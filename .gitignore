@@ -13,4 +13,4 @@ shioaji.log
 
 # Configuration files
 config/*.json
-!config/*_config.example.json
+!config/*.example.json
