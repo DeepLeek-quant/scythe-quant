@@ -1,0 +1,16 @@
+# macOS system files
+.DS_Store
+
+# Python bytecode cache directories
+**/__pycache__/
+
+# Shioaji trading API logs
+shioaji.log
+
+# Python package metadata
+*.egg-info/
+*.egg
+
+# Configuration files
+config/*.json
+!config/*_config.example.json
