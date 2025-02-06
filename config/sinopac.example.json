@@ -3,5 +3,6 @@
     "secret_key": "your_secret_key",
     "ca_path": "your_ca_path",
     "ca_passwd": "your_ca_passwd",
-    "person_id": "your_person_id"
+    "person_id": "your_person_id",
+    "sj_log_path": "your_sj_log_path"
 }
