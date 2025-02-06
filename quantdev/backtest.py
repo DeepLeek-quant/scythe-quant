@@ -117,10 +117,12 @@ def _get_portfolio(data:pd.DataFrame, signal_shift:int=0, rebalance:Literal['QR'
 
 def backtesting(
     data:pd.DataFrame, signal_shift:int=0, rebalance:Literal['QR', 'W', 'M', 'Q', 'Y']='QR', hold_period:int=None, 
-    start:Union[int, str]=None, end:Union[int, str]=None, benchmark:str='0050'
+    start:Union[int, str]=None, end:Union[int, str]=None, 
+    benchmark:str='0050'
 ):
     # return & weight
     return_df = db.read_dataset('stock_return', filter_date='t_date', start=start, end=end)
+    benchmark_return = return_df[benchmark]
     
     # get data
     portfolio_df = _get_portfolio(data, signal_shift, rebalance, hold_period)
@@ -140,7 +142,7 @@ def backtesting(
 class Backtest:
     def __init__(self, start=None, end=None, benchmark:str='0050', db_path:str=None, db_token:str=None):
         self.db = Databank(path=db_path, token=db_token)
-        self.return_df = self.db.db_to_df('stock_return', filter_date='t_date', start=start, end=end)
+        self.return_df = self.db.read_dataset('stock_return', filter_date='t_date', start=start, end=end)
         self.bmk_stock_id = benchmark
         self.universe = None
         self.t_date = self.get_t_date()
@@ -174,7 +176,7 @@ class Backtest:
 
     # load data
     def get_t_date(self):
-        return self.db.db_to_df('mkt_calendar', 
+        return self.db.read_dataset('mkt_calendar', 
                                 columns=['date'], 
                                 filters=[('休市原因中文說明(人工建置)','=','')],
                                 start=self.return_df.index.min().strftime('%Y-%m-%d'),
@@ -182,10 +184,10 @@ class Backtest:
                                 )\
                             .rename(columns={'date':'t_date'})
 
-    def get_data(self, item:Union[str, pd.DataFrame], source=None):
+    def get_data(self, item:Union[str, pd.DataFrame], source:str=None):
         if isinstance(item, str):
-            raw_data = self.db.db_to_df(
-                data_name=self.db.column_to_data_name(item) if source is None else source, 
+            raw_data = self.db.read_dataset(
+                dataset=self.db.find_dataset(item) if source is None else source, 
                 filter_date='t_date', 
                 columns=['t_date', 'stock_id', item],
                 )
@@ -243,25 +245,23 @@ class Backtest:
             .assign(buy_date=position_info.name)\
             .assign(sell_date=sell_date)
 
-        filters=[('stock_id', 'in', position_info.stock_id.to_list())]
+        filters=[('stock_id', 'in', position_info['stock_id'].to_list())]
         
         # 獲取股票中文名稱
-        ch_name = self.db\
-            .db_to_df('stock_basic_info', columns=['stock_id', '證券名稱'], filters=filters)\
-            .rename(columns={'證券名稱':'name'})
+        ch_name = self.db.read_dataset('stock_basic_info', columns=['stock_id', '證券名稱'], filters=filters).rename(columns={'證券名稱':'name'})
 
         # 獲取財報和月營收公佈日期
-        quarterly_report_release_date = self.db.db_to_df('fin_data', columns=['stock_id', 'release_date'], filters=filters)\
+        quarterly_report_release_date = self.db.read_dataset('fin_data', columns=['stock_id', 'release_date'], filters=filters)\
             .loc[lambda x: x.groupby('stock_id')['release_date'].idxmax()]\
             .rename(columns={'release_date':'季報公佈日期'})
-        monthly_rev_release_date = self.db.db_to_df('monthly_rev', columns=['stock_id', 'release_date'], filters=filters)\
+        monthly_rev_release_date = self.db.read_dataset('monthly_rev', columns=['stock_id', 'release_date'], filters=filters)\
             .loc[lambda x: x.groupby('stock_id')['release_date'].idxmax()]\
             .rename(columns={'release_date':'月營收公佈日期'})
 
         filters.append(('date', '=', self.return_df.index.max()))
 
         # 獲取市場類型、產業類別、交易狀態
-        trading_notes = self.db.db_to_df('stock_trading_notes', columns=['date', 'stock_id', '是否為注意股票', '是否為處置股票', '是否暫停交易', '是否全額交割', '漲跌停註記', '市場別', '主產業別(中)'], filters=filters)\
+        trading_notes = self.db.read_dataset('stock_trading_notes', columns=['date', 'stock_id', '是否為注意股票', '是否為處置股票', '是否暫停交易', '是否全額交割', '漲跌停註記', '市場別', '主產業別(中)'], filters=filters)\
         .assign(
             警示狀態=lambda x: x.apply(
                 lambda row: ', '.join(filter(None, [
@@ -277,7 +277,7 @@ class Backtest:
         [['stock_id', '警示狀態', '漲跌停', '市場別', '主產業別']]
         
         # 獲取交易量和交易金額
-        trading_vol = self.db.db_to_df('stock_trading_data', columns=['stock_id', '成交量(千股)', '成交金額(元)'], filters=filters)\
+        trading_vol = self.db.read_dataset('stock_trading_data', columns=['stock_id', '成交量(千股)', '成交金額(元)'], filters=filters)\
         .rename(columns={
             '成交量(千股)':'前次成交量_K',
             '成交金額(元)':'前次成交額_M',
@@ -400,6 +400,7 @@ class Backtest:
         if show:
             display(self.performance_df)
     
+
     # analysis
     def performance_metrics(self, equity_curve):
         if not equity_curve.empty:
@@ -455,12 +456,12 @@ class Backtest:
           ]
 
         liquidity_status=pd.merge(
-          self.db.db_to_df(
+          self.db.read_dataset(
               'stock_trading_notes', 
               columns=['date', 'stock_id', '是否為注意股票', '是否為處置股票', '是否全額交割', '漲跌停註記'],
               filters=filters
           ),
-          self.db.db_to_df(
+          self.db.read_dataset(
               'stock_trading_data',
               columns=['date', 'stock_id', '成交量(千股)', '成交金額(元)'],
               filters=filters,
@@ -1562,3 +1563,82 @@ class Strategy():
             'Calmar ratio':f'{calmar_ratio:.2}',
             'beta':f'{beta:.2}',
         }
+
+    @staticmethod
+    def position_info(self, data:pd.DataFrame, rebalance:str) -> pd.DataFrame:
+        """顯示持倉資訊
+
+        Attributes:
+            rebalance (str): 再平衡方式
+
+        Returns:
+            DataFrame: 包含股票代碼、名稱、買入日期、賣出日期、警示狀態、漲跌停、前次成交量、前次成交額、季報公佈日期、月營收公佈日期、市場別、主產業別的資料表
+        """
+        print('make sure to update databank before get info!')
+
+        # 獲取買入和賣出日期
+        rebalance_dates = _get_rebalance_date(rebalance, end_date=self.t_date['t_date'].max())
+        buy_date = rebalance_dates[-1]
+        sell_date = next(d for d in rebalance_dates if d > buy_date)
+        
+        # 獲取持倉資訊
+        position_info = data.loc[buy_date]
+        position_info = position_info[position_info]\
+            .reset_index()\
+            .rename(columns={'index':'stock_id', position_info.name:'buy_date'})\
+            .assign(buy_date=position_info.name)\
+            .assign(sell_date=sell_date)
+
+        filters=[('stock_id', 'in', position_info['stock_id'].to_list())]
+        
+        # 獲取股票中文名稱
+        ch_name = self.db.read_dataset('stock_basic_info', columns=['stock_id', '證券名稱'], filters=filters).rename(columns={'證券名稱':'name'})
+
+        # 獲取財報和月營收公佈日期
+        quarterly_report_release_date = self.db.read_dataset('fin_data', columns=['stock_id', 'release_date'], filters=filters)\
+            .loc[lambda x: x.groupby('stock_id')['release_date'].idxmax()]\
+            .rename(columns={'release_date':'季報公佈日期'})
+        monthly_rev_release_date = self.db.read_dataset('monthly_rev', columns=['stock_id', 'release_date'], filters=filters)\
+            .loc[lambda x: x.groupby('stock_id')['release_date'].idxmax()]\
+            .rename(columns={'release_date':'月營收公佈日期'})
+
+        filters.append(('date', '=', self.return_df.index.max()))
+
+        # 獲取市場類型、產業類別、交易狀態
+        trading_notes = self.db.read_dataset('stock_trading_notes', columns=['date', 'stock_id', '是否為注意股票', '是否為處置股票', '是否暫停交易', '是否全額交割', '漲跌停註記', '市場別', '主產業別(中)'], filters=filters)\
+        .assign(
+            警示狀態=lambda x: x.apply(
+                lambda row: ', '.join(filter(None, [
+                    '注意股' if row['是否為注意股票'] == 'Y' else '',
+                    '處置股' if row['是否為處置股票'] == 'Y' else '', 
+                    '暫停交易' if row['是否暫停交易'] == 'Y' else '',
+                    '全額交割' if row['是否全額交割'] == 'Y' else '',
+                ])), axis=1
+            ).replace('', '='),
+            漲跌停=lambda x: x['漲跌停註記'].replace('', '=')
+        )\
+        .rename(columns={'主產業別(中)':'主產業別'})\
+        [['stock_id', '警示狀態', '漲跌停', '市場別', '主產業別']]
+        
+        # 獲取交易量和交易金額
+        trading_vol = self.db.read_dataset('stock_trading_data', columns=['stock_id', '成交量(千股)', '成交金額(元)'], filters=filters)\
+        .rename(columns={
+            '成交量(千股)':'前次成交量_K',
+            '成交金額(元)':'前次成交額_M',
+                        })\
+        .assign(前次成交額_M=lambda x: (x['前次成交額_M']/1e6).round(2))
+
+        # 合併所有資訊
+        return position_info\
+            .merge(ch_name, on='stock_id', how='left')\
+                .merge(quarterly_report_release_date, on='stock_id', how='left')\
+                .merge(monthly_rev_release_date, on='stock_id', how='left')\
+                .merge(trading_notes, on='stock_id', how='left')\
+                .merge(trading_vol, on='stock_id', how='left')\
+                [[
+                    'stock_id', 'name', 'buy_date', 'sell_date', 
+                    '警示狀態', '漲跌停',
+                    '前次成交量_K', '前次成交額_M', 
+                    '季報公佈日期', '月營收公佈日期', 
+                    '市場別', '主產業別',
+                ]].set_index('stock_id')
