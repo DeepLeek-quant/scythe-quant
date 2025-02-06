@@ -52,7 +52,7 @@ def get_quote(stock_id: str, lot_type: Literal[0, 1, None] = None, raw: bool = F
         }
     return quote
 
-def price_pct_to_tick(price: int | float, pct: float):
+def price_pct_to_tick(price: Union[int, float], pct: float):
         """根據價格和漲跌幅計算調整後的價格
 
         Attributes:
@@ -141,37 +141,36 @@ def mkt_is_open():
     return (current_day<5) and (market_open<=current_time<=market_close)
 
 class Position:
+    """建構 Position
+
+    Attributes:
+        - data (Union[Tuple[str, Union[int, float]], sj.position.StockPosition]): 代表部位的資料，可以是一個元組 (stock_id, money) 或是 shioaji 的 StockPosition 物件。
+        - price_tolerance (float): 價格容忍度，預設為 0.02 (2%)。
+        - odd (bool): 是否允許零股交易，預設為 True。
+
+    Examples:
+        **建立新部位**
+        ```python
+        # 使用 tuple 建立部位
+        position = Position(('2330', 100000))  # 買入台積電 10 萬元
+
+        # 使用 shioaji StockPosition 建立部位
+        position = Position(stock_position)  # stock_position 為 shioaji 的部位物件
+        ```
+
+        **部位運算**
+        ```python
+        # 部位相加
+        total_position = position1 + position2
+
+        # 部位相減
+        diff_position = position1 - position2
+
+        # 部位乘以倍數
+        double_position = position * 2
+        ```
+    """
     def __init__(self, data:Union[Tuple[str, Union[int, float]], sj.position.StockPosition], price_tolerance:float=0.02, odd:bool=True):
-        """建構 Position 。
-
-            Attributes:
-                - data (Union[Tuple[str, Union[int, float]], sj.position.StockPosition]): 代表部位的資料，可以是一個元組 (stock_id, money) 或是 shioaji 的 StockPosition 物件。
-                - price_tolerance (float): 價格容忍度，預設為 0.02 (2%)。
-                - odd (bool): 是否允許零股交易，預設為 True。
-
-            Examples:
-                **建立新部位**
-                ```python
-                # 使用 tuple 建立部位
-                position = Position(('2330', 100000))  # 買入台積電 10 萬元
-
-                # 使用 shioaji StockPosition 建立部位
-                position = Position(stock_position)  # stock_position 為 shioaji 的部位物件
-                ```
-
-                **部位運算**
-                ```python
-                # 部位相加
-                total_position = position1 + position2
-
-                # 部位相減
-                diff_position = position1 - position2
-
-                # 部位乘以倍數
-                double_position = position * 2
-                ```
-        """
-        
         self.inventory_data = {}
         self.data = {
             'stock_id': np.nan, 'buy_money': np.nan,
@@ -290,8 +289,7 @@ class Position:
         return str(self.data)
 
 class Portfolio:
-    def __init__(self, data:Dict[str, Union[List[Position], Tuple[List[str], int]]], n_workers:int=20):
-        """ 建構 Portfolio 。
+    """ 建構 Portfolio
 
         用於管理多個策略的投資部位，支持部位的加減運算和報價更新。
 
@@ -341,7 +339,7 @@ class Portfolio:
             更新時會先清除原有的部位資料，再載入新的部位資料。如果新的部位資料中有相同的策略名稱，
             則會覆蓋原有的策略部位。
         """
-        
+    def __init__(self, data:Dict[str, Union[List[Position], Tuple[List[str], int]]], n_workers:int=20):
         self.data = data
         self.n_workers = n_workers
 
@@ -730,8 +728,7 @@ class Trader:
         return self.api.update_status(self.api.stock_account)
 
 class PortfolioManager(Trader):
-    def __init__(self, api: SjAPI, portfolio:Union[Portfolio, str]=None):
-        """投資組合管理執行類別
+    """投資組合管理執行類別
 
         繼承自 Trader 類別，提供投資組合管理和執行相關功能，包括同步庫存、更新部位、執行交易等。
 
@@ -776,7 +773,7 @@ class PortfolioManager(Trader):
             - trade_portfolio: 執行整個投資組合交易
             - run_portfolio_manager: 執行投資組合管理循環
         """
-        
+    def __init__(self, api: SjAPI, portfolio:Union[Portfolio, str]=None):
         super().__init__(api)
         self.json_path = '/Users/jianrui/Desktop/Research/Quant/portfolio/portfolio.json'
         self.actual_portfolio:Portfolio = None

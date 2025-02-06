@@ -1,4 +1,4 @@
-from typing import Literal, Union
+from typing import Union
 import pyarrow.parquet as pq
 import pyarrow as pa
 import datetime as dt
@@ -8,10 +8,6 @@ import logging
 import tejapi
 import time
 import os
-
-# reg
-from statsmodels.regression.rolling import RollingOLS
-import statsmodels.api as sm
 
 # stock industry tag
 from bs4 import BeautifulSoup
@@ -28,7 +24,7 @@ from requests.adapters import HTTPAdapter, Retry
 from .config import config
 
 class DataBankInfra:
-    """資料庫基礎建設類別
+    """資料庫基礎建設
 
     Attributes:
         databank_path (str): 資料庫路徑
@@ -234,8 +230,8 @@ class DataBankInfra:
             return pq.ParquetFile(f'{data_path}/{file_list[0]}').schema.names
         else:
             return pq.ParquetFile(f'{data_path}/{dataset}.parquet').schema.names
-              
-    def find_dataset(self, column: str):
+
+    def find_dataset(self, column:str):
         """根據欄位名稱找出對應的資料集名稱
 
         Attributes:
@@ -251,25 +247,18 @@ class DataBankInfra:
             'stock_trading_data'
             ```
         """
-        column_dataset = {}
-        for dataset in self.list_datasets():
-            if dataset != 'stock_return':
+        column_datasets = {}
+        for data_name in self.list_datasets():
+            if data_name != 'stock_return':
                 try:
-                    for col in self.get_dataset_columns(dataset):
-                        if col not in column_dataset:
-                            column_dataset[col] = []
-                        column_dataset[col].append(dataset)
+                    for col in self.list_columns(data_name):
+                        if col not in column_datasets:
+                            column_datasets[col] = []
+                        column_datasets[col].append(data_name)
                 except FileNotFoundError:
                     continue
-        
-        if column not in column_dataset:
-            raise KeyError(f"Column '{column}' not found")
-            
-        datasets = column_dataset[column]
-        if len(datasets) > 1:
-            raise ValueError(f"Column '{column}' found in: {datasets}")
-        return datasets[0]
-
+        return column_datasets[column][0]
+    
     # db read & write
     def read_dataset(self, dataset:str, filter_date:str='date', start:Union[int, str]=None, end:Union[int, str]=None, columns:list=None, filters:list=None) -> pd.DataFrame:
         """讀取資料集
@@ -341,7 +330,7 @@ class DataBankInfra:
         logging.info(f'Exported {dataset} as DataFrame from parquet')
         return df
     
-    def _read_dataset_max(self, dataset:str, start:int | str=None, end:int | str=None, columns:list=None, filters:list=None):
+    def _read_dataset_max(self, dataset:str, start:Union[int, str]=None, end:Union[int, str]=None, columns:list=None, filters:list=None):
         file_path = f'{self._get_path(dataset)}/'
         file_list = [i for i in os.listdir(file_path) if i !='.DS_Store']
         file_list.sort()
@@ -524,7 +513,10 @@ class TEJHandler(DataBankInfra):
         self.almost_reach_limit = ((row_usage >= 0.95) or (req_usage >= 0.95))
         
         # reach limit
-        return ((row_usage >= 1) or (req_usage >= 1))
+        reach_limit = ((row_usage >= 1) or (req_usage >= 1))
+        if reach_limit:
+            logging.warning('TEJ API limit reached', )
+        return reach_limit
 
     def get_tej_data(self, dataset:str, start_date:str=None, end_date:str=None, stock_id:str=None)-> pd.DataFrame:
         """從 TEJ API 取得資料
@@ -564,7 +556,6 @@ class TEJHandler(DataBankInfra):
             - 部分資料集(如 mkt_calendar, stock_basic_info)不需要日期區間
         """
         if self.reach_tej_limit(True):
-            logging.warning('TEJ API limit reached', extra={'print': True})
             return None
         
         tej_dataset = self.tej_datasets.get(dataset).get('id')
@@ -582,9 +573,9 @@ class TEJHandler(DataBankInfra):
         )
         df = self._process_tej_data(dataset, df)
         if 'date' in df.columns:
-            print(f'Fetched {dataset}({tej_dataset}) data from {df.date.min().strftime("%Y-%m-%d")} to {df.date.max().strftime("%Y-%m-%d")}')
+            logging.info(f'Fetched {dataset} from {df.date.min().strftime("%Y-%m-%d")} to {df.date.max().strftime("%Y-%m-%d")} from TEJ', )
         else:
-            print(f'Fetched {dataset}({tej_dataset}) data')
+            logging.info(f'Fetched {dataset} from TEJ')
         return df
 
     def get_tej_data_bulk(self, dataset:str, start_date:str=None, end_date:str=None, stock_id:str=None)-> pd.DataFrame:
@@ -903,12 +894,14 @@ class TEJHandler(DataBankInfra):
 
         # insert
         self.write_dataset(dataset, old_data)
+        logging.info(f'Updated {dataset} from tej')
 
 
 class FinMindHandler(DataBankInfra):
     def __init__(self):
         super().__init__()
         self.__finmind_token = config.data_config.get('finmind_token')
+        
     def get_broker_info_finmind(self):
         # first check if reach limit
         if self.finmind_reach_limit():
@@ -941,7 +934,7 @@ class FinMindHandler(DataBankInfra):
             )
         
         # add latitude, longitude
-        data = self.add_latlng(data, 'clean_address')
+        data = self._add_latlng(data, 'clean_address')
 
         return data
 
@@ -1246,23 +1239,59 @@ class FinMindHandler(DataBankInfra):
 
 
 class ProcessedDataHandler(DataBankInfra):
+    """處理資料的類別
+
+    此類別負責處理原始資料,計算各種財務、技術、籌碼等指標。
+
+    Attributes:
+        processed_datasets (dict): 已處理資料集的設定,包含:
+            - fin_data_chng: 財務資料變化率
+            - fin_ratio_diff: 財務比率差分
+            - roe_roa: ROE與ROA
+            - monthly_rev_chng: 月營收變化率
+            - stock_momentum: 股價動量
+            - shareholding_pct: 股東持股比例
+            - shareholding_pct_diff: 股東持股比例變化率
+            - inst_investor_ratio_diff: 法人持股比例變化率
+            - inst_investor_money: 法人買賣超金額
+            - stock_return: 個股報酬率
+
+    Returns:
+        None
+
+    Examples:
+        ```python
+        # 初始化處理資料類別
+        handler = ProcessedDataHandler()
+
+        # 更新特定資料集
+        handler.update_processed_data(dataset='fin_data_chng')
+
+        # 更新所有資料集
+        handler.update_processed_data()
+        ```
+
+    Note:
+        - 每個資料集都有對應的更新函數
+        - 可以選擇更新單一資料集或全部資料集
+        - 資料處理包含財務面、技術面、籌碼面等多個面向
+    """
+
     def __init__(self):
         super().__init__()
         self.processed_datasets = { 
             'fin_data_chng':{'source':'fin_data', 'func':self._update_fin_data_chng},
             'fin_ratio_diff':{'source':'fin_data', 'func':self._update_fin_ratio_diff},
-            'monthly_rev_chng':{'source':'monthly_rev', 'func':self._update_monthly_rev_chng},
             'roe_roa':{'source':'fin_data', 'func':self._update_roe_roa},
-            'stock_momentum':{'source':'stock_trading_data', 'func':self.insert_stock_momentum},
-            'shareholding_pct':{'source':'stock_custody', 'func':self.insert_shareholding_pct},
-            'shareholding_pct_diff':{'source':'stock_custody', 'func':self.insert_shareholding_pct_diff},
-            'inst_investor_ratio_diff':{'source':'trading_activity', 'func':self.insert_shareholding_pct_diff},
-            'inst_investor_money':{'source':'trading_activity', 'func':self.insert_inst_investor_money},
-            'stock_return':{'source':'stock_trading_data', 'func':self.insert_stock_return},
+            'monthly_rev_chng':{'source':'monthly_rev', 'func':self._update_monthly_rev_chng},
+            'stock_momentum':{'source':'stock_trading_data', 'func':self._update_stock_momentum},
+            'shareholding_pct':{'source':'stock_custody', 'func':self._update_shareholding_pct},
+            'shareholding_pct_diff':{'source':'stock_custody', 'func':self._update_shareholding_pct_diff},
+            'inst_investor_ratio_diff':{'source':'trading_activity', 'func':self._update_inst_investor_ratio_diff},
+            'inst_investor_money':{'source':'trading_activity', 'func':self._update_inst_investor_money},
+            'stock_return':{'source':'stock_trading_data', 'func':self._update_stock_return},
         }
     
-    # process data
-
     # fundamental
     def _update_fin_data_chng(self, columns:list=['營業收入', '稅後淨利', '預收款_流動', '營運產生現金流量', '資產總計','每股盈餘',]):
         """計算財務資料變化率
@@ -1368,8 +1397,20 @@ class ProcessedDataHandler(DataBankInfra):
     def _update_roe_roa(self):
         """計算股東權益報酬率(ROE)與總資產報酬率(ROA)
 
+        計算公司的ROE與ROA財務指標。
+
         Returns:
             None: 將計算結果寫入 roe_roa 資料集
+
+        Examples:
+            ```python
+            db = DataBank()
+            db._update_roe_roa()
+            ```
+
+        Note:
+            - ROE = 稅後淨利/股東權益總計
+            - ROA = 稅後淨利/資產總計
         """
         df = self.read_dataset('fin_data', columns=['date', 'release_date', 'stock_id', '股東權益總計', '資產總計', '稅後淨利', 't_date'])
         df['roe'] = (df['稅後淨利']/ df['股東權益總計']).round(5)
@@ -1379,38 +1420,42 @@ class ProcessedDataHandler(DataBankInfra):
         return self.write_dataset('roe_roa', df)
     
     def _update_monthly_rev_chng(self):
+        """計算單月營收的變化率
+
+        計算單月營收的變化率，包含月增率(mom)、季增率(qoq)、年增率(yoy)。
+
+        Returns:
+            None: 將計算結果寫入 monthly_rev_chng 資料集
+
+        Examples:
+            ```python
+            db = DataBank()
+            db._update_monthly_rev_chng()
+            ```
+
+        Note:
+            - 計算移動平均包含3月、1年、2年、3年
+            - 變化率包含月增率(mom)、季增率(qoq)、年增率(yoy)
+            - 會自動填補缺失值
+        """
+
         df = self.read_dataset('monthly_rev', columns=[
-            'date', 
-            'release_date', 
-            'stock_id', 
-            '單月營收(千元)', 
-            '單月營收成長率％',
-            '近12月累計營收成長率％',
-            '近3月累計營收成長率％',
-            '近3月累計營收與上月比％',
+            'date', 'release_date', 'stock_id', 
+            '單月營收(千元)', '單月營收成長率％', '近12月累計營收成長率％', '近3月累計營收成長率％', '近3月累計營收與上月比％', 
             't_date'
             ])
         column = '單月營收(千元)'
 
         # calculate rolling average
-        rolling_avg = {
-            '3m':3,
-            '1y':12,
-            '2y':24,
-            '3y':36,
-        }
-        for key in rolling_avg:
-            df[f'{column}_{key}_avg'] = df.groupby(['stock_id'])[column].transform(lambda d: d.rolling(window=rolling_avg.get(key)).mean())
+        rolling_avg = {'3m':3, '1y':12, '2y':24, '3y':36,}
+        for k, v in rolling_avg.items():
+            df[f'{column}_{k}_avg'] = df.groupby(['stock_id'])[column].transform(lambda d: d.rolling(window=v).mean())
         
         # calculate changes
-        changes = {
-            'mom':1,
-            'qoq':3,
-            'yoy':12,
-        }
+        changes = { 'mom':1, 'qoq':3, 'yoy':12, }
         for col in [column] + [col for col in df.columns if col.endswith('_avg')]:
-            for key in changes:
-                df[f'{col}_{key}'] = round(df.groupby(['stock_id'])[col].pct_change(periods=changes.get(key)), 3)
+            for k, v in changes.items():
+                df[f'{col}_{k}'] = round(df.groupby(['stock_id'])[col].pct_change(periods=v), 3)
         
         # fillna
         df['單月營收(千元)_yoy'] = df['單月營收(千元)_yoy'].fillna(df['單月營收成長率％']/100)
@@ -1424,70 +1469,61 @@ class ProcessedDataHandler(DataBankInfra):
         return self.write_dataset(dataset='monthly_rev_chng', df=df)
 
     # technical
-    def insert_stock_momentum(self):
+    def _update_stock_momentum(self):
+        """計算股價動量
+
+        計算不同期間的股價動量指標。
+
+        Returns:
+            None: 將計算結果寫入 stock_momentum 資料集
+
+        Examples:
+            ```python
+            db = DataBank()
+            db._update_stock_momentum()
+            ```
+
+        Note:
+            - 計算期間包含1週、1月、3月、6月、1年、3年
+            - 使用累積報酬率計算動量
+        """
+
         df = self.read_dataset('stock_trading_data', columns=['date', 'stock_id', '報酬率', 't_date'])
         df['c_return'] = df.groupby('stock_id')['報酬率'].transform(lambda x: (1 + x/100).cumprod())
         
         # calculate changes
         mtm_map = {
-            'mtm_1d':1,
-            'mtm_1w':5,
-            'mtm_1m':20,
-            'mtm_3m':60,
-            'mtm_6m':120,
-            'mtm_1y':240,
-            'mtm_3y':720,
+            'mtm_1w':5, 'mtm_1m':20, 'mtm_3m':60, 'mtm_6m':120, 'mtm_1y':240, 'mtm_3y':720,
         }
         
-        for key, value in mtm_map.items():
-            df[key] = df.groupby(['stock_id'])['c_return'].transform(lambda x: x.pct_change(periods=value)).round(3)
+        for k, v in mtm_map.items():
+            df[k] = df.groupby(['stock_id'])['c_return'].transform(lambda x: x.pct_change(periods=v)).round(3)
 
         df = df[['date', 'stock_id'] + [col for col in df.columns if col.startswith('mtm')] + ['t_date']]
         return self.write_dataset(dataset='stock_momentum', df=df)
 
-    # error term
-    def insert_models_error_term(self,
-        models=['CAPM', 'Carhart4', 'FF5', 'FF3', 'q4', 'q5'],
-        est_window:int=120, const:bool=True, std_window:int=20,
-    ):
-        
-        models = {model: self.read_dataset(model) for model in models}
-        rtn = self.read_dataset('stock_trading_data', columns=['date', 'stock_id', '報酬率'])
-        rtn_wide = rtn.pivot(index='date', columns='stock_id', values='報酬率')
-        
-        error_terms = pd.DataFrame()    
-        for model_name, model in models.items():
-            error_terms_wide = pd.DataFrame(index=rtn_wide.index, columns=rtn_wide.columns)
-            
-            for col in rtn_wide.columns:
-                clean_data = pd.concat([model, rtn_wide[col]], axis=1).dropna()
-                
-                if len(clean_data) >= est_window:
-                    Y = clean_data[col]
-                    X = sm.add_constant(clean_data[model.columns]) if const else clean_data[rtn_model.columns]
-
-                    results = RollingOLS(Y, X, window=est_window, missing='drop').fit()
-                    fitted = (results.params.shift(1) * X).sum(axis=1)
-                    error_terms_wide.loc[clean_data.index, col] = Y - fitted
-            model_error_terms = error_terms_wide.stack().reset_index()
-            model_error_terms.columns = ['date', 'stock_id', f'{model_name}_e']
-            error_terms = model_error_terms if error_terms.empty else error_terms.merge(model_error_terms, on=['date', 'stock_id'], how='outer')
-            print(f"Finished processing {model_name}")
-        error_terms = self._add_trade_date(error_terms)
-        return self.write_dataset('error_terms', error_terms)
-
-    
     # chip
-    def insert_shareholding_pct(self):
+    def _update_shareholding_pct(self):
+        """計算股東持股比例
+
+        計算不同持股級距的股東持股比例。
+
+        Returns:
+            None: 將計算結果寫入 shareholding_pct 資料集
+
+        Examples:
+            ```python
+            db = DataBank()
+            db._update_shareholding_pct()
+            ```
+
+        Note:
+            - 計算級距包含:未滿400張、超過400張、超過600張、超過800張、超過1000張
+            - 比例以總持股數為分母計算
+        """
         df = self.read_dataset('stock_custody', columns=[
-            'date',
-            'stock_id',
-            '未滿400張集保張數',
-            '超過400張集保張數',
-            '400-600張集保張數',
-            '600-800張集保張數',
-            '800-1000張集保張數',
-            '超過1000張集保張數',
+            'date', 'stock_id',
+            '未滿400張集保張數', '超過400張集保張數', '400-600張集保張數', '600-800張集保張數', '800-1000張集保張數', '超過1000張集保張數',
             't_date',
         ])
         conditions = {
@@ -1503,77 +1539,120 @@ class ProcessedDataHandler(DataBankInfra):
         
         return self.write_dataset(dataset='shareholding_pct', df=df)
 
-    def insert_shareholding_pct_diff(self):
+    def _update_shareholding_pct_diff(self):
+        """計算股東持股比例的變化率
+
+        計算不同期間的股東持股比例變化。
+
+        Returns:
+            None: 將計算結果寫入 shareholding_pct_diff 資料集
+
+        Examples:
+            ```python
+            db = DataBank()
+            db._update_shareholding_pct_diff()
+            ```
+
+        Note:
+            - 計算週差(wow_diff)、月差(mom_diff)、季差(qoq_diff)、年差(yoy_diff)
+            - 對所有持股級距都計算差分
+        """
         df = self.read_dataset('shareholding_pct')
         
         # calculate changes
-        changes = {
-            'wow_diff':1,
-            'mom_diff':4,
-            'qoq_diff':13,
-            'yoy_diff':52,
-        }
+        changes = { 'wow_diff':1, 'mom_diff':4, 'qoq_diff':13, 'yoy_diff':52,}
         for col in [col for col in df.columns if col.endswith('張')]:
-            for key in changes:
-                df[f'{col}_{key}'] = round(df.groupby(['stock_id'])[col].diff(periods=changes.get(key)), 3)
+            for k, v in changes.items():
+                df[f'{col}_{k}'] = round(df.groupby(['stock_id'])[col].diff(periods=v), 3)
         
-        df = df[['date', 'stock_id'] + [col for col in df.columns for key in changes if col.endswith(key)] + ['t_date']]
+        df = df[['date', 'stock_id'] + [col for col in df.columns for k in changes if col.endswith(k)] + ['t_date']]
         return self.write_dataset(dataset='shareholding_pct_diff', df=df)
 
-    def insert_inst_investor_ratio_diff(self, columns=[
-        '外資持股率', '投信持股率', '自營商持股率',
-    ]):
+    def _update_inst_investor_ratio_diff(self):
+        """計算機構投資人持股比例的變化率
+
+        計算外資、投信、自營商等機構投資人持股比例的變化。
+
+        Returns:
+            None: 將計算結果寫入 inst_investor_ratio_diff 資料集
+
+        Examples:
+            ```python
+            db = DataBank()
+            db._update_inst_investor_ratio_diff()
+            ```
+
+        Note:
+            - 計算1週、1月、1季的移動平均
+            - 計算週差、月差、季差、年差
+            - 處理外資、投信、自營商三類機構投資人
+        """
+        columns=['外資持股率', '投信持股率', '自營商持股率']
         df = self.read_dataset('trading_activity', columns=['date','stock_id', *columns, 't_date'])
 
         for col in columns:
             # calculate rolling average
-            rolling_avg = {
-                '1w':5,
-                '1m':20,
-                '1q':60,
-            }
-            for key in rolling_avg:
-                df[f'{col}_{key}_avg'] = df.groupby(['stock_id'])[col].transform(lambda d: d.rolling(window=rolling_avg.get(key)).mean())
+            rolling_avg = {'1w':5, '1m':20, '1q':60,}
+            for k, v in rolling_avg.items():
+                df[f'{col}_{k}_avg'] = df.groupby(['stock_id'])[col].transform(lambda d: d.rolling(window=v).mean())
             
             # calculate changes
-            changes = {
-                'wow_diff':5,
-                'mom_diff':20,
-                'qoq_diff':60,
-                'yoy_diff':240,
-            }
-            for col in columns + [col for col in df.columns if col.endswith('_avg')]:
-                for key in changes:
-                    df[f'{col}_{key}'] = round(df.groupby(['stock_id'])[col].diff(periods=changes.get(key)), 3)
+            changes = {'wow_diff':5, 'mom_diff':20, 'qoq_diff':60, 'yoy_diff':240,}
+            for col in [col for col in df.columns if any(col.startswith(c) for c in columns)]:
+                for k, v in changes.items():
+                    df[f'{col}_{k}'] = round(df.groupby(['stock_id'])[col].diff(periods=v), 3)
         
-        df = df[['date', 'stock_id'] + [col for col in df.columns for key in changes if col.endswith(key)] + ['t_date']].dropna(how='all', axis=1)
+        df = df[['date', 'stock_id'] + [col for col in df.columns if any(col.startswith(c) for c in columns)] + ['t_date']].dropna(how='all', axis=1)
         
         return self.write_dataset(dataset='inst_investor_ratio_diff', df=df)
 
-    def insert_inst_investor_money(self, columns=[
-        '外資買賣超金額(千元)', '投信買賣超金額(千元)', '自營買賣超金額(自行)', '自營買賣超金額(避險)', '合計買賣超金額(千元)',
-    ]):
+    def _update_inst_investor_money(self):
+        """計算機構投資人買賣超金額
+
+        計算外資、投信、自營商等機構投資人的買賣超金額。
+
+        Returns:
+            None: 將計算結果寫入 inst_investor_money 資料集
+
+        Note:
+            - 計算1週、1月、1季的累計買賣超金額
+            - 包含外資、投信、自營商(自行)、自營商(避險)
+            - 金額單位為千元
+        """
+        columns=['外資買賣超金額(千元)', '投信買賣超金額(千元)', '自營買賣超金額(自行)', '自營買賣超金額(避險)', '合計買賣超金額(千元)',]
         df = self.read_dataset('trading_activity', columns=['date','stock_id', *columns, 't_date'])
         
         for col in columns:
             # calculate rolling average
-            rolling_sum = {
-                '1w':5,
-                '1m':20,
-                '1q':60,
-            }
-            for key in rolling_sum:
-                df[f'{col}_{key}_sum'] = df.groupby(['stock_id'])[col].transform(lambda d: d.rolling(window=rolling_sum.get(key)).sum())
+            rolling_sum = {'1w':5, '1m':20, '1q':60, }
+            for k, v in rolling_sum.items():
+                df[f'{col}_{k}_sum'] = df.groupby(['stock_id'])[col].transform(lambda d: d.rolling(window=v).sum())
         
         df = df[['date', 'stock_id'] + [col for col in df.columns if col.endswith('_sum')] + ['t_date']].dropna(how='all', axis=1)
         
         return self.write_dataset(dataset='inst_investor_money', df=df)
 
     # backtest
-    def insert_stock_return(self):
-        df = self.read_dataset('stock_trading_data', columns=['date', 'stock_id', '報酬率'])
-        df['rtn'] = df.groupby('stock_id')['報酬率'].shift(-1) /100
-        df = df[['date', 'stock_id', 'rtn']]\
+    def _update_stock_return(self):
+        """計算個股報酬率
+
+        Returns:
+            None: 將計算結果寫入 stock_return 資料集
+
+        Examples:
+            ```python
+            db = DataBank()
+            db._update_stock_return()
+            ```
+
+        Note:
+            - 計算下一期的報酬率
+            - 報酬率以小數表示
+            - 結果以日期為索引,股票代碼為欄位的矩陣形式儲存
+        """
+        df = self.read_dataset('stock_trading_data', columns=['date', 'stock_id', '報酬率'])\
+            .assign(rtn=lambda df: df.groupby('stock_id')['報酬率'].shift(-1) /100)\
+            [['date', 'stock_id', 'rtn']]\
             .rename(columns={'date':'t_date'})\
             .set_index(['t_date', 'stock_id'])\
             .unstack('stock_id')\
@@ -1581,13 +1660,79 @@ class ProcessedDataHandler(DataBankInfra):
             .dropna(axis=0, how='all')
         return self.write_dataset(dataset='stock_return', df=df)
 
+    # all/ any
+    def update_processed_data(self, dataset:str=None, tej_dataset:str=None):
+        """更新處理後的資料集
+
+        根據指定的資料集或原始資料集更新對應的處理後資料。
+
+        Attributes:
+            dataset (str): 要更新的處理後資料集名稱
+            tej_dataset (str): 要更新的原始資料集名稱
+
+        Returns:
+            None
+
+        Examples:
+            ```python
+            db = DataBank()
+            # 更新特定資料集
+            db.update_processed_data(dataset='fin_data_chng')
+            # 更新特定原始資料相關的所有處理後資料
+            db.update_processed_data(tej_dataset='fin_data')
+            # 更新所有資料集
+            db.update_processed_data()
+            ```
+
+        Note:
+            - 可以選擇更新單一資料集或全部資料集
+            - 可以根據原始資料集更新相關的所有處理後資料
+            - 會記錄更新日誌
+        """
+        if dataset:
+            self.processed_datasets.get(dataset).get('func')()
+            self.update_processed_data(tej_dataset=dataset)
+            logging.info(f'Updated processed data for {dataset}')
+        elif tej_dataset:
+            for k, v in self.processed_datasets.items():
+                if v.get('source') == tej_dataset:
+                    self.update_processed_data(dataset=k)
+                    logging.info(f'Updated processed data for {k} from {tej_dataset}')
+        elif (not dataset) & (not tej_dataset):
+            for k in self.processed_datasets.keys():
+                self.update_processed_data(dataset=k)
+
 
 class PublicDataHandler(DataBankInfra):
+    """公開資料處理類別
+
+    處理從公開網站爬取的資料，如公司產業標籤、公司地址等。
+
+    Attributes:
+        stock_industry_tag_url (str): 公司產業標籤爬取網址
+        stock_address_url (str): 公司地址爬取網址
+        rf_rate_url (str): 無風險利率爬取網址
+
+    Returns:
+        None
+
+    Examples:
+        ```python
+        # 初始化公開資料處理類別
+        handler = PublicDataHandler()
+
+        # 更新所有公開資料
+        handler.update_public_data()
+        ```
+    """
     def __init__(self):
         super().__init__()
-    
-    def get_stock_industry_tag(self, stock_id:str):
-        r = requests.get(f'https://ic.tpex.org.tw/company_chain.php?stk_code={stock_id}')
+        self.stock_industry_tag_url = 'https://ic.tpex.org.tw/company_chain.php?stk_code='
+        self.stock_address_url = 'https://mops.twse.com.tw/mops/web/t51sb01'
+        self.rf_rate_url = 'https://www.cbc.gov.tw/tw/public/data/a13rate.xls'
+
+    def _get_stock_industry_tag(self, stock_id:str):
+        r = requests.get(f'{self.stock_industry_tag_url}{stock_id}')
         r.encoding = "utf-8"
         html = r.text
 
@@ -1612,20 +1757,19 @@ class PublicDataHandler(DataBankInfra):
             print(f'fail to fetch stock industry tag for {stock_id}')
         return df
     
-    def insert_stock_industry_tag(self):
+    def _update_stock_industry_tag(self):
         df = self.read_dataset('stock_basic_info', columns=['stock_id', '下市日'], filters=[('主產業別(中)', '!=', '')])
-        stock_list = df[(df.下市日.isna()) & (df.stock_id.str.match(r'^\d{4}$'))]['stock_id'].tolist()
+        stock_list = df[(df['下市日'].isna()) & (df['stock_id'].str.match(r'^\d{4}$'))]['stock_id'].tolist()
 
         df = pd.DataFrame()
         for stock_id in stock_list:
-            df_temp = self.get_stock_industry_tag(stock_id)
+            df_temp = self._get_stock_industry_tag(stock_id)
             df = pd.concat([df, df_temp], ignore_index=True)\
                 .drop_duplicates(subset=['stock_id'], keep='last')\
                 .reset_index(drop=True)
         self.write_dataset(dataset='stock_industry_tag', df=df)
 
-    def get_stock_address(self):
-        url = "https://mops.twse.com.tw/mops/web/t51sb01"
+    def _get_stock_address(self):
         data = pd.DataFrame()
         for stock_type in ['sii', 'otc', 'rotc']:
             form_data = {
@@ -1635,7 +1779,7 @@ class PublicDataHandler(DataBankInfra):
                 'off': 1,
                 'TYPEK': stock_type,
             }
-            r = requests.post(url,form_data)
+            r = requests.post(self.stock_address_url,form_data)
             data = pd.concat([data, pd.read_html(r.text)[9][['公司 代號', '外國企業 註冊地國', '住址']]], axis=0, ignore_index=True)
         return data\
             .rename(columns={
@@ -1662,12 +1806,12 @@ class PublicDataHandler(DataBankInfra):
             )\
             .reset_index(drop=True)
 
-    def insert_stock_address(self):
-        df = self.get_stock_address()
-        df = self.add_latlng(df, 'address')
+    def _update_stock_address(self):
+        df = self._get_stock_address()
+        df = self._add_latlng(df, 'address')
         return self.write_dataset('stock_address', df)
 
-    def add_latlng(self, data:pd.DataFrame, address_col:str, na_only:bool=False):
+    def _add_latlng(self, data:pd.DataFrame, address_col:str, na_only:bool=False):
         if not na_only:
             data=data\
                 .assign(latlng=data[address_col].apply(lambda x: geocoder.arcgis(x).latlng))
@@ -1679,8 +1823,8 @@ class PublicDataHandler(DataBankInfra):
             .apply(lambda x: geocoder.arcgis(x).latlng)
         return data
 
-    def insert_rf_rate(self):
-        rf_xls = pd.ExcelFile('https://www.cbc.gov.tw/tw/public/data/a13rate.xls')
+    def _update_rf_rate(self):
+        rf_xls = pd.ExcelFile(self.rf_rate_url)
 
         # get column names
         col = rf_xls.parse('台銀')[0:4]\
@@ -1719,27 +1863,66 @@ class PublicDataHandler(DataBankInfra):
         # insert
         self.write_dataset('rf_rate', rf_rate)
 
+    def update_public_data(self):
+        self._update_stock_industry_tag()
+        self._update_stock_address()
+        self._update_rf_rate()
+
 
 class Databank(TEJHandler, FinMindHandler, ProcessedDataHandler, PublicDataHandler):
+    """quantdev 資料庫
+
+    整合 TEJ、FinMind 與公開資料的資料處理功能。
+
+    Attributes:
+        databank_path (str): 資料庫路徑
+        tej_token (str): TEJ API 金鑰
+        tej_datasets (dict): TEJ 資料集對照表
+        processed_datasets (dict): 處理資料集設定
+        finmind_token (str): FinMind API 金鑰
+
+    Examples:
+        ```python
+        # 初始化資料庫
+        db = Databank()
+
+        # 更新資料庫
+        db.update_databank()
+
+        # 讀取特定資料集
+        df = db.read_dataset('monthly_rev')
+
+        # 讀取特定資料集的資料
+        df = db.read_dataset('fin_data', columns=['stock_id', 'date', 'revenue'])
+
+        # 更新特定 TEJ 資料集
+        db.update_tej_dataset('monthly_rev')
+
+        # 更新處理後的資料
+        db.update_processed_data(dataset='fin_data_chng')
+
+        # 更新公開資料
+        db.update_public_data()
+
+        # 寫入資料到資料庫
+        db.write_dataset('custom_data', df)
+
+        ```
+
+    Note:
+        - 需要在 config 中設定相關 API 金鑰
+        - 資料庫更新會自動處理資料相依性
+    """
+    
     def __init__(self):
         super().__init__()
     
     # basic
-    def update_databank(self, exclude:list=['stock_basic_info', 'mkt_calendar'], include:list=[], update_processed=True):
+    def update_databank(self, exclude:list[str]=['stock_basic_info', 'mkt_calendar'], include:list=[], update_processed=True):
+        logging.info('Starting databank update')
         for dataset in self.tej_datasets.keys():
             if ((not exclude) and (not include)) or (dataset not in exclude) or (dataset in include):
                 self.update_tej_dataset(dataset, update_processed=update_processed)
                 if update_processed:
                     self.update_processed_data(tej_dataset=dataset)
-
-    def update_processed_data(self, dataset:str=None, tej_dataset:str=None):
-        if dataset:
-            self.processed_datasets.get(dataset).get('func')()
-            self.update_processed_data(tej_dataset=dataset)
-        elif tej_dataset:
-            for k, v in self.processed_datasets.items():
-                if v.get('source') == tej_dataset:
-                    self.update_processed_data(dataset=k)
-        elif (not dataset) & (not tej_dataset):
-            for k in self.processed_datasets.keys():
-                self.update_processed_data(dataset=k)
+        logging.info('Completed databank update')

@@ -4,11 +4,11 @@ import json
 class Config:
     def __init__(self):
         self.config_dir = Path(__file__).parent.parent / 'config'
-        self.data_config = self._load_config('data.json')
-        self.fugle_config = self._load_config('fugle_marketdata.json')
-        self.sinopac_config = self._load_config('sinopac.json')
+        self.data_config = self.__load_config('data.json')
+        self.fugle_config = self.__load_config('fugle_marketdata.json')
+        self.sinopac_config = self.__load_config('sinopac.json')
 
-    def _load_config(self, file_name: str) -> dict:
+    def __load_config(self, file_name: str) -> dict:
         """
         從 JSON 檔案載入設定。
         
