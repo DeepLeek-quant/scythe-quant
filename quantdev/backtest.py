@@ -55,7 +55,7 @@ def get_factor(item:Union[str, pd.DataFrame], asc:bool=True, source_dataset:str=
 def _get_rebalance_date(rebalance:Literal['MR', 'QR', 'W', 'M', 'Q', 'Y'], end_date:str | pd.Timestamp=None):
     # dates
     start_date = t_date['t_date'].min()
-    end_date = pd.Timestamp.today() + pd.DateOffset(days=2) if end_date is None else pd.to_datetime(end_date)
+    end_date =  pd.to_datetime(end_date) or (pd.Timestamp.today() + pd.DateOffset(days=2))
     
     if rebalance == 'MR':
         date_list = [
@@ -65,7 +65,6 @@ def _get_rebalance_date(rebalance:Literal['MR', 'QR', 'W', 'M', 'Q', 'Y'], end_d
             if start_date <= pd.to_datetime(f'{year}-{month:02d}-10') + pd.DateOffset(days=1) <= end_date
         ]
         r_date = pd.DataFrame(date_list, columns=['r_date'])
-
     elif rebalance == 'QR':
         qr_dates = ['03-31', '05-15', '08-14', '11-14']
         date_list = [
@@ -74,8 +73,7 @@ def _get_rebalance_date(rebalance:Literal['MR', 'QR', 'W', 'M', 'Q', 'Y'], end_d
             for md in qr_dates
             if start_date <= pd.to_datetime(f"{year}-{md}") + pd.DateOffset(days=1) <= end_date
         ]
-        r_date = pd.DataFrame(date_list, columns=['r_date'])
-    
+        r_date = pd.DataFrame(date_list, columns=['r_date'])   
     elif rebalance == 'M':
         r_date = pd.DataFrame(pd.date_range(start=start_date, end=end_date, freq='MS'), columns=['r_date'])
     elif rebalance == 'W':
@@ -84,7 +82,6 @@ def _get_rebalance_date(rebalance:Literal['MR', 'QR', 'W', 'M', 'Q', 'Y'], end_d
         r_date = pd.DataFrame(pd.date_range(start=start_date, end=end_date, freq='QS'), columns=['r_date'])    
     elif rebalance == 'Y':
         r_date = pd.DataFrame(pd.date_range(start=start_date, end=end_date, freq='YS'), columns=['r_date'])
-    
     else:
         raise ValueError("Invalid frequency. Allowed values are 'QR', 'W', 'M', 'Q', 'Y'.")
 
@@ -95,70 +92,53 @@ def _get_rebalance_date(rebalance:Literal['MR', 'QR', 'W', 'M', 'Q', 'Y'], end_d
         direction='forward'
         )['t_date'].to_list()
 
-def _get_portfolio(data:pd.DataFrame, signal_shift:int=0, rebalance:Literal['QR', 'W', 'M', 'Q', 'Y']='QR', hold_period:int=None):
+def _get_portfolio(data:pd.DataFrame, return_df:pd.DataFrame, signal_shift:int=0, rebalance:Literal['QR', 'W', 'M', 'Q', 'Y']='QR', hold_period:int=None):
       
     # rebalance
     r_date = _get_rebalance_date(rebalance)
+    buy_list =  data[data.index.isin(r_date)]
     
     # weight
-    portfolio = data[data.index.isin(r_date)]\
+    portfolio = buy_list\
         .fillna(False)\
         .astype(int)\
         .apply(lambda x: x / x.sum(), axis=1)
-    
+
     # shift & hold_period
-    portfolio = t_date\
+    portfolio = pd.DataFrame(return_df.index)\
         .merge(portfolio, on='t_date', how='left')\
         .set_index('t_date')\
         .shift(signal_shift)\
         .ffill(limit=hold_period)\
         .dropna(how='all')
-    return portfolio
+    return buy_list, portfolio
 
 def backtesting(
-    data:pd.DataFrame, signal_shift:int=0, rebalance:Literal['QR', 'W', 'M', 'Q', 'Y']='QR', hold_period:int=None, 
+    data:pd.DataFrame, signal_shift:int=0, rebalance:Literal['QR', 'W', 'M', 'Q', 'Y']='QR', 
+    hold_period:int=None, stop_loss:float=None,
     start:Union[int, str]=None, end:Union[int, str]=None, 
-    benchmark:str='0050'
+    benchmark:str='0050', universe:pd.DataFrame=None,
 ):
+
     # return & weight
     return_df = db.read_dataset('stock_return', filter_date='t_date', start=start, end=end)
-    benchmark_return = return_df[benchmark]
     
     # get data
-    portfolio_df = _get_portfolio(data, signal_shift, rebalance, hold_period)
+    buy_list, portfolio_df = _get_portfolio(data, return_df, signal_shift, rebalance, hold_period)
     
     # backtest
-    backtest_df = (return_df * portfolio_df).dropna(axis=0, how='all')
-
-    # equity curve
-    daily_return = backtest_df.sum(axis=1)
-    c_return = (1 + daily_return).cumprod() - 1
+    backtest_df = (return_df * portfolio_df)\
+        .dropna(axis=0, how='all')
     
-    bmk_return = benchmark
+    return Strategy(
+        buy_list,
+        portfolio_df,
+        backtest_df,
+        benchmark,
+    )
 
-
-    return Strategy(c_return)
-
-class Backtest:
-    def __init__(self, start=None, end=None, benchmark:str='0050', db_path:str=None, db_token:str=None):
-        self.db = Databank(path=db_path, token=db_token)
-        self.return_df = self.db.read_dataset('stock_return', filter_date='t_date', start=start, end=end)
-        self.bmk_stock_id = benchmark
-        self.universe = None
-        self.t_date = self.get_t_date()
-        
-        # backtest
-        self.buy_list = None
-        self.portfolio_df = None
-        self.backtest_df = None
-
-        # performance
-        self.daily_return = None
-        self.equity_df = None
-        self.bmk_equity_df = (1 + self.return_df[self.bmk_stock_id]).cumprod() - 1
-        self.performance_df = None
-
-        # fig
+class PlotMaster:
+    def __init__(self):
         self.fig_param = dict(
             size=dict(w=800, h=600),
             margin=dict(t=50, b=50, l=50, r=50),
@@ -174,55 +154,86 @@ class Backtest:
             neg_colorscale = [[0,'#02EF02'],[0.5,'#017301'],[1,'#405351']],
         )
 
-    # load data
-    def get_t_date(self):
-        return self.db.read_dataset('mkt_calendar', 
-                                columns=['date'], 
-                                filters=[('休市原因中文說明(人工建置)','=','')],
-                                start=self.return_df.index.min().strftime('%Y-%m-%d'),
-                                end=None,
-                                )\
-                            .rename(columns={'date':'t_date'})
 
-    def get_data(self, item:Union[str, pd.DataFrame], source:str=None):
-        if isinstance(item, str):
-            raw_data = self.db.read_dataset(
-                dataset=self.db.find_dataset(item) if source is None else source, 
-                filter_date='t_date', 
-                columns=['t_date', 'stock_id', item],
-                )
-        elif isinstance(item, pd.DataFrame):
-            raw_data = item
-
-        t_date = self.t_date
-        data = pd.merge_asof(
-            t_date[t_date['t_date']<=pd.Timestamp.today() + pd.DateOffset(days=2)], 
-            raw_data\
-            .sort_values(by='t_date')\
-            .drop_duplicates(subset=['t_date', 'stock_id'], keep='last')\
-            .set_index(['t_date', 'stock_id'])\
-            .unstack('stock_id')\
-            .droplevel(0, axis=1), 
-            on='t_date', 
-            direction='backward'
-            )\
-            .ffill(limit=240)\
-            .set_index(['t_date'])\
-            .dropna(axis=1, how='all')\
+class Strategy(PlotMaster):
+    def __init__(self, buy_list:Union[pd.DataFrame, pd.Series], portfolio_df:Union[pd.DataFrame, pd.Series], backtest_df:Union[pd.DataFrame, pd.Series], benchmark:Union[pd.DataFrame, pd.Series, str]):
         
-        if self.universe is not None:
-            return data[self.universe].filter(regex='^\d')
-        else:
-            return data.filter(regex='^\d')
-    
-    def get_factor(self, item:str | pd.DataFrame, asc:bool=True, source:str=None):
-        if isinstance(item, str):
-            return self.get_data(item=item, source=source).rank(axis=1, pct=True, ascending=asc)
-        elif isinstance(item, pd.DataFrame):
-            return item.rank(axis=1, pct=True, ascending=asc)
+        # backtest
+        self.buy_list = buy_list
+        self.portfolio_df = portfolio_df
+        self.backtest_df = backtest_df
+        self.benchmark = benchmark
 
-    # trade
-    def show_position_info(self, data:pd.DataFrame, rebalance:str) -> pd.DataFrame:
+        # performance
+        self.daily_return = None
+        self.equity_df = None
+        self.bmk_equity_df = None
+        
+        # performance
+        daily_return = backtest_df.sum(axis=1)
+        self.equity_df = (1 + daily_return).cumprod() - 1
+
+        self.performance_df = pd.concat([
+            pd.DataFrame.from_dict(self.performance_metrics(self.equity_df), orient='index', columns=['strategy']),
+            pd.DataFrame.from_dict(self.performance_metrics(self.bmk_equity_df), orient='index', columns=[f'{self.benchmark}.TT']),
+        ], axis=1)
+    
+    def _calc_summary(self, equity_curve):
+        if not equity_curve.empty:
+            cumulative_return = equity_curve.iloc[-1]
+            daily_returns = (1 + equity_curve).pct_change().dropna()
+            bmk_daily_returns = (1 + self.bmk_equity_df).pct_change().dropna()
+            
+            annual_return = (1 + cumulative_return) ** (240 / len(equity_curve)) - 1 # annual return
+            mdd = ((1 + equity_curve) / (1 + equity_curve).cummax() - 1).min() # mdd
+            annual_vol = daily_returns.std() * np.sqrt(240) # annual vol
+            calmar_ratio = annual_return / abs(mdd) # calmar Ratio
+            sharpe_ratio = annual_return/ annual_vol # sharpe Ratio
+            beta = daily_returns.cov(bmk_daily_returns) / bmk_daily_returns.var() # beta
+        else:
+            annual_return, cumulative_return, mdd, annual_vol, sharpe_ratio, calmar_ratio, beta = 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
+        
+        return {
+            'Annual return':f'{annual_return:.2%}',
+            'Cumulative return':f'{cumulative_return:.2%}',
+            'Max drawdown':f'{mdd:.2%}',
+            'Annual volatility':f'{annual_vol:.2%}',
+            'Sharpe ratio':f'{sharpe_ratio:.2}',
+            'Calmar ratio':f'{calmar_ratio:.2}',
+            'beta':f'{beta:.2}',
+        }
+
+    def performance_metrics(self, equity_curve):
+        if not equity_curve.empty:
+            cumulative_return = equity_curve.iloc[-1]
+            daily_returns = (1 + equity_curve).pct_change().dropna()
+            bmk_daily_returns = (1 + self.bmk_equity_df).pct_change().dropna()
+            
+            annual_return = (1 + cumulative_return) ** (240 / len(equity_curve)) - 1 # annual return
+            mdd = ((1 + equity_curve) / (1 + equity_curve).cummax() - 1).min() # mdd
+            annual_vol = daily_returns.std() * np.sqrt(240) # annual vol
+            calmar_ratio = annual_return / abs(mdd) # calmar Ratio
+            sharpe_ratio = annual_return/ annual_vol # sharpe Ratio
+            beta = daily_returns.cov(bmk_daily_returns) / bmk_daily_returns.var() # beta
+        else:
+            annual_return, cumulative_return, mdd, annual_vol, sharpe_ratio, calmar_ratio, beta = 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
+        
+        return {
+            'Annual return':f'{annual_return:.2%}',
+            'Cumulative return':f'{cumulative_return:.2%}',
+            'Max drawdown':f'{mdd:.2%}',
+            'Annual volatility':f'{annual_vol:.2%}',
+            'Sharpe ratio':f'{sharpe_ratio:.2}',
+            'Calmar ratio':f'{calmar_ratio:.2}',
+            'beta':f'{beta:.2}',
+        }
+    
+    @staticmethod
+    def performance(self)-> pd.DataFrame:
+        pass
+    
+    @staticmethod
+    def position_info(self, data:pd.DataFrame, rebalance:str) -> pd.DataFrame:
         """顯示持倉資訊
 
         Attributes:
@@ -234,8 +245,9 @@ class Backtest:
         print('make sure to update databank before get info!')
 
         # 獲取買入和賣出日期
-        buy_date = self.get_rebalance_date(rebalance)[-1]
-        sell_date = [d for d in self.get_rebalance_date(rebalance=rebalance, end_date=self.t_date['t_date'].max()) if d > buy_date][0]
+        rebalance_dates = _get_rebalance_date(rebalance, end_date=self.t_date['t_date'].max())
+        buy_date = rebalance_dates[-1]
+        sell_date = next(d for d in rebalance_dates if d > buy_date)
         
         # 獲取持倉資訊
         position_info = data.loc[buy_date]
@@ -287,87 +299,153 @@ class Backtest:
         # 合併所有資訊
         return position_info\
             .merge(ch_name, on='stock_id', how='left')\
-            .merge(quarterly_report_release_date, on='stock_id', how='left')\
-            .merge(monthly_rev_release_date, on='stock_id', how='left')\
-            .merge(trading_notes, on='stock_id', how='left')\
-            .merge(trading_vol, on='stock_id', how='left')\
-            [[
-                'stock_id', 'name', 'buy_date', 'sell_date', 
-                '警示狀態', '漲跌停',
-                '前次成交量_K', '前次成交額_M', 
-                '季報公佈日期', '月營收公佈日期', 
-                '市場別', '主產業別',
-            ]].set_index('stock_id')
-      
-    # backtest
-    def get_rebalance_date(self, rebalance:Literal['MR', 'QR', 'W', 'M', 'Q', 'Y'], end_date:str | pd.Timestamp=None):
-        # dates
-        start_date = self.t_date['t_date'].min()
-        end_date = pd.Timestamp.today() + pd.DateOffset(days=2) if end_date is None else pd.to_datetime(end_date)
+                .merge(quarterly_report_release_date, on='stock_id', how='left')\
+                .merge(monthly_rev_release_date, on='stock_id', how='left')\
+                .merge(trading_notes, on='stock_id', how='left')\
+                .merge(trading_vol, on='stock_id', how='left')\
+                [[
+                    'stock_id', 'name', 'buy_date', 'sell_date', 
+                    '警示狀態', '漲跌停',
+                    '前次成交量_K', '前次成交額_M', 
+                    '季報公佈日期', '月營收公佈日期', 
+                    '市場別', '主產業別',
+                ]].set_index('stock_id')
+
+class Backtest:
+    def __init__(self, start=None, end=None, benchmark:str='0050'):
+        self.db = Databank()
+        self.return_df = self.db.read_dataset('stock_return', filter_date='t_date', start=start, end=end)
+        self.bmk_stock_id = benchmark
+        self.universe = None
+        self.t_date = self.get_t_date()
         
-        if rebalance == 'MR':
-            date_list = [
-                pd.to_datetime(f'{year}-{month:02d}-10') + pd.DateOffset(days=1)
-                for year in range(start_date.year, end_date.year + 1)
-                for month in range(1, 13)
-                if start_date <= pd.to_datetime(f'{year}-{month:02d}-10') + pd.DateOffset(days=1) <= end_date
-            ]
-            r_date = pd.DataFrame(date_list, columns=['r_date'])
+        # backtest
+        self.buy_list = None
+        self.portfolio_df = None
+        self.backtest_df = None
 
-        elif rebalance == 'QR':
-            qr_dates = ['03-31', '05-15', '08-14', '11-14']
-            date_list = [
-                pd.to_datetime(f'{year}-{md}') + pd.DateOffset(days=1)
-                for year in range(start_date.year, end_date.year + 1)
-                for md in qr_dates
-                if start_date <= pd.to_datetime(f"{year}-{md}") + pd.DateOffset(days=1) <= end_date
-            ]
-            r_date = pd.DataFrame(date_list, columns=['r_date'])
+        # performance
+        self.daily_return = None
+        self.equity_df = None
+        self.bmk_equity_df = (1 + self.return_df[self.bmk_stock_id]).cumprod() - 1
+        self.performance_df = None
+
+    # load data
+    # def get_t_date(self):
+    #     return self.db.read_dataset('mkt_calendar', 
+    #                             columns=['date'], 
+    #                             filters=[('休市原因中文說明(人工建置)','=','')],
+    #                             start=self.return_df.index.min().strftime('%Y-%m-%d'),
+    #                             end=None,
+    #                             )\
+    #                         .rename(columns={'date':'t_date'})
+
+    # def get_data(self, item:Union[str, pd.DataFrame], source:str=None):
+    #     if isinstance(item, str):
+    #         raw_data = self.db.read_dataset(
+    #             dataset=self.db.find_dataset(item) if source is None else source, 
+    #             filter_date='t_date', 
+    #             columns=['t_date', 'stock_id', item],
+    #             )
+    #     elif isinstance(item, pd.DataFrame):
+    #         raw_data = item
+
+    #     t_date = self.t_date
+    #     data = pd.merge_asof(
+    #         t_date[t_date['t_date']<=pd.Timestamp.today() + pd.DateOffset(days=2)], 
+    #         raw_data\
+    #         .sort_values(by='t_date')\
+    #         .drop_duplicates(subset=['t_date', 'stock_id'], keep='last')\
+    #         .set_index(['t_date', 'stock_id'])\
+    #         .unstack('stock_id')\
+    #         .droplevel(0, axis=1), 
+    #         on='t_date', 
+    #         direction='backward'
+    #         )\
+    #         .ffill(limit=240)\
+    #         .set_index(['t_date'])\
+    #         .dropna(axis=1, how='all')\
         
-        elif rebalance == 'M':
-            r_date = pd.DataFrame(pd.date_range(start=start_date, end=end_date, freq='MS'), columns=['r_date'])
-
-        elif rebalance == 'W':
-            r_date = pd.DataFrame(pd.date_range(start=start_date, end=end_date, freq='W-MON'), columns=['r_date'])
-
-        elif rebalance == 'Q': 
-             r_date = pd.DataFrame(pd.date_range(start=start_date, end=end_date, freq='QS'), columns=['r_date'])
-             
-        elif rebalance == 'Y':
-            r_date = pd.DataFrame(pd.date_range(start=start_date, end=end_date, freq='YS'), columns=['r_date'])
-        
-        else:
-            raise ValueError("Invalid frequency. Allowed values are 'QR', 'W', 'M', 'Q', 'Y'.")
-
-        return pd.merge_asof(
-            r_date,
-            self.t_date, 
-            left_on='r_date', 
-            right_on='t_date', 
-            direction='forward'
-            )['t_date'].to_list()
+    #     if self.universe is not None:
+    #         return data[self.universe].filter(regex='^\d')
+    #     else:
+    #         return data.filter(regex='^\d')
     
-    def get_portfolio(self, data:pd.DataFrame, signal_shift:int=0, rebalance:Literal['QR', 'W', 'M', 'Q', 'Y']='QR', hold_period:int=None):
-      
-        # rebalance
-        r_date = self.get_rebalance_date(rebalance)
-        self.buy_list =  data[data.index.isin(r_date)]
-        
-        # weight
-        portfolio = self.buy_list\
-            .fillna(False)\
-            .astype(int)\
-            .apply(lambda x: x / x.sum(), axis=1)
+    # def get_factor(self, item:str | pd.DataFrame, asc:bool=True, source:str=None):
+    #     if isinstance(item, str):
+    #         return self.get_data(item=item, source=source).rank(axis=1, pct=True, ascending=asc)
+    #     elif isinstance(item, pd.DataFrame):
+    #         return item.rank(axis=1, pct=True, ascending=asc)
 
-        # shift & hold_period
-        portfolio = pd.DataFrame(self.return_df.index)\
-            .merge(portfolio, on='t_date', how='left')\
-            .set_index('t_date')\
-            .shift(signal_shift)\
-            .ffill(limit=hold_period)\
-            .dropna(how='all')
-        self.portfolio_df = portfolio
-        return portfolio
+    # backtest
+    # def get_rebalance_date(self, rebalance:Literal['MR', 'QR', 'W', 'M', 'Q', 'Y'], end_date:str | pd.Timestamp=None):
+    #     # dates
+    #     start_date = self.t_date['t_date'].min()
+    #     end_date = pd.Timestamp.today() + pd.DateOffset(days=2) if end_date is None else pd.to_datetime(end_date)
+        
+    #     if rebalance == 'MR':
+    #         date_list = [
+    #             pd.to_datetime(f'{year}-{month:02d}-10') + pd.DateOffset(days=1)
+    #             for year in range(start_date.year, end_date.year + 1)
+    #             for month in range(1, 13)
+    #             if start_date <= pd.to_datetime(f'{year}-{month:02d}-10') + pd.DateOffset(days=1) <= end_date
+    #         ]
+    #         r_date = pd.DataFrame(date_list, columns=['r_date'])
+
+    #     elif rebalance == 'QR':
+    #         qr_dates = ['03-31', '05-15', '08-14', '11-14']
+    #         date_list = [
+    #             pd.to_datetime(f'{year}-{md}') + pd.DateOffset(days=1)
+    #             for year in range(start_date.year, end_date.year + 1)
+    #             for md in qr_dates
+    #             if start_date <= pd.to_datetime(f"{year}-{md}") + pd.DateOffset(days=1) <= end_date
+    #         ]
+    #         r_date = pd.DataFrame(date_list, columns=['r_date'])
+        
+    #     elif rebalance == 'M':
+    #         r_date = pd.DataFrame(pd.date_range(start=start_date, end=end_date, freq='MS'), columns=['r_date'])
+
+    #     elif rebalance == 'W':
+    #         r_date = pd.DataFrame(pd.date_range(start=start_date, end=end_date, freq='W-MON'), columns=['r_date'])
+
+    #     elif rebalance == 'Q': 
+    #          r_date = pd.DataFrame(pd.date_range(start=start_date, end=end_date, freq='QS'), columns=['r_date'])
+             
+    #     elif rebalance == 'Y':
+    #         r_date = pd.DataFrame(pd.date_range(start=start_date, end=end_date, freq='YS'), columns=['r_date'])
+        
+    #     else:
+    #         raise ValueError("Invalid frequency. Allowed values are 'QR', 'W', 'M', 'Q', 'Y'.")
+
+    #     return pd.merge_asof(
+    #         r_date,
+    #         self.t_date, 
+    #         left_on='r_date', 
+    #         right_on='t_date', 
+    #         direction='forward'
+    #         )['t_date'].to_list()
+    
+    # def get_portfolio(self, data:pd.DataFrame, signal_shift:int=0, rebalance:Literal['QR', 'W', 'M', 'Q', 'Y']='QR', hold_period:int=None):
+      
+    #     # rebalance
+    #     r_date = self.get_rebalance_date(rebalance)
+    #     self.buy_list =  data[data.index.isin(r_date)]
+        
+    #     # weight
+    #     portfolio = self.buy_list\
+    #         .fillna(False)\
+    #         .astype(int)\
+    #         .apply(lambda x: x / x.sum(), axis=1)
+
+    #     # shift & hold_period
+    #     portfolio = pd.DataFrame(self.return_df.index)\
+    #         .merge(portfolio, on='t_date', how='left')\
+    #         .set_index('t_date')\
+    #         .shift(signal_shift)\
+    #         .ffill(limit=hold_period)\
+    #         .dropna(how='all')
+    #     self.portfolio_df = portfolio
+    #     return portfolio
         
     def backtesting(self, data:pd.DataFrame, signal_shift:int=0, rebalance:Literal['QR', 'W', 'M', 'Q', 'Y']='QR', hold_period:int=None, stop_loss:float=None, show=True):
 
@@ -400,7 +478,6 @@ class Backtest:
         if show:
             display(self.performance_df)
     
-
     # analysis
     def performance_metrics(self, equity_curve):
         if not equity_curve.empty:
@@ -1524,121 +1601,3 @@ class Backtest:
         return surprise\
             .replace([np.inf, -np.inf], np.nan)\
             .stack()
-    
-class Strategy():
-    def __init__(self, name:str, c_return:Union[pd.DataFrame, pd.Series], bemchmark:Union[pd.DataFrame, pd.Series]):
-        self.name = name
-        self.c_return = c_return
-        self.bmk_c_return = (1 + return_df[self.bmk_stock_id]).cumprod() - 1
-        
-        
-        
-        (1 + return_df[self.bmk_stock_id]).cumprod() - 1
-
-        self.summary = self._calc_summary()
-        self.position = pd.DataFrame()
-        self.c_return = pd.DataFrame()
-    
-    def _calc_summary(self, equity_curve):
-        if not equity_curve.empty:
-            cumulative_return = equity_curve.iloc[-1]
-            daily_returns = (1 + equity_curve).pct_change().dropna()
-            bmk_daily_returns = (1 + self.bmk_equity_df).pct_change().dropna()
-            
-            annual_return = (1 + cumulative_return) ** (240 / len(equity_curve)) - 1 # annual return
-            mdd = ((1 + equity_curve) / (1 + equity_curve).cummax() - 1).min() # mdd
-            annual_vol = daily_returns.std() * np.sqrt(240) # annual vol
-            calmar_ratio = annual_return / abs(mdd) # calmar Ratio
-            sharpe_ratio = annual_return/ annual_vol # sharpe Ratio
-            beta = daily_returns.cov(bmk_daily_returns) / bmk_daily_returns.var() # beta
-        else:
-            annual_return, cumulative_return, mdd, annual_vol, sharpe_ratio, calmar_ratio, beta = 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
-        
-        return {
-            'Annual return':f'{annual_return:.2%}',
-            'Cumulative return':f'{cumulative_return:.2%}',
-            'Max drawdown':f'{mdd:.2%}',
-            'Annual volatility':f'{annual_vol:.2%}',
-            'Sharpe ratio':f'{sharpe_ratio:.2}',
-            'Calmar ratio':f'{calmar_ratio:.2}',
-            'beta':f'{beta:.2}',
-        }
-
-    @staticmethod
-    def position_info(self, data:pd.DataFrame, rebalance:str) -> pd.DataFrame:
-        """顯示持倉資訊
-
-        Attributes:
-            rebalance (str): 再平衡方式
-
-        Returns:
-            DataFrame: 包含股票代碼、名稱、買入日期、賣出日期、警示狀態、漲跌停、前次成交量、前次成交額、季報公佈日期、月營收公佈日期、市場別、主產業別的資料表
-        """
-        print('make sure to update databank before get info!')
-
-        # 獲取買入和賣出日期
-        rebalance_dates = _get_rebalance_date(rebalance, end_date=self.t_date['t_date'].max())
-        buy_date = rebalance_dates[-1]
-        sell_date = next(d for d in rebalance_dates if d > buy_date)
-        
-        # 獲取持倉資訊
-        position_info = data.loc[buy_date]
-        position_info = position_info[position_info]\
-            .reset_index()\
-            .rename(columns={'index':'stock_id', position_info.name:'buy_date'})\
-            .assign(buy_date=position_info.name)\
-            .assign(sell_date=sell_date)
-
-        filters=[('stock_id', 'in', position_info['stock_id'].to_list())]
-        
-        # 獲取股票中文名稱
-        ch_name = self.db.read_dataset('stock_basic_info', columns=['stock_id', '證券名稱'], filters=filters).rename(columns={'證券名稱':'name'})
-
-        # 獲取財報和月營收公佈日期
-        quarterly_report_release_date = self.db.read_dataset('fin_data', columns=['stock_id', 'release_date'], filters=filters)\
-            .loc[lambda x: x.groupby('stock_id')['release_date'].idxmax()]\
-            .rename(columns={'release_date':'季報公佈日期'})
-        monthly_rev_release_date = self.db.read_dataset('monthly_rev', columns=['stock_id', 'release_date'], filters=filters)\
-            .loc[lambda x: x.groupby('stock_id')['release_date'].idxmax()]\
-            .rename(columns={'release_date':'月營收公佈日期'})
-
-        filters.append(('date', '=', self.return_df.index.max()))
-
-        # 獲取市場類型、產業類別、交易狀態
-        trading_notes = self.db.read_dataset('stock_trading_notes', columns=['date', 'stock_id', '是否為注意股票', '是否為處置股票', '是否暫停交易', '是否全額交割', '漲跌停註記', '市場別', '主產業別(中)'], filters=filters)\
-        .assign(
-            警示狀態=lambda x: x.apply(
-                lambda row: ', '.join(filter(None, [
-                    '注意股' if row['是否為注意股票'] == 'Y' else '',
-                    '處置股' if row['是否為處置股票'] == 'Y' else '', 
-                    '暫停交易' if row['是否暫停交易'] == 'Y' else '',
-                    '全額交割' if row['是否全額交割'] == 'Y' else '',
-                ])), axis=1
-            ).replace('', '='),
-            漲跌停=lambda x: x['漲跌停註記'].replace('', '=')
-        )\
-        .rename(columns={'主產業別(中)':'主產業別'})\
-        [['stock_id', '警示狀態', '漲跌停', '市場別', '主產業別']]
-        
-        # 獲取交易量和交易金額
-        trading_vol = self.db.read_dataset('stock_trading_data', columns=['stock_id', '成交量(千股)', '成交金額(元)'], filters=filters)\
-        .rename(columns={
-            '成交量(千股)':'前次成交量_K',
-            '成交金額(元)':'前次成交額_M',
-                        })\
-        .assign(前次成交額_M=lambda x: (x['前次成交額_M']/1e6).round(2))
-
-        # 合併所有資訊
-        return position_info\
-            .merge(ch_name, on='stock_id', how='left')\
-                .merge(quarterly_report_release_date, on='stock_id', how='left')\
-                .merge(monthly_rev_release_date, on='stock_id', how='left')\
-                .merge(trading_notes, on='stock_id', how='left')\
-                .merge(trading_vol, on='stock_id', how='left')\
-                [[
-                    'stock_id', 'name', 'buy_date', 'sell_date', 
-                    '警示狀態', '漲跌停',
-                    '前次成交量_K', '前次成交額_M', 
-                    '季報公佈日期', '月營收公佈日期', 
-                    '市場別', '主產業別',
-                ]].set_index('stock_id')
