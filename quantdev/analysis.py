@@ -32,7 +32,7 @@ def plot_test_factor(self, factor:pd.DataFrame, rebalance:str='QR', group:int=10
     #         break
     f_daily_rtn = (1 + results[max(results.keys())]).pct_change() - (1 + results[base_key]).pct_change()
     f_rtn  = (1+f_daily_rtn).cumprod()-1
-    f_relative_rtn, downtrend_rtn = self.calculate_relative_return(f_daily_rtn)
+    f_relative_rtn, downtrend_rtn = self._calc_relative_return(f_daily_rtn)
     bmk_rtn = self.bmk_equity_df
 
     # relative return
@@ -108,7 +108,7 @@ def plot_test_factor(self, factor:pd.DataFrame, rebalance:str='QR', group:int=10
         row=2, col=1)
 
     # IC
-    ic = self.calculate_ic(factor)
+    ic = self._calc_ic(factor)
 
     fig.add_trace(go.Scatter(
         x=ic.index, 

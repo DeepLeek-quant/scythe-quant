@@ -26,7 +26,7 @@ from .config import config
 class DataBankInfra:
     """資料庫基礎建設
 
-    Attributes:
+    Args:
         databank_path (str): 資料庫路徑
         start_date (str): 資料起始日期，格式為 YYYY-MM-DD
         databank_map (dict): 資料庫結構對照表，包含以下資料集:
@@ -205,7 +205,7 @@ class DataBankInfra:
     def list_columns(self, dataset:str):
         """取得資料集中所有欄位名稱
 
-        Attributes:
+        Args:
             dataset (str): 資料集名稱
 
         Returns:
@@ -234,7 +234,7 @@ class DataBankInfra:
     def find_dataset(self, column:str):
         """根據欄位名稱找出對應的資料集名稱
 
-        Attributes:
+        Args:
             column (str): 欄位名稱
 
         Examples:
@@ -263,7 +263,7 @@ class DataBankInfra:
     def read_dataset(self, dataset:str, filter_date:str='date', start:Union[int, str]=None, end:Union[int, str]=None, columns:list=None, filters:list=None) -> pd.DataFrame:
         """讀取資料集
 
-        Attributes:
+        Args:
             dataset (str): 資料集名稱
             filter_date (str, optional): 用於日期過濾的欄位名稱，預設為 'date'
             start (Union[int, str], optional): 起始日期，可以是年份(int)或日期字串(str)
@@ -401,7 +401,7 @@ class TEJHandler(DataBankInfra):
 
     處理 TEJ API 資料的下載、更新與儲存。
 
-    Attributes:
+    Args:
         tej_token (str): TEJ API 金鑰
         tej_datasets (dict): TEJ 資料集對照表，包含中文名稱與 API ID
         bulk_tej_data_temp (pd.DataFrame): 暫存批量下載的資料
@@ -452,7 +452,7 @@ class TEJHandler(DataBankInfra):
     def reach_tej_limit(self, print_status:Union[str, bool]=False)-> bool:
         """檢查 TEJ API 使用量是否達到上限
 
-        Attributes:
+        Args:
             print_status (str | bool, optional): 是否印出使用量狀態
                 - False: 不印出
                 - True/'short': 印出簡短狀態
@@ -521,7 +521,7 @@ class TEJHandler(DataBankInfra):
     def get_tej_data(self, dataset:str, start_date:str=None, end_date:str=None, stock_id:str=None)-> pd.DataFrame:
         """從 TEJ API 取得資料
 
-        Attributes:
+        Args:
             dataset (str): 資料集名稱
             start_date (str, optional): 起始日期，格式為 'YYYY-MM-DD'
             end_date (str, optional): 結束日期，格式為 'YYYY-MM-DD'
@@ -584,7 +584,7 @@ class TEJHandler(DataBankInfra):
         當需要取得大量資料時，為避免一次取得太多資料導致 API 使用量超過上限，
         將資料分批取得，每次取得一年的資料。
 
-        Attributes:
+        Args:
             dataset (str): 資料集名稱
             start_date (str): 起始日期，格式為 YYYY-MM-DD
             end_date (str, optional): 結束日期，格式為 YYYY-MM-DD，預設為今天
@@ -639,7 +639,7 @@ class TEJHandler(DataBankInfra):
     def _process_tej_data(self, dataset:str, df:pd.DataFrame):
         """處理 TEJ 資料
 
-        Attributes:
+        Args:
             dataset (str): 資料集名稱
             df (pd.DataFrame): 要處理的 DataFrame
 
@@ -723,7 +723,7 @@ class TEJHandler(DataBankInfra):
 
         將資料的日期或發布日期對應到下一個交易日，用於計算資訊揭露後的市場反應
 
-        Attributes:
+        Args:
             df (pd.DataFrame): 要加入交易日期的 DataFrame
 
         Returns:
@@ -769,7 +769,7 @@ class TEJHandler(DataBankInfra):
         將新的交易資料與舊資料合併，並重新計算除權息調整係數。新資料的調整係數會乘上舊資料的調整係數，
         以確保歷史資料的連續性。
 
-        Attributes:
+        Args:
             old_data (pd.DataFrame): 舊的交易資料，包含 date、stock_id、調整係數、調整係數(除權) 等欄位
             new_data (pd.DataFrame): 新的交易資料，包含 date、stock_id、調整係數、調整係數(除權) 等欄位
 
@@ -827,7 +827,7 @@ class TEJHandler(DataBankInfra):
     def update_tej_dataset(self, dataset:str, end_date:str=None):
         """更新TEJ資料集
 
-        Attributes:
+        Args:
             dataset (str): 要更新的資料集名稱
             end_date (str, optional): 更新資料的結束日期. Defaults to None.
 
@@ -1243,7 +1243,7 @@ class ProcessedDataHandler(DataBankInfra):
 
     此類別負責處理原始資料,計算各種財務、技術、籌碼等指標。
 
-    Attributes:
+    Args:
         processed_datasets (dict): 已處理資料集的設定,包含:
             - fin_data_chng: 財務資料變化率
             - fin_ratio_diff: 財務比率差分
@@ -1298,7 +1298,7 @@ class ProcessedDataHandler(DataBankInfra):
 
         計算財務資料的移動平均與變化率，包含季增率(qoq)與年增率(yoy)。
 
-        Attributes:
+        Args:
             columns (list): 要計算變化率的欄位名稱，預設為:
 
                 - 營業收入
@@ -1350,7 +1350,7 @@ class ProcessedDataHandler(DataBankInfra):
 
         計算財務比率的移動平均與差分，包含季差(qoq_diff)與年差(yoy_diff)。
 
-        Attributes:
+        Args:
             columns (list): 要計算差分的欄位名稱，預設為:
 
                 - 營業毛利率
@@ -1666,7 +1666,7 @@ class ProcessedDataHandler(DataBankInfra):
 
         根據指定的資料集或原始資料集更新對應的處理後資料。
 
-        Attributes:
+        Args:
             dataset (str): 要更新的處理後資料集名稱
             tej_dataset (str): 要更新的原始資料集名稱
 
@@ -1708,7 +1708,7 @@ class PublicDataHandler(DataBankInfra):
 
     處理從公開網站爬取的資料，如公司產業標籤、公司地址等。
 
-    Attributes:
+    Args:
         stock_industry_tag_url (str): 公司產業標籤爬取網址
         stock_address_url (str): 公司地址爬取網址
         rf_rate_url (str): 無風險利率爬取網址
@@ -1874,7 +1874,7 @@ class Databank(TEJHandler, FinMindHandler, ProcessedDataHandler, PublicDataHandl
 
     整合 TEJ、FinMind 與公開資料的資料處理功能。
 
-    Attributes:
+    Args:
         databank_path (str): 資料庫路徑
         tej_token (str): TEJ API 金鑰
         tej_datasets (dict): TEJ 資料集對照表

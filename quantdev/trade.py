@@ -16,7 +16,7 @@ quote_api = RestClient(api_key=config.fugle_config.get('fugle_api_key'))
 def get_quote(stock_id: str, lot_type: Literal[0, 1, None] = None, raw: bool = False):
     """取得股票報價資訊
 
-       Attributes:
+       Args:
            stock_id (str): 股票代號
            lot_type (Literal[0, 1, None]): 0 代表整股，1 代表零股，None 代表兩者都要
            raw (bool): True 代表回傳原始資料，False 代表回傳處理過的資料
@@ -55,7 +55,7 @@ def get_quote(stock_id: str, lot_type: Literal[0, 1, None] = None, raw: bool = F
 def price_pct_to_tick(price: Union[int, float], pct: float):
         """根據價格和漲跌幅計算調整後的價格
 
-        Attributes:
+        Args:
             price (int or float): 股票價格
             pct (float): 漲跌幅，例如 0.01 代表漲 1%，-0.01 代表跌 1%
 
@@ -87,7 +87,7 @@ def price_pct_to_tick(price: Union[int, float], pct: float):
 def calc_price( stock_id: str, lot_type: Literal[0, 1], direction: int, price_tolerance: float = 0.01):
         """根據股票代碼、交易類型、交易方向和價格容忍度計算下單價格
 
-        Attributes:
+        Args:
             stock_id (str): 股票代碼
             lot_type (Literal[0, 1]): 0 表示整股，1 表示零股
             direction (int): 交易方向，1 表示買入，-1 表示賣出
@@ -143,7 +143,7 @@ def mkt_is_open():
 class Position:
     """建構 Position
 
-    Attributes:
+    Args:
         - data (Union[Tuple[str, Union[int, float]], sj.position.StockPosition]): 代表部位的資料，可以是一個元組 (stock_id, money) 或是 shioaji 的 StockPosition 物件。
         - price_tolerance (float): 價格容忍度，預設為 0.02 (2%)。
         - odd (bool): 是否允許零股交易，預設為 True。
@@ -206,7 +206,7 @@ class Position:
 
         更新部位的報價資訊，包括整股與零股的價格。
 
-        Attributes:
+        Args:
             price_tolerance (float): 價格容忍度，預設為 0.02。
             odd (bool): 是否計算零股價格，預設為 True。
 
@@ -261,7 +261,7 @@ class Position:
     def __mul__(self, other:int):
         """將持倉乘以一個標量值。
 
-        Attributes:
+        Args:
             other (int): 要乘以的標量值。
         
         Examples:
@@ -293,7 +293,7 @@ class Portfolio:
 
         用於管理多個策略的投資部位，支持部位的加減運算和報價更新。
 
-        Attributes:
+        Args:
         data (Dict[str, Union[List[Position], Tuple[List[str], int]]]): 投資組合資料，可以是以下兩種格式之一：
 
         1. {策略名稱: ([股票代號列表], 投資金額)}
@@ -407,7 +407,7 @@ class Portfolio:
         將兩個投資組合的部位相加，如果兩個組合有相同的策略和股票，則將其部位相加。
         如果某個策略或股票只存在於其中一個組合，則保留該部位。
 
-        Attributes:
+        Args:
             other (Portfolio): 要相加的另一個投資組合
 
         Returns:
@@ -454,7 +454,7 @@ class Portfolio:
         如果某個股票只存在於第一個組合，則保留該部位。
         如果某個股票只存在於第二個組合，則將該部位反轉（乘以-1）。
 
-        Attributes:
+        Args:
             other (Portfolio): 要相減的另一個投資組合
 
         Returns:
@@ -501,7 +501,7 @@ class Portfolio:
         1. {策略名稱: [(股票代號列表), 投資金額]}
         2. {策略名稱: [Position物件列表]}
 
-        Attributes:
+        Args:
             strategy (Union[Dict[str, List[Position]], Dict[str, Tuple[List[str], int]]]): 新的部位資料，格式必須符合以下之一：
             
             - {策略名稱: [Position物件列表]}
@@ -554,7 +554,7 @@ class SjAPI(sj.Shioaji):
 
         繼承自 shioaji.Shioaji，提供自動登入和憑證啟用功能。
 
-        Attributes:
+        Args:
             key (dict): API 金鑰和憑證資訊，必須包含以下欄位：
                 - api_key: API 金鑰
                 - secret_key: API 密鑰
@@ -620,7 +620,7 @@ class Trader:
 
         提供基本的交易功能，包括查詢庫存、下單、取消委託等。
 
-        Attributes:
+        Args:
             api (SjAPI): SjAPI 物件，用於執行交易相關操作
 
         Examples:
@@ -732,7 +732,7 @@ class PortfolioManager(Trader):
 
         繼承自 Trader 類別，提供投資組合管理和執行相關功能，包括同步庫存、更新部位、執行交易等。
 
-        Attributes:
+        Args:
             api (SjAPI): SjAPI 物件，用於執行交易相關操作
             portfolio (Union[Portfolio, str], optional): 初始投資組合或 JSON 檔案路徑
             json_path (str): 投資組合 JSON 檔案的預設儲存路徑
@@ -889,7 +889,7 @@ class PortfolioManager(Trader):
 
         更新目標投資組合的部位資料，並同步實際持有部位。
 
-        Attributes:
+        Args:
             strategy (Union[Dict[str, List[Position]], Dict[str, List[Tuple[str, int]]]]): 新的目標投資組合資料，格式為：
                 {策略名稱: [Position物件列表]}
 
@@ -928,7 +928,7 @@ class PortfolioManager(Trader):
 
         將實際持有部位的資料儲存到指定的 JSON 檔案中。
 
-        Attributes:
+        Args:
             path (str, optional): JSON 檔案的路徑，預設為 self.json_path
         """
         
@@ -951,7 +951,7 @@ class PortfolioManager(Trader):
 
         從指定的 JSON 檔案中載入投資組合資料，並同步實際持有部位。
 
-        Attributes:
+        Args:
             path (str, optional): JSON 檔案的路徑，預設為 self.json_path
 
         Returns:
@@ -1040,7 +1040,7 @@ class PortfolioManager(Trader):
 
         執行單一部位交易，包括買入和賣出。
 
-        Attributes:
+        Args:
             position (Position): 要交易的部位
         """
         
@@ -1070,7 +1070,7 @@ class PortfolioManager(Trader):
 
         執行整個投資組合交易，包括買入和賣出。
 
-        Attributes:
+        Args:
             portfolio (Portfolio): 要交易的投資組合
         """
         
@@ -1087,7 +1087,7 @@ class PortfolioManager(Trader):
         2. 銀行餘額不足（除非 ignore_bank_balance=True）
         3. 投資組合已完全執行（actual_portfolio 等於 target_portfolio）
 
-        Attributes:
+        Args:
             freq (int): 更新頻率，單位為分鐘，預設為 1 分鐘
             ignore_bank_balance (bool): 是否忽略銀行餘額檢查，預設為 False
                 - True: 即使銀行餘額不足也繼續執行

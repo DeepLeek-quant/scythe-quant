@@ -1,21 +1,22 @@
 from pathlib import Path
 import json
+from . import get_config_dir
 
 class Config:
     def __init__(self):
-        self.config_dir = Path(__file__).parent.parent / 'config'
-        self.data_config = self.__load_config('data.json')
-        self.fugle_config = self.__load_config('fugle_marketdata.json')
-        self.sinopac_config = self.__load_config('sinopac.json')
+        self.config_dir = get_config_dir()
+        self.data_config = self._load_config('data.json')
+        self.fugle_config = self._load_config('fugle_marketdata.json')
+        self.sinopac_config = self._load_config('sinopac.json')
 
-    def __load_config(self, file_name: str) -> dict:
+    def _load_config(self, file_name: str) -> dict:
         """
         從 JSON 檔案載入設定。
         
         會先嘗試從主要設定檔載入，如果主要設定檔不存在則會改用範例設定檔。
         兩個檔案都必須放在 config 目錄下。
         
-        Attributes:
+        Args:
             file_name: 設定檔名稱
             
         Returns:
@@ -38,6 +39,6 @@ class Config:
             with open(example_path, 'r') as f:
                 return json.load(f)
         else:
-            return {}
+            raise FileNotFoundError(f"No config file found in {self.config_dir}")
 
 config = Config()
