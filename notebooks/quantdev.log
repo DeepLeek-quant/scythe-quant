@@ -411,3 +411,100 @@ t_date
 2025-02-11 00:27:06,230 - root - INFO - Exported trading_activity as DataFrame from parquet
 2025-02-11 00:27:22,223 - root - INFO - Exported mkt_calendar as DataFrame from parquet
 2025-02-11 00:27:23,159 - root - INFO - Exported trading_activity as DataFrame from parquet
+2025-02-11 00:40:04,433 - root - INFO - Exported trading_activity as DataFrame from parquet
+2025-02-11 00:41:38,122 - root - INFO - Saved inst_investor_ratio_diff as parquet from DataFrame
+2025-02-11 00:43:15,979 - root - INFO - Exported inst_investor_ratio_diff as DataFrame from parquet
+2025-02-11 00:59:37,889 - root - INFO - Exported trading_activity as DataFrame from parquet
+2025-02-11 01:01:29,487 - root - INFO - Saved inst_investor_ratio_diff as parquet from DataFrame
+2025-02-11 01:01:29,865 - root - INFO - Updated processed data for inst_investor_ratio_diff
+2025-02-11 01:01:29,866 - root - INFO - Updated processed data for inst_investor_ratio_diff from trading_activity
+2025-02-11 01:01:30,258 - root - INFO - Exported trading_activity as DataFrame from parquet
+2025-02-11 01:02:09,138 - root - INFO - Saved inst_investor_money as parquet from DataFrame
+2025-02-11 01:02:09,298 - root - INFO - Updated processed data for inst_investor_money
+2025-02-11 01:02:09,298 - root - INFO - Updated processed data for inst_investor_money from trading_activity
+2025-02-11 01:02:48,463 - root - INFO - Starting databank update
+2025-02-11 01:02:48,501 - root - INFO - Exported monthly_rev as DataFrame from parquet
+2025-02-11 01:02:50,436 - root - INFO - Exported mkt_calendar as DataFrame from parquet
+2025-02-11 01:02:50,444 - root - INFO - Fetched monthly_rev from 2025-01-01 to 2025-01-01 from TEJ
+2025-02-11 01:02:50,926 - root - INFO - Saved monthly_rev as parquet from DataFrame
+2025-02-11 01:02:50,929 - root - INFO - Updated monthly_rev from tej
+2025-02-11 01:02:50,956 - root - INFO - Exported monthly_rev as DataFrame from parquet
+2025-02-11 01:02:53,054 - root - INFO - Saved monthly_rev_chng as parquet from DataFrame
+2025-02-11 01:02:53,059 - root - INFO - Updated processed data for monthly_rev_chng
+2025-02-11 01:02:53,059 - root - INFO - Updated processed data for monthly_rev_chng from monthly_rev
+2025-02-11 01:02:53,074 - root - INFO - Exported self_disclosed as DataFrame from parquet
+2025-02-11 01:02:54,525 - root - INFO - Exported mkt_calendar as DataFrame from parquet
+2025-02-11 01:02:54,528 - root - INFO - Fetched self_disclosed from 2024-12-01 to 2024-12-01 from TEJ
+2025-02-11 01:02:54,694 - root - INFO - Saved self_disclosed as parquet from DataFrame
+2025-02-11 01:02:54,696 - root - INFO - Updated self_disclosed from tej
+2025-02-11 01:02:54,755 - root - INFO - Exported fin_data as DataFrame from parquet
+2025-02-11 01:02:56,567 - root - INFO - Exported mkt_calendar as DataFrame from parquet
+2025-02-11 01:02:56,572 - root - INFO - Fetched fin_data from 2024-12-01 to 2024-12-01 from TEJ
+2025-02-11 01:02:57,429 - root - INFO - Saved fin_data as parquet from DataFrame
+2025-02-11 01:02:57,434 - root - INFO - Updated fin_data from tej
+2025-02-11 01:02:57,455 - root - INFO - Exported fin_data as DataFrame from parquet
+2025-02-11 01:03:03,673 - root - INFO - Saved fin_data_chng as parquet from DataFrame
+2025-02-11 01:03:03,687 - root - INFO - Updated processed data for fin_data_chng
+2025-02-11 01:03:03,687 - root - INFO - Updated processed data for fin_data_chng from fin_data
+2025-02-11 01:03:03,699 - root - INFO - Exported fin_data as DataFrame from parquet
+2025-02-11 01:03:53,597 - root - INFO - Saved fin_ratio_diff as parquet from DataFrame
+2025-02-11 01:03:53,608 - root - INFO - Updated processed data for fin_ratio_diff
+2025-02-11 01:03:53,608 - root - INFO - Updated processed data for fin_ratio_diff from fin_data
+2025-02-11 01:03:53,621 - root - INFO - Exported fin_data as DataFrame from parquet
+2025-02-11 01:03:53,670 - root - INFO - Saved roe_roa as parquet from DataFrame
+2025-02-11 01:03:53,674 - root - INFO - Updated processed data for roe_roa
+2025-02-11 01:03:53,674 - root - INFO - Updated processed data for roe_roa from fin_data
+2025-02-11 01:03:53,687 - root - INFO - Exported dividend_policy as DataFrame from parquet
+2025-02-11 01:04:00,133 - root - INFO - Fetched dividend_policy from TEJ
+2025-02-11 01:04:00,239 - root - INFO - Saved dividend_policy as parquet from DataFrame
+2025-02-11 01:04:00,239 - root - INFO - Updated dividend_policy from tej
+2025-02-11 01:04:00,270 - root - INFO - Exported capital_formation as DataFrame from parquet
+2025-02-11 01:04:01,827 - root - INFO - Fetched capital_formation from TEJ
+2025-02-11 01:04:02,227 - root - INFO - Saved capital_formation as parquet from DataFrame
+2025-02-11 01:04:02,233 - root - INFO - Updated capital_formation from tej
+2025-02-11 01:04:04,324 - root - INFO - Exported stock_trading_data as DataFrame from parquet
+2025-02-11 01:04:12,508 - root - INFO - Exported mkt_calendar as DataFrame from parquet
+2025-02-11 01:04:12,517 - root - INFO - Fetched stock_trading_data from 2025-02-03 to 2025-02-10 from TEJ
+2025-02-11 01:04:52,010 - root - INFO - Saved stock_trading_data as parquet from DataFrame
+2025-02-11 01:04:52,086 - root - INFO - Updated stock_trading_data from tej
+2025-02-11 01:04:52,646 - root - INFO - Exported stock_trading_data as DataFrame from parquet
+2025-02-11 01:05:09,821 - root - INFO - Saved stock_momentum as parquet from DataFrame
+2025-02-11 01:05:09,866 - root - INFO - Updated processed data for stock_momentum
+2025-02-11 01:05:09,866 - root - INFO - Updated processed data for stock_momentum from stock_trading_data
+2025-02-11 01:05:10,111 - root - INFO - Exported stock_trading_data as DataFrame from parquet
+2025-02-11 01:05:12,743 - root - INFO - Saved stock_return as parquet from DataFrame
+2025-02-11 01:05:12,751 - root - INFO - Updated processed data for stock_return
+2025-02-11 01:05:12,751 - root - INFO - Updated processed data for stock_return from stock_trading_data
+2025-02-11 01:05:15,664 - root - INFO - Exported stock_trading_notes as DataFrame from parquet
+2025-02-11 01:05:22,941 - root - INFO - Exported mkt_calendar as DataFrame from parquet
+2025-02-11 01:05:22,983 - root - INFO - Fetched stock_trading_notes from 2025-02-04 to 2025-02-11 from TEJ
+2025-02-11 01:05:58,434 - root - INFO - Saved stock_trading_notes as parquet from DataFrame
+2025-02-11 01:05:59,161 - root - INFO - Updated stock_trading_notes from tej
+2025-02-11 01:06:08,309 - root - INFO - Exported trading_activity as DataFrame from parquet
+2025-02-11 01:06:18,038 - root - INFO - Exported mkt_calendar as DataFrame from parquet
+2025-02-11 01:06:18,055 - root - INFO - Fetched trading_activity from 2025-02-03 to 2025-02-10 from TEJ
+2025-02-11 01:07:02,951 - root - INFO - Saved trading_activity as parquet from DataFrame
+2025-02-11 01:07:03,143 - root - INFO - Updated trading_activity from tej
+2025-02-11 01:07:03,639 - root - INFO - Exported trading_activity as DataFrame from parquet
+2025-02-11 01:08:50,535 - root - INFO - Saved inst_investor_ratio_diff as parquet from DataFrame
+2025-02-11 01:08:50,989 - root - INFO - Updated processed data for inst_investor_ratio_diff
+2025-02-11 01:08:50,989 - root - INFO - Updated processed data for inst_investor_ratio_diff from trading_activity
+2025-02-11 01:08:52,131 - root - INFO - Exported trading_activity as DataFrame from parquet
+2025-02-11 01:09:32,921 - root - INFO - Saved inst_investor_money as parquet from DataFrame
+2025-02-11 01:09:33,055 - root - INFO - Updated processed data for inst_investor_money
+2025-02-11 01:09:33,055 - root - INFO - Updated processed data for inst_investor_money from trading_activity
+2025-02-11 01:09:33,316 - root - INFO - Exported stock_custody as DataFrame from parquet
+2025-02-11 01:09:35,966 - root - INFO - Exported mkt_calendar as DataFrame from parquet
+2025-02-11 01:09:35,973 - root - INFO - Fetched stock_custody from 2025-01-24 to 2025-02-07 from TEJ
+2025-02-11 01:09:38,167 - root - INFO - Saved stock_custody as parquet from DataFrame
+2025-02-11 01:09:38,186 - root - INFO - Updated stock_custody from tej
+2025-02-11 01:09:38,273 - root - INFO - Exported stock_custody as DataFrame from parquet
+2025-02-11 01:09:41,147 - root - INFO - Saved shareholding_pct as parquet from DataFrame
+2025-02-11 01:09:41,159 - root - INFO - Updated processed data for shareholding_pct
+2025-02-11 01:09:41,159 - root - INFO - Updated processed data for shareholding_pct from stock_custody
+2025-02-11 01:09:41,347 - root - INFO - Exported shareholding_pct as DataFrame from parquet
+2025-02-11 01:09:45,401 - root - INFO - Saved shareholding_pct_diff as parquet from DataFrame
+2025-02-11 01:09:45,424 - root - INFO - Updated processed data for shareholding_pct_diff
+2025-02-11 01:09:45,425 - root - INFO - Updated processed data for shareholding_pct_diff from stock_custody
+2025-02-11 01:09:45,425 - root - INFO - Completed databank update
+2025-02-11 01:18:19,098 - root - INFO - Exported inst_investor_ratio_diff as DataFrame from parquet

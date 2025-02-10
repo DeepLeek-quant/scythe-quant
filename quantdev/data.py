@@ -23,6 +23,9 @@ from requests.adapters import HTTPAdapter, Retry
 # config
 from .config import config
 
+import warnings
+warnings.filterwarnings('ignore', category=FutureWarning, module='tejapi.get')
+
 class DataBankInfra:
     """資料庫基礎建設
 
@@ -1592,23 +1595,33 @@ class ProcessedDataHandler(DataBankInfra):
             - 計算週差、月差、季差、年差
             - 處理外資、投信、自營商三類機構投資人
         """
-        columns=['外資持股率', '投信持股率', '自營商持股率']
-        df = self.read_dataset('trading_activity', columns=['date','stock_id', *columns, 't_date'])
-
-        for col in columns:
-            # calculate rolling average
-            rolling_avg = {'1w':5, '1m':20, '1q':60}
-            for key in rolling_avg:
-                df[f'{col}_{key}_avg'] = df.groupby(['stock_id'])[col].transform(lambda d: d.rolling(window=rolling_avg.get(key)).mean())
-            
-            # calculate changes
-            changes = {'wow_diff':5, 'mom_diff':20, 'qoq_diff':60}
-            for col in [col for col in df.columns if any(col.startswith(c) for c in columns)]:
-                for key in changes:
-                    new_cols = {f'{col}_{key}': round(df.groupby(['stock_id'])[col].diff(periods=changes.get(key)), 3)}
-                    df = df.assign(**new_cols)
+        columns = ['外資持股率', '投信持股率', '自營商持股率']
+        df = self.read_dataset('trading_activity', columns=['date', 'stock_id', *columns, 't_date'])
         
-        df = df[['date', 'stock_id'] + [col for col in df.columns if any(col.startswith(c) for c in columns)] + ['t_date']].dropna(how='all', axis=1)
+        # Pre-calculate all groupby objects to avoid redundant grouping
+        grouped = df.groupby('stock_id')
+        
+        # Calculate all rolling averages at once
+        rolling_avg = {'1w': 5, '1m': 20, '1q': 60}
+        avg_cols = []
+        for col in columns:
+            for key, window in rolling_avg.items():
+                new_col = f'{col}_{key}_avg'
+                avg_cols.append(new_col)
+                df[new_col] = grouped[col].transform(lambda x: x.rolling(window=window).mean())
+
+        # Calculate all changes at once 
+        changes = {'wow_diff': 5, 'mom_diff': 20, 'qoq_diff': 60}
+        diff_cols = []
+        for col in columns + avg_cols:
+            for key, periods in changes.items():
+                new_col = f'{col}_{key}'
+                diff_cols.append(new_col)
+                df[new_col] = grouped[col].transform(lambda x: x.diff(periods=periods)).round(3)
+
+        # Select columns efficiently
+        keep_cols = ['date', 'stock_id'] + [col for col in df.columns if any(col.startswith(c) for c in columns)] + ['t_date']
+        df = df[keep_cols].dropna(how='all', axis=1)
         
         return self.write_dataset(dataset='inst_investor_ratio_diff', df=df)
 
@@ -1625,16 +1638,27 @@ class ProcessedDataHandler(DataBankInfra):
             - 包含外資、投信、自營商(自行)、自營商(避險)
             - 金額單位為千元
         """
-        columns=['外資買賣超金額(千元)', '投信買賣超金額(千元)', '自營買賣超金額(自行)', '自營買賣超金額(避險)', '合計買賣超金額(千元)',]
-        df = self.read_dataset('trading_activity', columns=['date','stock_id', *columns, 't_date'])
+        columns = ['外資買賣超金額(千元)', '投信買賣超金額(千元)', 
+                  '自營買賣超金額(自行)', '自營買賣超金額(避險)', '合計買賣超金額(千元)']
+        df = self.read_dataset('trading_activity', columns=['date', 'stock_id', *columns, 't_date'])
         
+        # Pre-calculate groupby object
+        grouped = df.groupby('stock_id')
+        
+        # Calculate all rolling sums at once
+        rolling_sum = {'1w': 5, '1m': 20, '1q': 60}
+        sum_cols = []
+        
+        # Process all columns and periods in a single loop
         for col in columns:
-            # calculate rolling average
-            rolling_sum = {'1w':5, '1m':20, '1q':60, }
-            for k, v in rolling_sum.items():
-                df[f'{col}_{k}_sum'] = df.groupby(['stock_id'])[col].transform(lambda d: d.rolling(window=v).sum())
+            for period_name, window in rolling_sum.items():
+                new_col = f'{col}_{period_name}_sum'
+                sum_cols.append(new_col)
+                df[new_col] = grouped[col].transform(lambda x: x.rolling(window=window).sum())
         
-        df = df[['date', 'stock_id'] + [col for col in df.columns if col.endswith('_sum')] + ['t_date']].dropna(how='all', axis=1)
+        # Efficient column selection
+        keep_cols = ['date', 'stock_id'] + sum_cols + ['t_date']
+        df = df[keep_cols].dropna(how='all', axis=1)
         
         return self.write_dataset(dataset='inst_investor_money', df=df)
 
