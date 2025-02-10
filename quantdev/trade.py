@@ -11,6 +11,7 @@ import json
 
 from .config import config
 
+SJ_LOG_PATH = config.sinopac_config.get('sj_log_path')
 quote_api = RestClient(api_key=config.fugle_config.get('fugle_api_key'))
 
 def get_quote(stock_id: str, lot_type: Literal[0, 1, None] = None, raw: bool = False):
@@ -548,9 +549,9 @@ class Portfolio:
     def __repr__(self):
         return str(self.data)
  
-class SjAPI(sj.Shioaji):
-    def __init__(self, key: dict, sim: bool = False):
-        """shioaji API
+class SinoPacAccount(sj.Shioaji):
+    def __init__(self, key: dict = None, sim: bool = False):
+        """SinoPac Account
 
         繼承自 shioaji.Shioaji，提供自動登入和憑證啟用功能。
 
@@ -573,7 +574,7 @@ class SjAPI(sj.Shioaji):
                 'ca_passwd': 'your_ca_password',
                 'person_id': 'your_person_id'
             }
-            api = SjAPI(key=api_key, sim=False)
+            api = SinoPacAccount(key=api_key, sim=False)
             ```
 
         Available Functions:
@@ -595,7 +596,7 @@ class SjAPI(sj.Shioaji):
         """
         
         super().__init__(simulation=sim)
-        self.__key = key
+        self.__key = key or config.sinopac_config
         
         # login
         self.login(
@@ -615,18 +616,18 @@ class SjAPI(sj.Shioaji):
         return pd.DataFrame([dict(super().usage())])
 
 class Trader:
-    def __init__(self, api: SjAPI):
+    def __init__(self, api: SinoPacAccount):
         """ Trader 類別
 
         提供基本的交易功能，包括查詢庫存、下單、取消委託等。
 
         Args:
-            api (SjAPI): SjAPI 物件，用於執行交易相關操作
+            api (SinoPacAccount): SinoPacAccount 物件，用於執行交易相關操作
 
         Examples:
             ```python
             # 建立 Trader 物件
-            api = SjAPI(key=api_key, sim=False)
+            api = SinoPacAccount(key=api_key, sim=False)
             trader = Trader(api=api)
 
             # 查詢庫存
@@ -733,7 +734,7 @@ class PortfolioManager(Trader):
         繼承自 Trader 類別，提供投資組合管理和執行相關功能，包括同步庫存、更新部位、執行交易等。
 
         Args:
-            api (SjAPI): SjAPI 物件，用於執行交易相關操作
+            api (SinoPacAccount): SinoPacAccount 物件，用於執行交易相關操作
             portfolio (Union[Portfolio, str], optional): 初始投資組合或 JSON 檔案路徑
             json_path (str): 投資組合 JSON 檔案的預設儲存路徑
             actual_portfolio (Portfolio): 實際持有的投資組合
@@ -742,7 +743,7 @@ class PortfolioManager(Trader):
         Examples:
             ```python
             # 建立 PortfolioManager 物件
-            api = SjAPI(key=api_key, sim=False)
+            api = SinoPacAccount(key=api_key, sim=False)
             pm = PortfolioManager(api=api)
 
             # 從 JSON 檔案載入投資組合
@@ -773,7 +774,7 @@ class PortfolioManager(Trader):
             - trade_portfolio: 執行整個投資組合交易
             - run_portfolio_manager: 執行投資組合管理循環
         """
-    def __init__(self, api: SjAPI, portfolio:Union[Portfolio, str]=None):
+    def __init__(self, api: SinoPacAccount, portfolio:Union[Portfolio, str]=None):
         super().__init__(api)
         self.json_path = '/Users/jianrui/Desktop/Research/Quant/portfolio/portfolio.json'
         self.actual_portfolio:Portfolio = None

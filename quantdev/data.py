@@ -884,7 +884,10 @@ class TEJHandler(DataBankInfra):
         if (dataset == 'stock_trading_data') & (not old_data.empty):
             old_data = self._concat_new_trading_data(old_data, new_data)
         else:
-            old_data = pd.concat([old_data, new_data], ignore_index=True)
+            old_data = pd.concat([
+                old_data.dropna(axis=1, how='all'), 
+                new_data.dropna(axis=1, how='all')
+            ], ignore_index=True)
             
             # drop_duplicates
             subset = ['date', 'stock_id'] if {'date', 'stock_id'}.issubset(old_data.columns) else old_data.columns.difference(['insert_time'])
@@ -1388,7 +1391,9 @@ class ProcessedDataHandler(DataBankInfra):
             changes = {'qoq_diff':1, 'yoy_diff':4}
             for col in [col for col in df.columns if any(col.startswith(c) for c in columns)]:
                 for k, v in changes.items():
-                    df[f'{col}_{k}'] = round(df.groupby(['stock_id'])[col].diff(periods=v), 3)
+                    # Calculate all diffs at once and join to avoid fragmentation
+                    diff_df = df.groupby(['stock_id'])[col].diff(periods=v).round(3)
+                    df = df.assign(**{f'{col}_{k}': diff_df})
         
         df = df[['date', 'release_date', 'stock_id'] + [col for col in df.columns if any(col.startswith(c) for c in columns)] + ['t_date']]
         
@@ -1455,7 +1460,7 @@ class ProcessedDataHandler(DataBankInfra):
         changes = { 'mom':1, 'qoq':3, 'yoy':12, }
         for col in [column] + [col for col in df.columns if col.endswith('_avg')]:
             for k, v in changes.items():
-                df[f'{col}_{k}'] = round(df.groupby(['stock_id'])[col].pct_change(periods=v), 3)
+                df[f'{col}_{k}'] = round(df.groupby(['stock_id'])[col].pct_change(periods=v, fill_method=None), 3)
         
         # fillna
         df['單月營收(千元)_yoy'] = df['單月營收(千元)_yoy'].fillna(df['單月營收成長率％']/100)
@@ -1497,7 +1502,7 @@ class ProcessedDataHandler(DataBankInfra):
         }
         
         for k, v in mtm_map.items():
-            df[k] = df.groupby(['stock_id'])['c_return'].transform(lambda x: x.pct_change(periods=v)).round(3)
+            df[k] = df.groupby(['stock_id'])['c_return'].transform(lambda x: x.pct_change(periods=v, fill_method=None)).round(3)
 
         df = df[['date', 'stock_id'] + [col for col in df.columns if col.startswith('mtm')] + ['t_date']]
         return self.write_dataset(dataset='stock_momentum', df=df)
@@ -1592,15 +1597,16 @@ class ProcessedDataHandler(DataBankInfra):
 
         for col in columns:
             # calculate rolling average
-            rolling_avg = {'1w':5, '1m':20, '1q':60,}
-            for k, v in rolling_avg.items():
-                df[f'{col}_{k}_avg'] = df.groupby(['stock_id'])[col].transform(lambda d: d.rolling(window=v).mean())
+            rolling_avg = {'1w':5, '1m':20, '1q':60}
+            for key in rolling_avg:
+                df[f'{col}_{key}_avg'] = df.groupby(['stock_id'])[col].transform(lambda d: d.rolling(window=rolling_avg.get(key)).mean())
             
             # calculate changes
-            changes = {'wow_diff':5, 'mom_diff':20, 'qoq_diff':60, 'yoy_diff':240,}
+            changes = {'wow_diff':5, 'mom_diff':20, 'qoq_diff':60}
             for col in [col for col in df.columns if any(col.startswith(c) for c in columns)]:
-                for k, v in changes.items():
-                    df[f'{col}_{k}'] = round(df.groupby(['stock_id'])[col].diff(periods=v), 3)
+                for key in changes:
+                    new_cols = {f'{col}_{key}': round(df.groupby(['stock_id'])[col].diff(periods=changes.get(key)), 3)}
+                    df = df.assign(**new_cols)
         
         df = df[['date', 'stock_id'] + [col for col in df.columns if any(col.startswith(c) for c in columns)] + ['t_date']].dropna(how='all', axis=1)
         
@@ -1922,7 +1928,7 @@ class Databank(TEJHandler, FinMindHandler, ProcessedDataHandler, PublicDataHandl
         logging.info('Starting databank update')
         for dataset in self.tej_datasets.keys():
             if ((not exclude) and (not include)) or (dataset not in exclude) or (dataset in include):
-                self.update_tej_dataset(dataset, update_processed=update_processed)
+                self.update_tej_dataset(dataset)
                 if update_processed:
                     self.update_processed_data(tej_dataset=dataset)
         logging.info('Completed databank update')

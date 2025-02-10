@@ -1,10 +1,11 @@
-from typing import Literal, Union, Callable
+from typing import Literal, Union, Tuple
 from abc import ABC, abstractmethod
 from scipy import stats
 import datetime as dt
 import pandas as pd
 import numpy as np
 import calendar
+import logging
 
 from plotly.colors import sample_colorscale
 from plotly.subplots import make_subplots
@@ -20,12 +21,12 @@ from .data import Databank
 db = Databank()
 _t_date = db.read_dataset('mkt_calendar', columns=['date'], filters=[('休市原因中文說明(人工建置)','=','')]).rename(columns={'date':'t_date'})
 
-def get_data(item:Union[str, pd.DataFrame], source_dataset:str=None)-> pd.DataFrame:
+def get_data(item:Union[str, pd.DataFrame, Tuple[str, str]], universe:pd.DataFrame=None)-> pd.DataFrame:
     """取得股票資料並轉換為時間序列格式
 
     Args:
-        item (Union[str, pd.DataFrame]): 資料欄位名稱或已有的 DataFrame
-        source_dataset (str, optional): 資料來源資料集名稱，若為 None 則自動尋找
+        item (Union[str, pd.DataFrame, Tuple[str, str]]): 資料欄位名稱或已有的 DataFrame，或是 (欄位名稱, 資料集名稱) 的 tuple
+        universe (pd.DataFrame, optional): 股票池，用於篩選要保留的股票
 
     Returns:
         pd.DataFrame: 轉換後的時間序列資料，index 為日期，columns 為股票代號
@@ -42,22 +43,42 @@ def get_data(item:Union[str, pd.DataFrame], source_dataset:str=None)-> pd.DataFr
         close = get_data(df)
         ```
 
+        指定資料集:
+        ```python
+        close = get_data(('收盤價', 'stock_trading_data'))
+        ```
+
+        指定股票池:
+        ```python
+        universe = bts.get_data('稅後淨利') >= 0
+        close = get_data('收盤價', universe=universe)
+        ```
+
     Note:
         - 若輸入字串，會從資料庫尋找對應欄位資料
         - 若輸入 DataFrame，需包含 t_date、stock_id 及目標欄位
+        - 若輸入 tuple，第一個元素為欄位名稱，第二個元素為資料集名稱
         - 輸出資料會自動向前填補最多 240 個交易日的缺失值
         - 會移除全部為空值的股票
+        - 若有指定 universe，只會保留 universe 內的股票資料
     """
+
     if isinstance(item, str):
         raw_data = db.read_dataset(
-            dataset=source_dataset or db.find_dataset(item), 
+            dataset=db.find_dataset(item), 
             filter_date='t_date', 
             columns=['t_date', 'stock_id', item],
             )
+    elif isinstance(item, tuple):
+        raw_data = db.read_dataset(
+            dataset=item[1],
+            filter_date='t_date',
+            columns=['t_date', 'stock_id', item[0]],
+            )
     elif isinstance(item, pd.DataFrame):
         raw_data = item
-    
-    return pd.merge_asof(
+
+    data = pd.merge_asof(
         _t_date[_t_date['t_date']<=pd.Timestamp.today() + pd.DateOffset(days=5)], 
         raw_data\
             .sort_values(by='t_date')\
@@ -71,14 +92,15 @@ def get_data(item:Union[str, pd.DataFrame], source_dataset:str=None)-> pd.DataFr
         .ffill(limit=240)\
         .set_index(['t_date'])\
         .dropna(axis=1, how='all')
+    return data[universe] if universe is not None else data
 
-def get_factor(item:Union[str, pd.DataFrame], asc:bool=True, source_dataset:str=None)-> pd.DataFrame:
+def get_factor(item:Union[str, pd.DataFrame, Tuple[str, str]], asc:bool=True, universe:pd.DataFrame=None)-> pd.DataFrame:
     """將資料轉換為因子值
 
     Args:
-        item (Union[str, pd.DataFrame]): 資料欄位名稱或已有的 DataFrame
+        item (Union[str, pd.DataFrame, Tuple[str, str]]): 資料欄位名稱或已有的 DataFrame，或是 (欄位名稱, 資料集名稱) 的 tuple
         asc (bool): 是否為正向因子，True 代表數值越大分數越高，False 代表數值越小分數越高
-        source_dataset (str, optional): 資料來源資料集名稱，若為 None 則自動尋找
+        universe (pd.DataFrame, optional): 股票池，用於篩選要保留的股票
 
     Returns:
         pd.DataFrame: 轉換後的因子值，數值介於 0~1 之間，index 為日期，columns 為股票代號
@@ -95,14 +117,29 @@ def get_factor(item:Union[str, pd.DataFrame], asc:bool=True, source_dataset:str=
         roe_factor = get_factor(df, asc=True)
         ```
 
+        指定資料集:
+        ```python
+        roe_factor = get_factor(('roe', 'fin_data'), asc=True)
+        ```
+
+        指定股票池:
+        ```python
+        universe = bts.get_data('稅後淨利') >= 0
+        roe_factor = get_factor('roe', asc=True, universe=universe)
+        ```
+
     Note:
         - 若輸入字串，會先呼叫 get_data 取得資料
+        - 若輸入 DataFrame，需包含 t_date、stock_id 及目標欄位
+        - 若輸入 tuple，第一個元素為欄位名稱，第二個元素為資料集名稱
         - 輸出的因子值為橫截面標準化後的百分比排名
+        - 若有指定 universe，只會保留 universe 內的股票資料
     """
-    if isinstance(item, str):
-        return get_factor(get_data(item, source_dataset), asc)
+    if isinstance(item, (str, tuple)):
+        return get_factor(get_data(item), asc, universe)
     elif isinstance(item, pd.DataFrame):
-        return item.rank(axis=1, pct=True, ascending=asc)
+        data = item[universe] if universe is not None else item
+        return data.rank(axis=1, pct=True, ascending=asc)
 
 def _get_rebalance_date(rebalance:Literal['MR', 'QR', 'W', 'M', 'Q', 'Y'], end_date:Union[pd.Timestamp, str]=None):
     """取得再平衡日期列表
@@ -229,7 +266,7 @@ def backtesting(
     rebalance:Literal['MR', 'QR', 'W', 'M', 'Q', 'Y']='QR', signal_shift:int=0, hold_period:int=None, 
     stop_loss:float=None, stop_profit:float=None,
     start:Union[int, str]=None, end:Union[int, str]=None, 
-    universe:pd.DataFrame=None, benchmark:Union[str, list[str]]='0050')-> 'Strategy':
+    benchmark:Union[str, list[str]]='0050')-> 'Strategy':
     """
     進行回測並返回回測結果
 
@@ -268,9 +305,6 @@ def backtesting(
         - 停損停利點若未設定則不啟用
     """
 
-    # universe
-    data = data[universe] if universe is not None else data
-    
     # return & weight
     return_df = db.read_dataset('stock_return', filter_date='t_date', start=start, end=end)
     
@@ -1275,6 +1309,7 @@ class Strategy(PlotMaster):
 
     Returns:
         Strategy: 回測策略物件，包含以下功能:
+        
             - summary: 回測績效摘要，包含年化報酬率、總報酬率、最大回撤、波動率等指標
             - position_info: 持倉資訊，包含股票代碼、名稱、買賣日期、警示狀態、漲跌停、成交量額、財報公佈日期、板塊產業別等資訊
             - report: 回測報告圖表，包含淨值曲線、相對報酬、報酬熱圖、流動性分析等
@@ -1341,6 +1376,7 @@ class Strategy(PlotMaster):
         self.summary = self._calc_summary()
         self.report = self.report_tabs()
         self.position_info = self._position_info()
+        logging.info(f"Created Strategy with AAR: {self.summary['strategy']['Annual return']}; MDD: {self.summary['strategy']['Max drawdown']}; Avol: {self.summary['strategy']['Annual volatility']}")
 
     def _calc_summary(self) -> pd.DataFrame:
         
