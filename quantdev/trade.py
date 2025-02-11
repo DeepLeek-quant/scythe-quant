@@ -776,7 +776,7 @@ class PortfolioManager(Trader):
         """
     def __init__(self, api: SinoPacAccount, portfolio:Union[Portfolio, str]=None):
         super().__init__(api)
-        self.json_path = config.sinopac_config['portfolio_path']
+        self.json_path = config.pf_path_config['portfolio_path']
         self.actual_portfolio:Portfolio = None
         if not portfolio:
             self.target_portfolio:Portfolio = self.from_json()
