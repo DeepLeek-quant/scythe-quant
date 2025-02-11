@@ -4,5 +4,6 @@
     "ca_path": "your_ca_path",
     "ca_passwd": "your_ca_passwd",
     "person_id": "your_person_id",
-    "sj_log_path": "your_sj_log_path"
+    "portfolio_path": "your_portfolio_path",
+    "sj_log_path": "your_sj_log_path(optional)"
 }
