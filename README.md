@@ -16,7 +16,7 @@ Before using QuantDev, you'll need to set up your configuration files in a `conf
 
 ```python
 import quantdev
-quantdev.set_config_dir('/path/to/config')
+quantdev.set_config_dir('/path/to/config') # if not set, the default is ./config
 ```
 
 ## Data Management

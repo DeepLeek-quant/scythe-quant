@@ -119,7 +119,7 @@ class DataBankInfra:
                     'shareholding_pct',
                     'shareholding_pct_diff',
                     'inst_investor_ratio_diff',
-                    'inst_investor_money',
+                    'inst_investor_money_chng',
                 },
                 'backtest':{
                     'stock_return',
@@ -1294,7 +1294,7 @@ class ProcessedDataHandler(DataBankInfra):
             'shareholding_pct':{'source':'stock_custody', 'func':self._update_shareholding_pct},
             'shareholding_pct_diff':{'source':'stock_custody', 'func':self._update_shareholding_pct_diff},
             'inst_investor_ratio_diff':{'source':'trading_activity', 'func':self._update_inst_investor_ratio_diff},
-            'inst_investor_money':{'source':'trading_activity', 'func':self._update_inst_investor_money},
+            'inst_investor_money_chng':{'source':'trading_activity', 'func':self._update_inst_investor_money_chng},
             'stock_return':{'source':'stock_trading_data', 'func':self._update_stock_return},
         }
     
@@ -1625,7 +1625,7 @@ class ProcessedDataHandler(DataBankInfra):
         
         return self.write_dataset(dataset='inst_investor_ratio_diff', df=df)
 
-    def _update_inst_investor_money(self):
+    def _update_inst_investor_money_chng(self):
         """計算機構投資人買賣超金額
 
         計算外資、投信、自營商等機構投資人的買賣超金額。
@@ -1656,11 +1656,20 @@ class ProcessedDataHandler(DataBankInfra):
                 sum_cols.append(new_col)
                 df[new_col] = grouped[col].transform(lambda x: x.rolling(window=window).sum())
         
-        # Efficient column selection
-        keep_cols = ['date', 'stock_id'] + sum_cols + ['t_date']
+        # Calculate all changes at once 
+        changes = {'wow_chng': 5, 'mom_chng': 20, 'qoq_chng': 60}
+        chng_cols = []
+        for col in columns + sum_cols:
+            for key, periods in changes.items():
+                new_col = f'{col}_{key}'
+                chng_cols.append(new_col)
+                df[new_col] = grouped[col].transform(lambda x: x.pct_change(periods=periods, fill_method=None)).round(3)
+
+        # Select columns efficiently
+        keep_cols = ['date', 'stock_id'] + [col for col in df.columns if col.endswith('chng')] + ['t_date']
         df = df[keep_cols].dropna(how='all', axis=1)
         
-        return self.write_dataset(dataset='inst_investor_money', df=df)
+        return self.write_dataset(dataset='inst_investor_money_chng', df=df)
 
     # backtest
     def _update_stock_return(self):

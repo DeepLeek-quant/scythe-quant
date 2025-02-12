@@ -17,7 +17,7 @@
 
 ```python
 import quantdev
-quantdev.set_config_dir('/path/to/config')
+quantdev.set_config_dir('/path/to/config') # 如果未設置，默認為 ./config
 ```
 
 ## 資料管理
@@ -136,9 +136,9 @@ strategy.report  # 顯示包含多個分析選項的互動式圖表
 from quantdev.trade import Position
 
 # 為您的交易策略創建位置
-tsmc_position = Position(('2330', 100000))    # 100,000 TWD of TSMC
-hon_hai_position = Position(('2317', 50000))   # 50,000 TWD of Hon Hai
-mediatek_position = Position(('2454', 80000))  # 80,000 TWD of MediaTek
+tsmc_position = Position(('2330', 100000))    # 台積電 100,000 新台幣
+hon_hai_position = Position(('2317', 50000))   # 鴻海 50,000 新台幣
+mediatek_position = Position(('2454', 80000))  # 聯發科 80,000 新台幣
 
 # 在添加到投資組合之前更新最新的報價
 tsmc_position.refresh_quotes(price_tolerance=0.02, odd=True)
@@ -161,8 +161,8 @@ portfolio = Portfolio({
 
 # 直接使用股票代碼和分配創建投資組合
 portfolio = Portfolio({
-    'tech_leaders': (['2330', '2317'], 150000),  # 150K TWD split between TSMC and Hon Hai
-    'semiconductor': (['2454'], 80000)            # 80K TWD in MediaTek
+    'tech_leaders': (['2330', '2317'], 150000),  # 150K 新台幣分別購買台積電和鴻海
+    'semiconductor': (['2454'], 80000)            # 80K 新台幣購買聯發科
 })
 
 # 確保所有位置報價都是最新的
@@ -188,12 +188,12 @@ pm = PortfolioManager(
 # 新的投資組合 (例如，基於新的策略信號)
 new_portfolio = Portfolio({
     'tech_leaders': [
-        Position(('2330', 120000)),  # 增加 台積電 位置
-        Position(('2317', 30000))    # 減少 鴻海 位置
+        Position(('2330', 120000)),  # 增加 台積電 部位
+        Position(('2317', 30000))    # 減少 鴻海 部位
     ],
     'semiconductor': [
-        Position(('2454', 100000)),  # 增加 聯發科 位置
-        Position(('2379', 50000))    # 增加 瑞昱 位置
+        Position(('2454', 100000)),  # 增加 聯發科 部位
+        Position(('2379', 50000))    # 增加 瑞昱 部位
     ]
 })
 

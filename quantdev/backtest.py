@@ -261,6 +261,21 @@ def _get_portfolio(data:pd.DataFrame, return_df:pd.DataFrame, rebalance:Literal[
         .dropna(how='all')
     return buy_list, portfolio
 
+def _stop_loss_stop_profit(backtest_df:pd.DataFrame, stop_loss:float, pct:float):
+    def get_reach_stop_loss_date(group):
+      stop_loss_dates = group.loc[group['cumulative_return'] <= -stop_loss, 'trade_date']
+      if not stop_loss_dates.empty:
+        first_stop_loss_date = stop_loss_dates.iloc[0]
+      else:
+        first_stop_loss_date = '2099-01-01'
+      result = pd.Series(first_stop_loss_date, index=group.index)
+      return result
+    
+    backtest_df['reach_stop_loss_date'] = backtest_df.groupby(['trade_count', 'stock_id']).apply(get_reach_stop_loss_date).reset_index(level=[0, 1], drop=True)
+    mask = backtest_df['trade_date'] > backtest_df['reach_stop_loss_date']
+    backtest_df = backtest_df.drop(backtest_df[mask].index)
+    backtest_df.drop(columns=['reach_stop_loss_date'])
+
 def backtesting(
     data:pd.DataFrame, 
     rebalance:Literal['MR', 'QR', 'W', 'M', 'Q', 'Y']='QR', signal_shift:int=0, hold_period:int=None, 
@@ -311,10 +326,35 @@ def backtesting(
     # get data
     buy_list, portfolio_df = _get_portfolio(data, return_df, rebalance, signal_shift, hold_period)
     
+    if stop_loss is not None or stop_profit is not None:
+        # Create position mask and cumulative returns
+        position_mask = portfolio_df.notnull()
+        cum_returns = (1 + return_df).cumprod() - 1
+        
+        # Calculate rolling max/min for each position
+        if stop_loss is not None:
+            drawdown = (1 + return_df) / (1 + return_df).cumprod().cummax() - 1
+            stop_loss_mask = drawdown <= stop_loss
+            
+        if stop_profit is not None:
+            runup = return_df.cumprod() / return_df.cumprod().cummax() - 1
+            stop_profit_mask = runup >= stop_profit
+            
+        # Combine stop triggers and forward fill
+        stop_triggers = pd.DataFrame(False, index=return_df.index, columns=return_df.columns)
+        if stop_loss is not None:
+            stop_triggers |= stop_loss_mask
+        if stop_profit is not None:
+            stop_triggers |= stop_profit_mask
+            
+        # Apply stops by nullifying positions after trigger
+        stopped_positions = stop_triggers.where(position_mask).ffill().fillna(False)
+        portfolio_df = portfolio_df.mask(stopped_positions, 0)
+
     # backtest
     backtest_df = (return_df * portfolio_df)\
         .dropna(axis=0, how='all')
-    
+
     return Strategy(
         return_df,
         buy_list,

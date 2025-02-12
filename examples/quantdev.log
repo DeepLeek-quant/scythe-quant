@@ -508,3 +508,23 @@ t_date
 2025-02-11 01:09:45,425 - root - INFO - Updated processed data for shareholding_pct_diff from stock_custody
 2025-02-11 01:09:45,425 - root - INFO - Completed databank update
 2025-02-11 01:18:19,098 - root - INFO - Exported inst_investor_ratio_diff as DataFrame from parquet
+2025-02-11 23:37:29,157 - root - INFO - Exported mkt_calendar as DataFrame from parquet
+2025-02-11 23:37:30,435 - root - INFO - Exported trading_activity as DataFrame from parquet
+2025-02-11 23:41:12,857 - root - INFO - Exported mkt_calendar as DataFrame from parquet
+2025-02-11 23:41:13,115 - root - INFO - Exported trading_activity as DataFrame from parquet
+2025-02-11 23:43:49,341 - root - INFO - Saved inst_investor_money_chng as parquet from DataFrame
+2025-02-11 23:44:39,921 - root - INFO - Exported inst_investor_money_chng as DataFrame from parquet
+2025-02-11 23:45:59,600 - root - INFO - Exported mkt_calendar as DataFrame from parquet
+2025-02-11 23:45:59,857 - root - INFO - Exported trading_activity as DataFrame from parquet
+2025-02-11 23:48:33,236 - root - INFO - Saved inst_investor_money_chng as parquet from DataFrame
+2025-02-11 23:48:53,909 - root - INFO - Exported inst_investor_money_chng as DataFrame from parquet
+2025-02-12 00:48:59,940 - root - INFO - Exported roe_roa as DataFrame from parquet
+2025-02-12 00:49:01,575 - root - INFO - Exported stock_return as DataFrame from parquet
+2025-02-12 00:49:03,758 - root - INFO - Exported stock_trading_notes as DataFrame from parquet
+2025-02-12 00:49:04,017 - root - INFO - Exported stock_trading_data as DataFrame from parquet
+2025-02-12 00:49:04,151 - root - INFO - Exported stock_basic_info as DataFrame from parquet
+2025-02-12 00:49:04,161 - root - INFO - Exported fin_data as DataFrame from parquet
+2025-02-12 00:49:04,174 - root - INFO - Exported monthly_rev as DataFrame from parquet
+2025-02-12 00:49:04,193 - root - INFO - Exported stock_trading_notes as DataFrame from parquet
+2025-02-12 00:49:04,208 - root - INFO - Exported stock_trading_data as DataFrame from parquet
+2025-02-12 00:49:04,212 - root - INFO - Created Strategy with AAR: 12.31%; MDD: -54.02%; Avol: 17.40%
