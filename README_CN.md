@@ -1,7 +1,7 @@
 
 # QuantDev
 
-[English](README.md) | [中文](README_CN.md)
+[English](README.md) | 中文
 
 一個用於量化交易的 Python 模組。
 
