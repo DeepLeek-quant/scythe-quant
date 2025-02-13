@@ -17,6 +17,8 @@ import panel as pn
 
 from .data import Databank
 
+pd.set_option('future.no_silent_downcasting', True)
+
 # databank
 db = Databank()
 _t_date = db.read_dataset('mkt_calendar', columns=['date'], filters=[('休市原因中文說明(人工建置)','=','')]).rename(columns={'date':'t_date'})
@@ -261,25 +263,77 @@ def _get_portfolio(data:pd.DataFrame, return_df:pd.DataFrame, rebalance:Literal[
         .dropna(how='all')
     return buy_list, portfolio
 
-def _stop_loss_stop_profit(backtest_df:pd.DataFrame, stop_loss:float, pct:float):
-    def get_reach_stop_loss_date(group):
-      stop_loss_dates = group.loc[group['cumulative_return'] <= -stop_loss, 'trade_date']
-      if not stop_loss_dates.empty:
-        first_stop_loss_date = stop_loss_dates.iloc[0]
-      else:
-        first_stop_loss_date = '2099-01-01'
-      result = pd.Series(first_stop_loss_date, index=group.index)
-      return result
+def _stop_loss_or_profit(buy_list:pd.DataFrame, portfolio_df:pd.DataFrame, return_df:pd.DataFrame, pct:float, stop_at:Literal['intraday', 'next_day']='intraday'):
+    # calculate portfolio returns by multiplying portfolio positions (0/1) with return data
+    portfolio_return = (portfolio_df != 0).astype(int) * return_df[portfolio_df.columns].loc[portfolio_df.index]
     
-    backtest_df['reach_stop_loss_date'] = backtest_df.groupby(['trade_count', 'stock_id']).apply(get_reach_stop_loss_date).reset_index(level=[0, 1], drop=True)
-    mask = backtest_df['trade_date'] > backtest_df['reach_stop_loss_date']
-    backtest_df = backtest_df.drop(backtest_df[mask].index)
-    backtest_df.drop(columns=['reach_stop_loss_date'])
+    # initialize empty DataFrame to store portfolio after stop loss/profit adjustments
+    aftermath_portfolio_df = pd.DataFrame(index=portfolio_return.index, columns=portfolio_return.columns)
+    
+    # get rebalancing period dates
+    period_starts = portfolio_df.index.intersection(buy_list.index)
+    period_ends = period_starts[1:].map(lambda x: portfolio_df.loc[:x].index[-1])
+    period_ends = period_ends.append(pd.Index([portfolio_return.index[-1]]))
+
+    # convert DataFrames to numpy arrays for faster computation
+    returns_array = portfolio_return.values
+    dates_array = portfolio_return.index.values
+
+    # process each rebalancing period
+    for start_date, end_date in zip(period_starts, period_ends):
+        # get array indices for current period
+        start_idx = portfolio_return.index.get_indexer([start_date])[0]
+        end_idx = portfolio_return.index.get_indexer([end_date])[0] + 1
+        
+        # extract returns and dates for current period
+        period_returns = returns_array[start_idx:end_idx]
+        period_dates = dates_array[start_idx:end_idx]
+        
+        # calculate cumulative returns for period
+        if isinstance(pct, float):
+            cum_returns = np.cumprod(1 + period_returns, axis=0) - 1
+            
+            # create mask for stop loss/profit triggers based on threshold
+            if pct<0:
+                stop_loss_mask = cum_returns <= pct  # stop loss
+            else:
+                stop_loss_mask = cum_returns >= pct  # stop profit
+        elif isinstance(pct, pd.DataFrame):
+            pass
+        
+        # skip if period has no data
+        if len(stop_loss_mask) == 0:
+            continue
+        
+        # find first trigger point for each stock
+        trigger_idx = np.argmax(stop_loss_mask, axis=0)
+        has_trigger = np.any(stop_loss_mask, axis=0)
+        
+        # for 'next_day' mode, shift trigger point one day forward
+        if stop_at=='next_day':
+            trigger_idx = np.where(has_trigger & (trigger_idx < len(period_dates) - 1), trigger_idx + 1, trigger_idx)
+        
+        # create mask for dates after trigger points
+        date_matrix = period_dates[:, None] > period_dates[trigger_idx]
+        
+        # only apply mask to stocks that hit stop loss/profit
+        final_mask = np.where(has_trigger, date_matrix, False)
+        
+        # get portfolio values and zero out positions after stop loss/profit
+        period_portfolio = portfolio_df.values[start_idx:end_idx]
+        filtered_portfolio = np.where(final_mask, 0, period_portfolio)
+        
+        # store results
+        aftermath_portfolio_df.iloc[start_idx:end_idx] = filtered_portfolio
+
+    return aftermath_portfolio_df
 
 def backtesting(
     data:pd.DataFrame, 
-    rebalance:Literal['MR', 'QR', 'W', 'M', 'Q', 'Y']='QR', signal_shift:int=0, hold_period:int=None, 
-    stop_loss:float=None, stop_profit:float=None,
+    rebalance:Literal['MR', 'QR', 'W', 'M', 'Q', 'Y']='QR', 
+    trade_at:Literal['open', 'close']='close',
+    signal_shift:int=0, hold_period:int=None, 
+    stop_loss:Union[float, pd.DataFrame]=None, stop_profit:Union[float, pd.DataFrame]=None, stop_at:Literal['intraday', 'next_day']='next_day',
     start:Union[int, str]=None, end:Union[int, str]=None, 
     benchmark:Union[str, list[str]]='0050')-> 'Strategy':
     """
@@ -322,34 +376,17 @@ def backtesting(
 
     # return & weight
     return_df = db.read_dataset('stock_return', filter_date='t_date', start=start, end=end)
+    # if trade_at == 'open':
+    #     return_df = return_df.shift(1)
     
     # get data
     buy_list, portfolio_df = _get_portfolio(data, return_df, rebalance, signal_shift, hold_period)
     
-    if stop_loss is not None or stop_profit is not None:
-        # Create position mask and cumulative returns
-        position_mask = portfolio_df.notnull()
-        cum_returns = (1 + return_df).cumprod() - 1
-        
-        # Calculate rolling max/min for each position
-        if stop_loss is not None:
-            drawdown = (1 + return_df) / (1 + return_df).cumprod().cummax() - 1
-            stop_loss_mask = drawdown <= stop_loss
-            
-        if stop_profit is not None:
-            runup = return_df.cumprod() / return_df.cumprod().cummax() - 1
-            stop_profit_mask = runup >= stop_profit
-            
-        # Combine stop triggers and forward fill
-        stop_triggers = pd.DataFrame(False, index=return_df.index, columns=return_df.columns)
-        if stop_loss is not None:
-            stop_triggers |= stop_loss_mask
-        if stop_profit is not None:
-            stop_triggers |= stop_profit_mask
-            
-        # Apply stops by nullifying positions after trigger
-        stopped_positions = stop_triggers.where(position_mask).ffill().fillna(False)
-        portfolio_df = portfolio_df.mask(stopped_positions, 0)
+    # stop loss or profit
+    if stop_loss is not None:
+        portfolio_df = _stop_loss_or_profit(buy_list, portfolio_df, return_df, pct=abs(stop_loss)*-1, stop_at=stop_at).infer_objects(copy=False).replace({np.nan: 0})
+    if stop_profit is not None:
+        portfolio_df = _stop_loss_or_profit(buy_list, portfolio_df, return_df, pct=stop_profit, stop_at=stop_at).infer_objects(copy=False).replace({np.nan: 0})
 
     # backtest
     backtest_df = (return_df * portfolio_df)\
@@ -486,7 +523,7 @@ class PlotMaster(ABC):
         portfolio_df = portfolio_df or self.portfolio_df
         
         # get buy sell dates for each trade
-        last_portfolio = portfolio_df.shift(1).fillna(0)
+        last_portfolio = portfolio_df.shift(1).fillna(0).infer_objects(copy=False)
         buys = (last_portfolio == 0) & (portfolio_df != 0)
         sells = (last_portfolio != 0) & (portfolio_df == 0)
 
@@ -994,7 +1031,9 @@ class PlotMaster(ABC):
             )
         return fig
     
-    def _plot_maemfe(self, portfolio_df:pd.DataFrame, return_df:pd.DataFrame):
+    def _plot_maemfe(self, portfolio_df:pd.DataFrame=None, return_df:pd.DataFrame=None):
+        portfolio_df = portfolio_df or self.portfolio_df
+        return_df = return_df or self.return_df
         maemfe = self._maemfe_analysis(portfolio_df, return_df)
         win = maemfe[maemfe['return']>0]
         lose = maemfe[maemfe['return']<=0]
@@ -1311,7 +1350,7 @@ class PlotMaster(ABC):
         
         return fig
 
-    def report_tabs(self, tabs:list[str]=['Equity Curve', 'Relative Return', 'Return Heatmap', 'Liquidity']):
+    def report_tabs(self, tabs:list[str]=['Equity Curve', 'Relative Return', 'Return Heatmap', 'Liquidity', 'MAE/MFE']):
         # main plots
         pn.extension('plotly')
         
@@ -1421,28 +1460,31 @@ class Strategy(PlotMaster):
     def _calc_summary(self) -> pd.DataFrame:
         
         # performance
-        metrics_dfs = [pd.DataFrame.from_dict(self._calc_metrics(self.c_return), orient='index', columns=['strategy'])]
+        metrics_dfs = [pd.DataFrame.from_dict(self._calc_metrics(self.c_return, beta=True), orient='index', columns=['strategy'])]
         
         bmk_c_return = (1 + self.return_df[self.benchmark]).cumprod() - 1
         for bmk in self.benchmark:
             metrics_dfs.append(pd.DataFrame.from_dict(
-                self._calc_metrics(bmk_c_return[bmk]), 
+                self._calc_metrics(bmk_c_return[bmk], beta=False), 
                 orient='index', 
                 columns=[f'{bmk}.TT']
             ))
         return pd.concat(metrics_dfs, axis=1)
 
-    def _calc_metrics(self, c_return) -> dict:
+    def _calc_metrics(self, c_return, beta:bool=True) -> dict:
         total_return = c_return.iloc[-1]
-        daily_returns = (1 + c_return).pct_change().dropna()
-        bmk_daily_returns = (1 + self.return_df[self.benchmark[0]])
+        daily_returns = ((1 + c_return).pct_change().dropna()).infer_objects(copy=False)
         
         annual_return = (1 + total_return) ** (240 / len(c_return)) - 1 # annual return
         mdd = ((1 + c_return) / (1 + c_return).cummax() - 1).min() # mdd
         annual_vol = daily_returns.std() * np.sqrt(240) # annual vol
         calmar_ratio = annual_return / abs(mdd) # calmar Ratio
         sharpe_ratio = annual_return/ annual_vol # sharpe Ratio
-        beta = daily_returns.cov(bmk_daily_returns) / bmk_daily_returns.var() # beta
+        if beta:
+            bmk_daily_returns = (1 + self.return_df[self.benchmark[0]])
+            beta = daily_returns.cov(bmk_daily_returns) / bmk_daily_returns.var() # beta
+        else:
+            beta = '-'
 
         return {
             'Annual return':f'{annual_return:.2%}',
@@ -1463,7 +1505,7 @@ class Strategy(PlotMaster):
         Returns:
             DataFrame: 包含股票代碼、名稱、買入日期、賣出日期、警示狀態、漲跌停、前次成交量、前次成交額、季報公佈日期、月營收公佈日期、市場別、主產業別的資料表
         """
-        print('make sure to update databank before get info!')
+        # print('make sure to update databank before get info!')
 
         # 獲取買入和賣出日期
         rebalance_dates = _get_rebalance_date(self.rebalance, end_date=_t_date['t_date'].max())
@@ -1531,3 +1573,6 @@ class Strategy(PlotMaster):
                     '季報公佈日期', '月營收公佈日期', 
                     '板塊別', '主產業別',
                 ]].set_index('stock_id')
+
+
+        
