@@ -847,3 +847,23 @@ t_date
 2025-02-13 20:28:41,066 - root - INFO - Exported stock_trading_notes as DataFrame from parquet
 2025-02-13 20:28:41,081 - root - INFO - Exported stock_trading_data as DataFrame from parquet
 2025-02-13 20:28:41,086 - root - INFO - Created Strategy with AAR: 11.24%; MDD: -54.91%; Avol: 16.41%
+2025-02-14 00:56:10,720 - root - INFO - Exported roe_roa as DataFrame from parquet
+2025-02-14 00:56:12,726 - root - INFO - Exported stock_return as DataFrame from parquet
+2025-02-14 00:56:15,917 - root - INFO - Exported stock_trading_notes as DataFrame from parquet
+2025-02-14 00:56:16,134 - root - INFO - Exported stock_trading_data as DataFrame from parquet
+2025-02-14 00:56:16,315 - root - INFO - Exported stock_basic_info as DataFrame from parquet
+2025-02-14 00:56:16,328 - root - INFO - Exported fin_data as DataFrame from parquet
+2025-02-14 00:56:16,342 - root - INFO - Exported monthly_rev as DataFrame from parquet
+2025-02-14 00:56:16,359 - root - INFO - Exported stock_trading_notes as DataFrame from parquet
+2025-02-14 00:56:16,376 - root - INFO - Exported stock_trading_data as DataFrame from parquet
+2025-02-14 00:56:16,381 - root - INFO - Created Strategy with AAR: 11.24%; MDD: -54.91%; Avol: 16.41%
+2025-02-14 00:56:28,953 - root - INFO - Exported roe_roa as DataFrame from parquet
+2025-02-14 00:56:30,444 - root - INFO - Exported stock_return as DataFrame from parquet
+2025-02-14 00:56:31,939 - root - INFO - Exported stock_trading_notes as DataFrame from parquet
+2025-02-14 00:56:32,087 - root - INFO - Exported stock_trading_data as DataFrame from parquet
+2025-02-14 00:56:32,206 - root - INFO - Exported stock_basic_info as DataFrame from parquet
+2025-02-14 00:56:32,218 - root - INFO - Exported fin_data as DataFrame from parquet
+2025-02-14 00:56:32,231 - root - INFO - Exported monthly_rev as DataFrame from parquet
+2025-02-14 00:56:32,252 - root - INFO - Exported stock_trading_notes as DataFrame from parquet
+2025-02-14 00:56:32,270 - root - INFO - Exported stock_trading_data as DataFrame from parquet
+2025-02-14 00:56:32,275 - root - INFO - Created Strategy with AAR: 12.31%; MDD: -54.02%; Avol: 17.40%

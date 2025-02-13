@@ -7,7 +7,7 @@
 
 ## 目錄
 1. 配置設定
-2. 資料管理
+2. 資料庫
 3. 回測
 4. 投資組合管理
 
@@ -20,7 +20,7 @@ import quantdev
 quantdev.set_config_dir('/path/to/config') # 如果未設置，默認為 ./config
 ```
 
-## 資料管理
+## 資料庫
 
 `Databank` 類別整合多個資料源並提供統一的存取方式：
 
@@ -60,7 +60,7 @@ db.update_databank(exclude=['stock_basic_info'])  # 更新所有資料集，排�
 db.update_processed_data(dataset='fin_data_chng')  # 更新處理過的資料
 ```
 
-## Backtesting
+## 回測
 
 `backtesting()` 函數測試交易策略並返回 `Strategy` 實例，包含分析工具：
 - 績效指標 vs 基準
@@ -128,7 +128,7 @@ strategy.report  # 顯示包含多個分析選項的互動式圖表
 
 投資組合管理系統通過 SinoPac 的 API 執行交易，並使用 Fugle MarketData 的即時資料。系統由三個主要組件組成，共同工作：
 
-### Position Class
+### Position
 
 `Position` 類別表示將在投資組合中管理的個別股票位置：
 
@@ -146,7 +146,7 @@ hon_hai_position.refresh_quotes(price_tolerance=0.02, odd=True)
 mediatek_position.refresh_quotes(price_tolerance=0.02, odd=True)
 ```
 
-### Portfolio Class
+### Portfolio
 
 `Portfolio` 類別將多個位置組合為基於策略的投資組合，將被執行：
 

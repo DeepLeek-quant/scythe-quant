@@ -181,40 +181,6 @@ account = SinoPacAccount()  # Handles login automatically
 # Create portfolio manager with your portfolio
 pm = PortfolioManager(
     api=account,
-    portfolio=portfolio  # Pass your portfolio object
-)
-
-# Synchronize with actual positions before trading
-pm.sync()
-
-# Start automated portfolio management
-pm.run_portfolio_manager(
-    freq=1,              # Update positions every minute
-    ignore_bank_balance=False,  # Ensure sufficient funds
-    ignore_mkt_open=False      # Trade only during market hours
-)
-
-```
-
-The above components work together to:
-1. Define individual positions with `Position` class
-2. Group positions into strategies using `Portfolio` class
-3. Execute and monitor trades through `PortfolioManager`
-
-
-### Portfolio Manager
-
-The `PortfolioManager` class executes and monitors your portfolio strategies in real-time:
-
-```python
-from quantdev.trade import SinoPacAccount, PortfolioManager
-
-# Initialize SinoPac trading account
-account = SinoPacAccount()  # Handles login automatically
-
-# Create portfolio manager with your portfolio
-pm = PortfolioManager(
-    api=account,
     portfolio=None  # Automatically fetch portfolio from config/portfolio_path.json
 )
 
