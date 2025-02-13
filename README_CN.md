@@ -126,7 +126,7 @@ strategy.report  # 顯示包含多個分析選項的互動式圖表
 
 ## 投資組合管理
 
-投資組合管理系統通過 SinoPac 的 API 執行交易，並使用 Fugle MarketData 的即時資料。系統由三個主要組件組成，共同工作：
+投資組合管理系統通過 永豐證券 的 API 執行交易，並使用 Fugle MarketData 的即時資料。系統由三個主要組件組成，共同工作：
 
 ### Position
 
