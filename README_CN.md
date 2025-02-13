@@ -95,7 +95,7 @@ strategy = bts.backtesting(
 )
 ```
 
-### Examples
+### 範例
 
 ```python
 # 獲得策略績效指標
