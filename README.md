@@ -59,9 +59,9 @@ db.update_databank(exclude=['stock_basic_info'])  # Update all except specified
 db.update_processed_data(dataset='fin_data_chng')  # Update processed data
 ```
 
-## Backtesting
+## Backtest
 
-The `backtesting()` function tests trading strategies and returns a `Strategy` instance with analysis tools including:
+The `backtesting()` function under the `quantdev.backtest` module tests trading strategies and returns a `Strategy` instance with analysis tools including:
 - Performance metrics vs benchmark
 - Position information tracking
 - Interactive reporting with multiple views:

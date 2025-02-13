@@ -62,7 +62,7 @@ db.update_processed_data(dataset='fin_data_chng')  # 更新處理過的資料
 
 ## 回測
 
-`backtesting()` 函數測試交易策略並返回 `Strategy` 實例，包含分析工具：
+在 `quantdev.backtest` 模組中的 `backtesting()` 函數測試交易策略並返回 `Strategy` 實例，包含分析工具：
 - 績效指標 vs 基準
 - 位置資訊追蹤
 - 互動式報告，多個視圖：
