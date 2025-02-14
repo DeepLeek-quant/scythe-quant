@@ -1570,4 +1570,9 @@ class Strategy(PlotMaster):
                 ]].set_index('stock_id')
 
 
+class MetaStrategy(Strategy):
+    def __init__(self, strategies:dict[str, Strategy]):
+        super().__init__()
+        self.strategies = strategies
+    # pending 
         
