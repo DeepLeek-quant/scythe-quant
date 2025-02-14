@@ -568,26 +568,23 @@ class PlotMaster(ABC):
             pd.merge(buy_sells, liquidity_status, left_on=['stock_id', 'sell_date'], right_on=['stock_id', 'date'], how='left'),
           ])
     
-    def _maemfe_analysis(self, portfolio_df:pd.DataFrame=None, return_df:pd.DataFrame=None):
+    def _maemfe_analysis(self, buy_list:pd.DataFrame=None, portfolio_df:pd.DataFrame=None, return_df:pd.DataFrame=None):
+        buy_list = buy_list or self.buy_list
         portfolio_df = portfolio_df or self.portfolio_df
         return_df = return_df or self.return_df
-
-        buy_list = portfolio_df[portfolio_df !=0].stack().reset_index(name='buy').rename(columns={'level_1':'stock_id'})
-        portfolio_returns = return_df[portfolio_df !=0]
-
-        trades = {}
-        n = 0
-        for _, row in buy_list.iterrows():
-            stock_id = row['stock_id']
-            buy_date = row['t_date']
-            sell_date = buy_list[(buy_list['stock_id'] == stock_id) & (buy_list['t_date'] > buy_date)]['t_date'].min()
-            if pd.isna(sell_date):
-                sell_date = portfolio_returns.index.max()
-            period_returns = portfolio_returns.loc[buy_date:sell_date, stock_id].dropna()
-            if len(period_returns) !=0:
-                trades[f'{n+1}'] = period_returns.dropna().reset_index(drop=True)
-                n+=1
-        trades = pd.DataFrame(trades)
+        
+        portfolio_return = (portfolio_df != 0).astype(int) * return_df[portfolio_df.columns].loc[portfolio_df.index]
+        period_starts = portfolio_df.index.intersection(buy_list.index)[:-1]
+        period_ends = period_starts[1:].map(lambda x: portfolio_df.loc[:x].index[-1])
+        trades = pd.DataFrame()
+        for start_date, end_date in zip(period_starts, period_ends):
+            start_idx = portfolio_return.index.get_indexer([start_date])[0]
+            end_idx = portfolio_return.index.get_indexer([end_date])[0] + 1
+            r = portfolio_return.iloc[start_idx:end_idx, :]
+            trades = pd.concat([trades, r\
+                .loc[:, (r != 0).any() & ~r.isna().any()]\
+                .rename(columns=lambda x: r.index[0].strftime('%Y%m%d') + '_' + str(x))\
+                .reset_index(drop=True)], axis=1, ignore_index=True)
         
         c_returns = (1 + trades).cumprod(axis=0) - 1
         returns = c_returns.apply(lambda x: x.dropna().iloc[-1] if not x.dropna().empty else np.nan, axis=0)
@@ -1031,10 +1028,8 @@ class PlotMaster(ABC):
             )
         return fig
     
-    def _plot_maemfe(self, portfolio_df:pd.DataFrame=None, return_df:pd.DataFrame=None):
-        portfolio_df = portfolio_df or self.portfolio_df
-        return_df = return_df or self.return_df
-        maemfe = self._maemfe_analysis(portfolio_df, return_df)
+    def _plot_maemfe(self):
+        maemfe = self._maemfe_analysis()
         win = maemfe[maemfe['return']>0]
         lose = maemfe[maemfe['return']<=0]
 
