@@ -1,18 +1,34 @@
+from typing import Union, Literal, Tuple
 import pandas as pd
+from plotly.colors import sample_colorscale
 from plotly.subplots import make_subplots
-from .backtest import Backtest
+import plotly.graph_objects as go
 
-def test_factor(self, factor:pd.DataFrame, rebalance:str='QR', group:int=10):
+
+# utils
+
+
+# factor analysis
+def calc_factor_longshort_return(factor:Union[pd.DataFrame, str], asc:bool=True, rebalance:str='QR', group:int=10):
+    from quantdev.backtest import get_factor, quick_backtesting
+    factor = get_factor(item=factor, asc=asc)
+    long = quick_backtesting(factor>=(1-1/group), rebalance=rebalance)
+    short = quick_backtesting(factor<(1/group), rebalance=rebalance)
+
+    return (long-short).dropna()
+
+def calc_factor_quantiles_return(factor:pd.DataFrame, asc:bool=True, rebalance:str='QR', group:int=10):
+    from quantdev.backtest import get_factor, quick_backtesting
     results = {}
+    factor = get_factor(item=factor, asc=asc)
     for q_start, q_end in [(i/group, (i+1)/group) for i in range(group)]:
         condition = (q_start <= factor) & (factor < q_end)
-        self.backtesting(condition, show=False, rebalance=rebalance)
-        results[q_start*group] = self.equity_df
+        results[q_start*group] = quick_backtesting(condition, show=False, rebalance=rebalance)
 
     return results
 
-def plot_test_factor(self, factor:pd.DataFrame, rebalance:str='QR', group:int=10):
-    results = self.test_factor(factor, rebalance=rebalance, group=group)
+def plot_factor(factor:pd.DataFrame, asc:bool=True, rebalance:str='QR', group:int=10):
+    results = calc_factor_quantiles_return(factor, asc=asc, rebalance=rebalance, group=group)
 
     fig = make_subplots(
                 rows=2, cols=2,
@@ -108,7 +124,8 @@ def plot_test_factor(self, factor:pd.DataFrame, rebalance:str='QR', group:int=10
         row=2, col=1)
 
     # IC
-    ic = self._calc_ic(factor)
+    from quantdev.backtest import Strategy
+    ic = Strategy._calc_ic(factor)
 
     fig.add_trace(go.Scatter(
         x=ic.index, 
@@ -163,3 +180,5 @@ def plot_test_factor(self, factor:pd.DataFrame, rebalance:str='QR', group:int=10
         template=self.fig_param['template'],
     )
     return fig
+
+# strategy analysis

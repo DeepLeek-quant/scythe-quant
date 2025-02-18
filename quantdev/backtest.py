@@ -1,5 +1,5 @@
 from typing import Literal, Union, Tuple
-from abc import ABC, abstractmethod
+from abc import ABC
 from scipy import stats
 import datetime as dt
 import pandas as pd
@@ -10,7 +10,6 @@ import logging
 from plotly.colors import sample_colorscale
 from plotly.subplots import make_subplots
 from numerize.numerize import numerize
-from IPython.display import display
 import plotly.figure_factory as ff
 import plotly.graph_objects as go
 import panel as pn
@@ -20,8 +19,8 @@ from .data import Databank
 pd.set_option('future.no_silent_downcasting', True)
 
 # databank
-db = Databank()
-_t_date = db.read_dataset('mkt_calendar', columns=['date'], filters=[('休市原因中文說明(人工建置)','=','')]).rename(columns={'date':'t_date'})
+_db = Databank()
+_t_date = _db.read_dataset('mkt_calendar', columns=['date'], filters=[('休市原因中文說明(人工建置)','=','')]).rename(columns={'date':'t_date'})
 
 def get_data(item:Union[str, pd.DataFrame, Tuple[str, str]], universe:pd.DataFrame=None)-> pd.DataFrame:
     """取得股票資料並轉換為時間序列格式
@@ -41,7 +40,7 @@ def get_data(item:Union[str, pd.DataFrame, Tuple[str, str]], universe:pd.DataFra
 
         使用已有的 DataFrame:
         ```python
-        df = db.read_dataset('stock_trading_data', filter_date='t_date', start='2023-01-01', end='2023-01-02', columns=['t_date', 'stock_id', '收盤價'])
+        df = _db.read_dataset('stock_trading_data', filter_date='t_date', start='2023-01-01', end='2023-01-02', columns=['t_date', 'stock_id', '收盤價'])
         close = get_data(df)
         ```
 
@@ -66,13 +65,13 @@ def get_data(item:Union[str, pd.DataFrame, Tuple[str, str]], universe:pd.DataFra
     """
 
     if isinstance(item, str):
-        raw_data = db.read_dataset(
-            dataset=db.find_dataset(item), 
+        raw_data = _db.read_dataset(
+            dataset=_db.find_dataset(item), 
             filter_date='t_date', 
             columns=['t_date', 'stock_id', item],
             )
     elif isinstance(item, tuple):
-        raw_data = db.read_dataset(
+        raw_data = _db.read_dataset(
             dataset=item[1],
             filter_date='t_date',
             columns=['t_date', 'stock_id', item[0]],
@@ -334,6 +333,7 @@ def backtesting(
     trade_at:Literal['open', 'close']='close',
     signal_shift:int=0, hold_period:int=None, 
     stop_loss:Union[float, pd.DataFrame]=None, stop_profit:Union[float, pd.DataFrame]=None, stop_at:Literal['intraday', 'next_day']='next_day',
+    eval_function:dict=None,
     start:Union[int, str]=None, end:Union[int, str]=None, 
     benchmark:Union[str, list[str]]='0050')-> 'Strategy':
     """
@@ -375,7 +375,7 @@ def backtesting(
     """
 
     # return & weight
-    return_df = db.read_dataset('stock_return', filter_date='t_date', start=start, end=end)
+    return_df = _db.read_dataset('stock_return', filter_date='t_date', start=start, end=end)
     # if trade_at == 'open':
     #     return_df = return_df.shift(1)
     
@@ -401,6 +401,17 @@ def backtesting(
         rebalance
     )
 
+def quick_backtesting(
+    data:pd.DataFrame, 
+    rebalance:Literal['MR', 'QR', 'W', 'M', 'Q', 'Y']='QR', 
+    signal_shift:int=0, hold_period:int=None, 
+    )-> pd.DataFrame:
+    
+    return_df = _db.read_dataset('stock_return', filter_date='t_date')
+    _, portfolio_df = _get_portfolio(data, return_df, rebalance, signal_shift, hold_period)
+    return (return_df * portfolio_df)\
+        .dropna(axis=0, how='all')\
+        .sum(axis=1)
 
 class PlotMaster(ABC):
     """
@@ -548,12 +559,12 @@ class PlotMaster(ABC):
           ]
 
         liquidity_status=pd.merge(
-          db.read_dataset(
+          _db.read_dataset(
               'stock_trading_notes', 
               columns=['date', 'stock_id', '是否為注意股票', '是否為處置股票', '是否全額交割', '漲跌停註記'],
               filters=filters
           ),
-          db.read_dataset(
+          _db.read_dataset(
               'stock_trading_data',
               columns=['date', 'stock_id', '成交量(千股)', '成交金額(元)'],
               filters=filters,
@@ -584,7 +595,7 @@ class PlotMaster(ABC):
             trades = pd.concat([trades, r\
                 .loc[:, (r != 0).any() & ~r.isna().any()]\
                 .rename(columns=lambda x: r.index[0].strftime('%Y%m%d') + '_' + str(x))\
-                .reset_index(drop=True)], axis=1, ignore_index=True)
+                .reset_index(drop=True)], axis=1)
         
         c_returns = (1 + trades).cumprod(axis=0) - 1
         returns = c_returns.apply(lambda x: x.dropna().iloc[-1] if not x.dropna().empty else np.nan, axis=0)
@@ -1030,6 +1041,7 @@ class PlotMaster(ABC):
     
     def _plot_maemfe(self):
         maemfe = self._maemfe_analysis()
+        self.maemfe = maemfe
         win = maemfe[maemfe['return']>0]
         lose = maemfe[maemfe['return']<=0]
 
@@ -1345,34 +1357,29 @@ class PlotMaster(ABC):
         
         return fig
 
-    def report_tabs(self, tabs:list[str]=['Equity Curve', 'Relative Return', 'Return Heatmap', 'Liquidity', 'MAE/MFE']):
+    def plot_factors_corr(self):
+        pass
+
+    def report_tabs(self, exclude_tabs:list[str]=[]):
         # main plots
         pn.extension('plotly')
         
         # Define mapping of tab names to plot functions
         plot_funcs = {
-            'Equity Curve': self._plot_equity_curve,
-            'Relative Return': self._plot_relative_return,
-            'Return Heatmap': self._plot_return_heatmap,
-            'Liquidity': self._plot_liquidity,
-            'MAE/MFE': self._plot_maemfe
+            'Equity curve': self._plot_equity_curve,
+            'Relative return': self._plot_relative_return,
+            'Factors correlation': self.plot_factors_corr,
+            'Return heatmap': self._plot_return_heatmap,
+            'liquidity': self._plot_liquidity,
+            'MAE/MFE': self._plot_maemfe,
         }
 
-        # Only generate requested plots
-        if tabs:
-            figs = {
-                name: pn.pane.Plotly(plot_funcs[name]())
-                for name in tabs 
-                if name in plot_funcs
-            }
-            tab_items = list(figs.items())
-        else:
-            # If no tabs specified, generate all plots
-            figs = {
-                name: pn.pane.Plotly(func())
-                for name, func in plot_funcs.items()
-            }
-            tab_items = list(figs.items())
+        figs = {
+            name: pn.pane.Plotly(plot_funcs[name]())
+            for name in plot_funcs
+            if name not in exclude_tabs
+        }
+        tab_items = list(figs.items())
 
         return pn.Tabs(*tab_items)
 
@@ -1518,20 +1525,20 @@ class Strategy(PlotMaster):
         filters=[('stock_id', 'in', position_info['stock_id'].to_list())]
         
         # 獲取股票中文名稱
-        ch_name = db.read_dataset('stock_basic_info', columns=['stock_id', '證券名稱'], filters=filters).rename(columns={'證券名稱':'name'})
+        ch_name = _db.read_dataset('stock_basic_info', columns=['stock_id', '證券名稱'], filters=filters).rename(columns={'證券名稱':'name'})
 
         # 獲取財報和月營收公佈日期
-        quarterly_report_release_date = db.read_dataset('fin_data', columns=['stock_id', 'release_date'], filters=filters)\
+        quarterly_report_release_date = _db.read_dataset('fin_data', columns=['stock_id', 'release_date'], filters=filters)\
             .loc[lambda x: x.groupby('stock_id')['release_date'].idxmax()]\
             .rename(columns={'release_date':'季報公佈日期'})
-        monthly_rev_release_date = db.read_dataset('monthly_rev', columns=['stock_id', 'release_date'], filters=filters)\
+        monthly_rev_release_date = _db.read_dataset('monthly_rev', columns=['stock_id', 'release_date'], filters=filters)\
             .loc[lambda x: x.groupby('stock_id')['release_date'].idxmax()]\
             .rename(columns={'release_date':'月營收公佈日期'})
 
         filters.append(('date', '=', self.return_df.index.max()))
 
         # 獲取市場類型、產業類別、交易狀態
-        trading_notes = db.read_dataset('stock_trading_notes', columns=['date', 'stock_id', '是否為注意股票', '是否為處置股票', '是否暫停交易', '是否全額交割', '漲跌停註記', '板塊別(中)', '主產業別(中)'], filters=filters)\
+        trading_notes = _db.read_dataset('stock_trading_notes', columns=['date', 'stock_id', '是否為注意股票', '是否為處置股票', '是否暫停交易', '是否全額交割', '漲跌停註記', '板塊別(中)', '主產業別(中)'], filters=filters)\
         .assign(
             警示狀態=lambda x: x.apply(
                 lambda row: ', '.join(filter(None, [
@@ -1547,7 +1554,7 @@ class Strategy(PlotMaster):
         [['stock_id', '警示狀態', '漲跌停', '板塊別', '主產業別']]
         
         # 獲取交易量和交易金額
-        trading_vol = db.read_dataset('stock_trading_data', columns=['stock_id', '成交量(千股)', '成交金額(元)'], filters=filters)\
+        trading_vol = _db.read_dataset('stock_trading_data', columns=['stock_id', '成交量(千股)', '成交金額(元)'], filters=filters)\
         .rename(columns={
             '成交量(千股)':'前次成交量_K',
             '成交金額(元)':'前次成交額_M',

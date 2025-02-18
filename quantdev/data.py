@@ -1,4 +1,4 @@
-from typing import Union
+from typing import Union, Literal
 import pyarrow.parquet as pq
 import pyarrow as pa
 import datetime as dt
@@ -25,6 +25,8 @@ from .config import config
 
 import warnings
 warnings.filterwarnings('ignore', category=FutureWarning, module='tejapi.get')
+
+import quantdev.analysis as analysis
 
 class DataBankInfra:
     """資料庫基礎建設
@@ -75,17 +77,7 @@ class DataBankInfra:
         self.databank_path = config.data_config.get('databank_path')
         self.start_date = '2005-01-01'
         self.databank_map = {
-            'rf_rate':{},
-            'broker':{
-                'broker_info',
-                'broker_activity',
-                'broker_money',
-                'stock_address',
-                'stock_broker_distance',
-                'nearby_broker',
-                'stock_nearby_broker_money',
-            },
-            'raw_data':{
+            'tej_raw_data':{
                 'fundamental':{
                     'monthly_rev',
                     'self_disclosed',
@@ -123,20 +115,25 @@ class DataBankInfra:
                 },
                 'backtest':{
                     'stock_return',
-                },
-                'factor_model':{
-                    'CAPM', 
-                    'FF3', 
-                    'Carhart4', 
-                    'FF5',  
-                    'q4', 
-                    'q5',
-                    'error_terms',
+                    'factor_model',
                 },
             },
-            'stock_industry_tag':{},
+            'public_data':{
+                'stock_industry_tag',
+                'rf_rate',
+            }
         }
         
+        # 'broker':{
+        #         'broker_info',
+        #         'broker_activity',
+        #         'broker_money',
+        #         'stock_address',
+        #         'stock_broker_distance',
+        #         'nearby_broker',
+        #         'stock_nearby_broker_money',
+        #     },
+
         # init
         self.create_databank()
 
@@ -850,56 +847,77 @@ class TEJHandler(DataBankInfra):
             - 重複資料會保留最新一筆
         """
         
-        # old data
-        old_data = self.read_dataset(dataset)
+        # check if dataset is in tej_datasets
+        if dataset not in self.tej_datasets.keys():
+            raise ValueError(f'{dataset} is not in tej_datasets')
 
-        # date
-        request_dates = {
-            'monthly_rev':'date',
-            'self_disclosed':'date',
-            'fin_data':'date',
-            'dividend_policy':'today',
-            'capital_formation':'today',
-            'stock_trading_data':'date',
-            'stock_trading_notes':'date',
-            'trading_activity':'date',
-            'stock_custody':'date',
-            'stock_basic_info':None,
-            'mkt_calendar':None,
-        }
-        if (not old_data.empty) & (request_dates.get(dataset) == 'date'):
-            start_date = old_data['date'].max().strftime('%Y-%m-%d')
-        elif (not old_data.empty) & (request_dates.get(dataset) == 'today'):
-            start_date = dt.date.today().strftime('%Y-%m-%d')
-        else:
-            start_date = self.start_date
+        # mkt calendar
+        if dataset == 'mkt_calendar':
+            # first check last date
+            if self.read_dataset('mkt_calendar', columns=['date'])['date'].max().year <= dt.datetime.today().year:
+                data = self.get_tej_data('mkt_calendar')
+                data['insert_time'] = pd.Timestamp.now()
+                self.write_dataset(dataset, data)
         
-        # get data, process data
-        if (dataset in ['stock_trading_data', 'stock_trading_notes', 'trading_activity', 'stock_custody']) & \
-            ((dt.date.today() - dt.datetime.strptime(start_date, "%Y-%m-%d").date()).days >= 365):
-            new_data = self.get_tej_data_bulk(dataset, start_date=start_date, end_date=end_date)
-        else:
-            new_data = self.get_tej_data(dataset, start_date=start_date, end_date=end_date)
+        # stock basic info
+        elif dataset == 'stock_basic_info':
+            # first check last insert_time
+            if self.read_dataset('stock_basic_info', columns=['insert_time'])['insert_time'].min() <= (pd.Timestamp.now() - pd.Timedelta(weeks=1)):
+                data = self.get_tej_data('stock_basic_info')
+                data['insert_time'] = pd.Timestamp.now()
+                self.write_dataset(dataset, data)
         
-        # insert time
-        new_data['insert_time'] = pd.Timestamp.now()
+        # others
+        else:
+            # old data
+            old_data = self.read_dataset(dataset)
 
-        if (dataset == 'stock_trading_data') & (not old_data.empty):
-            old_data = self._concat_new_trading_data(old_data, new_data)
-        else:
-            old_data = pd.concat([
-                old_data.dropna(axis=1, how='all'), 
-                new_data.dropna(axis=1, how='all')
-            ], ignore_index=True)
+            # date
+            request_dates = {
+                'monthly_rev':'date',
+                'self_disclosed':'date',
+                'fin_data':'date',
+                'dividend_policy':'today',
+                'capital_formation':'today',
+                'stock_trading_data':'date',
+                'stock_trading_notes':'date',
+                'trading_activity':'date',
+                'stock_custody':'date',
+            }
+            if (not old_data.empty) & (request_dates.get(dataset) == 'date'):
+                start_date = old_data['date'].max().strftime('%Y-%m-%d')
+            elif (not old_data.empty) & (request_dates.get(dataset) == 'today'):
+                start_date = dt.date.today().strftime('%Y-%m-%d')
+            else:
+                start_date = self.start_date
             
-            # drop_duplicates
-            subset = ['date', 'stock_id'] if {'date', 'stock_id'}.issubset(old_data.columns) else old_data.columns.difference(['insert_time'])
-            old_data = old_data\
-                .drop_duplicates(subset=subset, keep='last')\
-                .reset_index(drop=True)
+            # get data, process data
+            if (dataset in ['stock_trading_data', 'stock_trading_notes', 'trading_activity', 'stock_custody']) & \
+                ((dt.date.today() - dt.datetime.strptime(start_date, "%Y-%m-%d").date()).days >= 365):
+                new_data = self.get_tej_data_bulk(dataset, start_date=start_date, end_date=end_date)
+            else:
+                new_data = self.get_tej_data(dataset, start_date=start_date, end_date=end_date)
+            
+            # insert time
+            new_data['insert_time'] = pd.Timestamp.now()
 
-        # insert
-        self.write_dataset(dataset, old_data)
+            if (dataset == 'stock_trading_data') & (not old_data.empty):
+                old_data = self._concat_new_trading_data(old_data, new_data)
+            else:
+                old_data = pd.concat([
+                    old_data.dropna(axis=1, how='all'), 
+                    new_data.dropna(axis=1, how='all')
+                ], ignore_index=True)
+                
+                # drop_duplicates
+                subset = ['date', 'stock_id'] if {'date', 'stock_id'}.issubset(old_data.columns) else old_data.columns.difference(['insert_time'])
+                old_data = old_data\
+                    .drop_duplicates(subset=subset, keep='last')\
+                    .reset_index(drop=True)
+
+            # insert
+            self.write_dataset(dataset, old_data)
+        
         logging.info(f'Updated {dataset} from tej')
 
 
@@ -1244,6 +1262,76 @@ class FinMindHandler(DataBankInfra):
         return self.write_dataset('stock_nearby_brokers_money', nearby_broker_money)
 
 
+class FactorModelHandler(DataBankInfra):
+    def __init__(self):
+        super().__init__()
+
+    def _update_factor_model(self):
+        from quantdev.analysis import calc_factor_longshort_return
+        from quantdev.backtest import get_data
+
+        model = pd.DataFrame({
+            'MKT':self._calc_market_factor(),
+            'PBR':calc_factor_longshort_return('股價淨值比', asc=False, rebalance='QR'),
+            'MCAP_to_REV':calc_factor_longshort_return((get_data('個股市值(元)')/1000/get_data('營業收入')), asc=False, rebalance='QR'),
+            'SIZE':calc_factor_longshort_return('個股市值(元)', asc=False, rebalance='Q'),
+            'VOL':calc_factor_longshort_return(get_data('成交金額(元)').rolling(60).mean(), asc=False, rebalance='Q'),
+            'MTM3m':calc_factor_longshort_return('mtm_3m', rebalance='Q'),
+            'MTM6m':calc_factor_longshort_return('mtm_6m', rebalance='Q'),
+            'ROE':calc_factor_longshort_return('roe', rebalance='QR'),
+            'OPM':calc_factor_longshort_return('營業利益率', rebalance='QR'),
+            'CMA':calc_factor_longshort_return('資產總計_yoy'),
+        }).dropna(how='all')
+
+        self.write_dataset('factor_model', model)
+        logging.info('Factor model updated')
+        
+    def _calc_market_factor(self, mkt_idx:Literal['TR', None]=None):
+        mkt_indice = {
+            None:{'TWSE':{'stock_id':'IX0001', 'ch_name':'加權指數'}, 'TPEX':{'stock_id':'IX0043', 'ch_name':'OTC 指數'}},
+            'TR':{'TWSE':{'stock_id':'IR0001', 'ch_name':'報酬指數'}, 'TPEX':{'stock_id':'IR0043', 'ch_name':'櫃檯報酬指'}},
+        }
+
+        # mkt rtn
+        idx_ids = [v['stock_id'] for v in mkt_indice[mkt_idx].values()]
+        idx_mkt_cap = self.read_dataset(
+            dataset='stock_trading_data',
+            filter_date='t_date', 
+            columns=['t_date', 'stock_id', '個股市值(元)'],
+            filters=[('stock_id', 'in', idx_ids)],
+        )\
+        .set_index(['t_date', 'stock_id'])\
+        .unstack('stock_id')\
+        .droplevel(0, axis=1)
+        
+        idx_return = self.read_dataset('stock_trading_data', 
+                        columns=['date', 'stock_id', '報酬率'], 
+                        filters=[['stock_id', 'in', idx_ids]])\
+        .set_index(['date', 'stock_id'])\
+        .unstack('stock_id')\
+        .droplevel(0, axis=1)/100
+
+        mkt_rtn  = (idx_return * idx_mkt_cap).sum(axis=1) / idx_mkt_cap.sum(axis=1) #pd.DataFrame((idx_return * idx_mkt_cap).sum(axis=1) / idx_mkt_cap.sum(axis=1), columns=['mkt_rtn'])
+
+        # rf_rate
+        t_date = self.read_dataset('mkt_calendar', columns=['date'], filters=[('休市原因中文說明(人工建置)','=','')]).rename(columns={'date':'t_date'})
+        rf_rate = pd.merge_asof(
+            t_date[t_date['t_date']<=pd.Timestamp.today()],
+            self.read_dataset('rf_rate', columns=['t_date', 'bank', '定存利率_一年期_固定'], filters=[['bank', '==', '一銀']])\
+            .rename(columns={'定存利率_一年期_固定':'rf_rate'})\
+            [['t_date', 'rf_rate']]\
+            .set_index('t_date')['rf_rate'], 
+            on='t_date', 
+            direction='backward'
+            )\
+            .assign(rf_rate=lambda df: (1 + df['rf_rate']) ** (1 / (df.groupby(df['t_date'].dt.year)['t_date'].transform('count'))) - 1)\
+            .set_index('t_date')\
+            ['rf_rate']\
+            .ffill()
+        
+        return (mkt_rtn-rf_rate)
+
+
 class ProcessedDataHandler(DataBankInfra):
     """處理資料的類別
 
@@ -1297,6 +1385,7 @@ class ProcessedDataHandler(DataBankInfra):
             'inst_investor_money_chng':{'source':'trading_activity', 'func':self._update_inst_investor_money_chng},
             'stock_return':{'source':'stock_trading_data', 'func':self._update_stock_return},
         }
+        # self.processed_datasets.update(self.factors_datasets)
     
     # fundamental
     def _update_fin_data_chng(self, columns:list=['營業收入', '稅後淨利', '預收款_流動', '營運產生現金流量', '資產總計','每股盈餘',]):
@@ -1698,7 +1787,7 @@ class ProcessedDataHandler(DataBankInfra):
             .droplevel(0, axis=1)\
             .dropna(axis=0, how='all')
         return self.write_dataset(dataset='stock_return', df=df)
-
+ 
     # all/ any
     def update_processed_data(self, dataset:str=None, tej_dataset:str=None):
         """更新處理後的資料集
@@ -1769,6 +1858,12 @@ class PublicDataHandler(DataBankInfra):
         self.stock_industry_tag_url = 'https://ic.tpex.org.tw/company_chain.php?stk_code='
         self.stock_address_url = 'https://mops.twse.com.tw/mops/web/t51sb01'
         self.rf_rate_url = 'https://www.cbc.gov.tw/tw/public/data/a13rate.xls'
+
+        self.public_datasets = {
+            'stock_industry_tag':{'func':self._update_stock_industry_tag},
+            'rf_rate':{'func':self._update_rf_rate},
+            
+        }
 
     def _get_stock_industry_tag(self, stock_id:str):
         r = requests.get(f'{self.stock_industry_tag_url}{stock_id}')
@@ -1902,13 +1997,18 @@ class PublicDataHandler(DataBankInfra):
         # insert
         self.write_dataset('rf_rate', rf_rate)
 
-    def update_public_data(self):
-        self._update_stock_industry_tag()
-        self._update_stock_address()
-        self._update_rf_rate()
+    def update_public_data(self, dataset:str=None):
+        if dataset:
+            self.public_datasets.get(dataset).get('func')()
+            logging.info(f'Updated public data for {dataset}')
+        else:
+            for k in self.public_datasets.keys():
+                self.update_public_data(dataset=k)
+
+        # self._update_stock_address()
 
 
-class Databank(TEJHandler, FinMindHandler, ProcessedDataHandler, PublicDataHandler):
+class Databank(TEJHandler, FinMindHandler, ProcessedDataHandler, PublicDataHandler, FactorModelHandler):
     """quantdev 資料庫
 
     整合 TEJ、FinMind 與公開資料的資料處理功能。
@@ -1957,11 +2057,25 @@ class Databank(TEJHandler, FinMindHandler, ProcessedDataHandler, PublicDataHandl
         super().__init__()
     
     # basic
-    def update_databank(self, exclude:list[str]=['stock_basic_info', 'mkt_calendar'], include:list=[], update_processed=True):
+    def update_databank(self, exclude:list[str]=['stock_industry_tag'], include:list=[], update_processed=True):
         logging.info('Starting databank update')
+        
+        # tej
         for dataset in self.tej_datasets.keys():
-            if ((not exclude) and (not include)) or (dataset not in exclude) or (dataset in include):
+            if ((not exclude) and (not include)) or (dataset not in exclude) or (dataset in include):    
                 self.update_tej_dataset(dataset)
+                        
+                # processed
                 if update_processed:
                     self.update_processed_data(tej_dataset=dataset)
+
+        # public
+        for dataset in self.public_datasets.keys():
+            if ((not exclude) and (not include)) or (dataset not in exclude) or (dataset in include):
+                self.update_public_data(dataset=dataset)
+
+        # factor model
+        if ('factor_model' in include) or ('factor_model' not in exclude):
+            self._update_factor_model()
+        
         logging.info('Completed databank update')
