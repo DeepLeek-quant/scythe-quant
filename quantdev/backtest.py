@@ -15,6 +15,7 @@ import plotly.graph_objects as go
 import panel as pn
 
 from .data import Databank
+from .analysis import *
 
 pd.set_option('future.no_silent_downcasting', True)
 
@@ -469,7 +470,8 @@ class PlotMaster(ABC):
             'backtest_df': 'pd.DataFrame',
             'benchmark': 'list',
             'rebalance': 'str',
-            'daily_return': 'pd.Series or pd.DataFrame'
+            'daily_return': 'pd.Series or pd.DataFrame',
+            'maemfe': 'pd.DataFrame'
         }
 
     def _bold(self, text):
@@ -579,39 +581,6 @@ class PlotMaster(ABC):
             pd.merge(buy_sells, liquidity_status, left_on=['stock_id', 'sell_date'], right_on=['stock_id', 'date'], how='left'),
           ])
     
-    def _maemfe_analysis(self, buy_list:pd.DataFrame=None, portfolio_df:pd.DataFrame=None, return_df:pd.DataFrame=None):
-        buy_list = buy_list or self.buy_list
-        portfolio_df = portfolio_df or self.portfolio_df
-        return_df = return_df or self.return_df
-        
-        portfolio_return = (portfolio_df != 0).astype(int) * return_df[portfolio_df.columns].loc[portfolio_df.index]
-        period_starts = portfolio_df.index.intersection(buy_list.index)[:-1]
-        period_ends = period_starts[1:].map(lambda x: portfolio_df.loc[:x].index[-1])
-        trades = pd.DataFrame()
-        for start_date, end_date in zip(period_starts, period_ends):
-            start_idx = portfolio_return.index.get_indexer([start_date])[0]
-            end_idx = portfolio_return.index.get_indexer([end_date])[0] + 1
-            r = portfolio_return.iloc[start_idx:end_idx, :]
-            trades = pd.concat([trades, r\
-                .loc[:, (r != 0).any() & ~r.isna().any()]\
-                .rename(columns=lambda x: r.index[0].strftime('%Y%m%d') + '_' + str(x))\
-                .reset_index(drop=True)], axis=1)
-        
-        c_returns = (1 + trades).cumprod(axis=0) - 1
-        returns = c_returns.apply(lambda x: x.dropna().iloc[-1] if not x.dropna().empty else np.nan, axis=0)
-        gmfe = c_returns.max(axis=0)
-        bmfe = c_returns.apply(lambda x: x.iloc[:x.idxmin()+1].max(), axis=0)
-        mae = c_returns.min(axis=0).where(lambda x: x <= 0, 0)
-        mdd = ((1 + c_returns) / (1 + c_returns).cummax(axis=0) - 1).min(axis=0)
-
-        return pd.DataFrame({
-            'return': returns,
-            'gmfe': gmfe,
-            'bmfe': bmfe,
-            'mae': mae,
-            'mdd': mdd
-        }, index=trades.columns)
-
     def _calc_relative_return(self, daily_return:pd.DataFrame=None, downtrend_window:int=3):
         daily_rtn = daily_return or self.daily_return
         bmk_daily_rtn = self.return_df[self.benchmark[0]]
@@ -1040,8 +1009,7 @@ class PlotMaster(ABC):
         return fig
     
     def _plot_maemfe(self):
-        maemfe = self._maemfe_analysis()
-        self.maemfe = maemfe
+        maemfe = self.maemfe
         win = maemfe[maemfe['return']>0]
         lose = maemfe[maemfe['return']<=0]
 
@@ -1303,7 +1271,7 @@ class PlotMaster(ABC):
                 )
 
         # information ratio
-        info_ratio = self._calc_ir()
+        info_ratio = calc_info_ratio(daily_rtn=self.daily_return, bmk_daily_rtn=self.return_df[self.benchmark[0]])
 
         info_ratio_trace = go.Scatter(
             x=info_ratio.index,
@@ -1357,31 +1325,9 @@ class PlotMaster(ABC):
         
         return fig
 
-    def plot_factors_corr(self):
+    def _plot_return_attribution(self):
         pass
 
-    def report_tabs(self, exclude_tabs:list[str]=[]):
-        # main plots
-        pn.extension('plotly')
-        
-        # Define mapping of tab names to plot functions
-        plot_funcs = {
-            'Equity curve': self._plot_equity_curve,
-            'Relative return': self._plot_relative_return,
-            'Factors correlation': self.plot_factors_corr,
-            'Return heatmap': self._plot_return_heatmap,
-            'liquidity': self._plot_liquidity,
-            'MAE/MFE': self._plot_maemfe,
-        }
-
-        figs = {
-            name: pn.pane.Plotly(plot_funcs[name]())
-            for name in plot_funcs
-            if name not in exclude_tabs
-        }
-        tab_items = list(figs.items())
-
-        return pn.Tabs(*tab_items)
 
 
 class Strategy(PlotMaster):
@@ -1451,12 +1397,18 @@ class Strategy(PlotMaster):
         self.backtest_df = backtest_df
         self.benchmark = [benchmark] if isinstance(benchmark, str) else benchmark
         self.rebalance = rebalance
-        # performance
+        
+        # analysis
         self.daily_return = backtest_df.sum(axis=1)
         self.c_return = (1 + self.daily_return).cumprod() - 1
+        self.maemfe = calc_maemfe(self.buy_list, self.portfolio_df, self.return_df)
+        
+        # performance
         self.summary = self._calc_summary()
-        self.report = self.report_tabs()
+        self.report = self._generate_report()
         self.position_info = self._position_info()
+
+
         logging.info(f"Created Strategy with AAR: {self.summary['strategy']['Annual return']}; MDD: {self.summary['strategy']['Max drawdown']}; Avol: {self.summary['strategy']['Annual volatility']}")
 
     def _calc_summary(self) -> pd.DataFrame:
@@ -1576,6 +1528,28 @@ class Strategy(PlotMaster):
                     '板塊別', '主產業別',
                 ]].set_index('stock_id')
 
+    def _generate_report(self, exclude_tabs:list[str]=[]):
+        # main plots
+        pn.extension('plotly')
+        
+        # Define mapping of tab names to plot functions
+        plot_funcs = {
+            'Equity curve': self._plot_equity_curve,
+            'Relative return': self._plot_relative_return,
+            'Return attr': self._plot_return_attribution,
+            'Return heatmap': self._plot_return_heatmap,
+            'Liquidity': self._plot_liquidity,
+            'MAE/MFE': self._plot_maemfe,
+        }
+
+        figs = {
+            name: pn.pane.Plotly(plot_funcs[name]())
+            for name in plot_funcs
+            if name not in exclude_tabs
+        }
+        tab_items = list(figs.items())
+
+        return pn.Tabs(*tab_items)
 
 class MetaStrategy(Strategy):
     def __init__(self, strategies:dict[str, Strategy]):

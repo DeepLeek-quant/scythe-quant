@@ -26,7 +26,6 @@ from .config import config
 import warnings
 warnings.filterwarnings('ignore', category=FutureWarning, module='tejapi.get')
 
-import quantdev.analysis as analysis
 
 class DataBankInfra:
     """資料庫基礎建設
@@ -116,6 +115,7 @@ class DataBankInfra:
                 'backtest':{
                     'stock_return',
                     'factor_model',
+                    'fama_macbeth',
                 },
             },
             'public_data':{
@@ -449,14 +449,8 @@ class TEJHandler(DataBankInfra):
         # temp storage
         self.bulk_tej_data_temp = pd.DataFrame()
 
-    def reach_tej_limit(self, print_status:Union[str, bool]=False)-> bool:
+    def reach_tej_limit(self) -> bool:
         """檢查 TEJ API 使用量是否達到上限
-
-        Args:
-            print_status (str | bool, optional): 是否印出使用量狀態
-                - False: 不印出
-                - True/'short': 印出簡短狀態
-                - 'long': 印出詳細狀態
 
         Returns:
             bool: 是否達到上限
@@ -468,30 +462,6 @@ class TEJHandler(DataBankInfra):
             # 檢查 API 使用量
             tej = TEJHandler()
             tej.reach_tej_limit()  # 回傳: False
-
-            # 印出簡短使用量狀態
-            tej.reach_tej_limit(print_status=True)  # 或使用 'short'
-            ```
-
-            輸出結果:
-            ```
-            Request usage: 0.00%
-            Row usage: 0.00%
-            False
-            ```
-
-            ```python
-            # 印出詳細使用量狀態
-            tej.reach_tej_limit(print_status='long')
-            ```
-
-            輸出結果:
-            ```
-            Request usage: 0.00%
-            Row usage: 0.00%
-            Request usage: 0.00% ( 0/ 1,000) 
-            Row usage: 0.00% ( 0/ 30,000,000)
-            False
             ```
 
         Note:
@@ -504,10 +474,7 @@ class TEJHandler(DataBankInfra):
         row_usage = today_row / row_limit
 
         # current status
-        if (print_status =='short') or (print_status):
-            print(f'Request usage: {req_usage:.2%}\nRow usage: {row_usage:.2%}')
-        if print_status =='long':
-            print(f'Request usage: {req_usage:.2%} ({today_req: ,}/{req_limit: ,}) \nRow usage: {row_usage:.2%} ({today_row: ,}/{row_limit: ,})')
+        logging.info(f'Req usage: {req_usage:.2%} ({today_req: ,}/{req_limit: ,}) ; Row usage: {row_usage:.2%} ({today_row: ,}/{row_limit: ,})')
 
         # almost reach limit:
         self.almost_reach_limit = ((row_usage >= 0.95) or (req_usage >= 0.95))
@@ -515,7 +482,7 @@ class TEJHandler(DataBankInfra):
         # reach limit
         reach_limit = ((row_usage >= 1) or (req_usage >= 1))
         if reach_limit:
-            logging.warning('TEJ API limit reached', )
+            logging.warning('TEJ API limit reached')
         return reach_limit
 
     def get_tej_data(self, dataset:str, start_date:str=None, end_date:str=None, stock_id:str=None)-> pd.DataFrame:
@@ -555,7 +522,7 @@ class TEJHandler(DataBankInfra):
             - 若達到 API 使用量上限，將回傳 None
             - 部分資料集(如 mkt_calendar, stock_basic_info)不需要日期區間
         """
-        if self.reach_tej_limit(True):
+        if self.reach_tej_limit():
             return None
         
         tej_dataset = self.tej_datasets.get(dataset).get('id')
@@ -628,7 +595,7 @@ class TEJHandler(DataBankInfra):
             
             # save if almost reach limit
             if self.almost_reach_limit:
-                self.reach_tej_limit(True)
+                self.reach_tej_limit()
                 break
             
             # continue
@@ -1285,51 +1252,57 @@ class FactorModelHandler(DataBankInfra):
 
         self.write_dataset('factor_model', model)
         logging.info('Factor model updated')
-        
-    def _calc_market_factor(self, mkt_idx:Literal['TR', None]=None):
-        mkt_indice = {
-            None:{'TWSE':{'stock_id':'IX0001', 'ch_name':'加權指數'}, 'TPEX':{'stock_id':'IX0043', 'ch_name':'OTC 指數'}},
-            'TR':{'TWSE':{'stock_id':'IR0001', 'ch_name':'報酬指數'}, 'TPEX':{'stock_id':'IR0043', 'ch_name':'櫃檯報酬指'}},
-        }
 
-        # mkt rtn
+    def _update_FM2_result(self):
+        pass
+
+    def _calc_market_factor(self, mkt_idx:Literal['TR', None]=None):
+        # define market indices mapping
+        mkt_indice = {
+            None: {
+                'TWSE': {'stock_id': 'IX0001', 'ch_name': '加權指數'}, 
+                'TPEX': {'stock_id': 'IX0043', 'ch_name': 'OTC 指數'}
+            },
+            'TR': {
+                'TWSE': {'stock_id': 'IR0001', 'ch_name': '報酬指數'}, 
+                'TPEX': {'stock_id': 'IR0043', 'ch_name': '櫃檯報酬指'}
+            }
+        }
         idx_ids = [v['stock_id'] for v in mkt_indice[mkt_idx].values()]
+
+        # get market cap data
         idx_mkt_cap = self.read_dataset(
             dataset='stock_trading_data',
-            filter_date='t_date', 
-            columns=['t_date', 'stock_id', '個股市值(元)'],
-            filters=[('stock_id', 'in', idx_ids)],
-        )\
-        .set_index(['t_date', 'stock_id'])\
-        .unstack('stock_id')\
-        .droplevel(0, axis=1)
-        
-        idx_return = self.read_dataset('stock_trading_data', 
-                        columns=['date', 'stock_id', '報酬率'], 
-                        filters=[['stock_id', 'in', idx_ids]])\
-        .set_index(['date', 'stock_id'])\
-        .unstack('stock_id')\
-        .droplevel(0, axis=1)/100
+            columns=['date', 'stock_id', '個股市值(元)'],
+            filters=[['stock_id', 'in', idx_ids]]
+        ).set_index(['date', 'stock_id']).unstack('stock_id').droplevel(0, axis=1)
 
-        mkt_rtn  = (idx_return * idx_mkt_cap).sum(axis=1) / idx_mkt_cap.sum(axis=1) #pd.DataFrame((idx_return * idx_mkt_cap).sum(axis=1) / idx_mkt_cap.sum(axis=1), columns=['mkt_rtn'])
+        # get return data 
+        idx_return = self.read_dataset(
+            'stock_trading_data',
+            columns=['date', 'stock_id', '報酬率'],
+            filters=[['stock_id', 'in', idx_ids]]
+        ).set_index(['date', 'stock_id']).unstack('stock_id').droplevel(0, axis=1) / 100
 
-        # rf_rate
-        t_date = self.read_dataset('mkt_calendar', columns=['date'], filters=[('休市原因中文說明(人工建置)','=','')]).rename(columns={'date':'t_date'})
+        # calculate market return
+        mkt_rtn = (idx_return * idx_mkt_cap).sum(axis=1) / idx_mkt_cap.sum(axis=1)
+
+        # get risk-free rate
         rf_rate = pd.merge_asof(
-            t_date[t_date['t_date']<=pd.Timestamp.today()],
-            self.read_dataset('rf_rate', columns=['t_date', 'bank', '定存利率_一年期_固定'], filters=[['bank', '==', '一銀']])\
-            .rename(columns={'定存利率_一年期_固定':'rf_rate'})\
-            [['t_date', 'rf_rate']]\
-            .set_index('t_date')['rf_rate'], 
-            on='t_date', 
+            pd.DataFrame(mkt_rtn.index),
+            self.read_dataset(
+                'rf_rate', 
+                columns=['date', 'bank', '定存利率_一年期_固定'],
+                filters=[['bank', '==', '一銀']]
+            ).rename(columns={'定存利率_一年期_固定': 'rf_rate'})[['date', 'rf_rate']].set_index('date')['rf_rate'],
+            on='date',
             direction='backward'
-            )\
-            .assign(rf_rate=lambda df: (1 + df['rf_rate']) ** (1 / (df.groupby(df['t_date'].dt.year)['t_date'].transform('count'))) - 1)\
-            .set_index('t_date')\
-            ['rf_rate']\
-            .ffill()
-        
-        return (mkt_rtn-rf_rate)
+        ).assign(
+            rf_rate=lambda df: (1 + df['rf_rate']) ** (1 / df.groupby(df['date'].dt.year)['date'].transform('count')) - 1
+        ).set_index('date')['rf_rate'].ffill()
+
+        # calculate cumulative excess return
+        return (mkt_rtn - rf_rate).shift(-1).rename_axis('t_date')
 
 
 class ProcessedDataHandler(DataBankInfra):

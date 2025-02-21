@@ -246,49 +246,6 @@
 2025-02-10 23:30:53,543 - root - INFO - Getting factor for roe
 2025-02-10 23:30:53,543 - root - INFO - Getting data for roe
 2025-02-10 23:30:53,648 - root - INFO - Exported roe_roa as DataFrame from parquet
-2025-02-10 23:30:53,888 - root - INFO - Getting factor for                1101     1102     1103     1104  1107     1108     1109  \
-t_date                                                                   
-2005-01-03      NaN      NaN      NaN      NaN   NaN      NaN      NaN   
-2005-01-04      NaN      NaN      NaN      NaN   NaN      NaN      NaN   
-2005-01-05      NaN      NaN      NaN      NaN   NaN      NaN      NaN   
-2005-01-06      NaN      NaN      NaN      NaN   NaN      NaN      NaN   
-2005-01-07      NaN      NaN      NaN      NaN   NaN      NaN      NaN   
-...             ...      ...      ...      ...   ...      ...      ...   
-2025-02-10  0.01523  0.00928  0.02273  0.02017   NaN  0.02141  0.00739   
-2025-02-11  0.01523  0.00928  0.02273  0.02017   NaN  0.02141  0.00739   
-2025-02-12  0.01523  0.00928  0.02273  0.02017   NaN  0.02141  0.00739   
-2025-02-13  0.01523  0.00928  0.02273  0.02017   NaN  0.02141  0.00739   
-2025-02-14  0.01523  0.00928  0.02273  0.02017   NaN  0.02141  0.00739   
-
-              1110     1201     1203  ...    9944     9945     9946     9949  \
-t_date                                ...                                      
-2005-01-03     NaN      NaN      NaN  ...     NaN      NaN      NaN      NaN   
-2005-01-04     NaN      NaN      NaN  ...     NaN      NaN      NaN      NaN   
-2005-01-05     NaN      NaN      NaN  ...     NaN      NaN      NaN      NaN   
-2005-01-06     NaN      NaN      NaN  ...     NaN      NaN      NaN      NaN   
-2005-01-07     NaN      NaN      NaN  ...     NaN      NaN      NaN      NaN   
-...            ...      ...      ...  ...     ...      ...      ...      ...   
-2025-02-10  0.0224  0.01838  0.02238  ... -0.0227  0.03515  0.00404 -0.02953   
-2025-02-11  0.0224  0.01838  0.02238  ... -0.0227  0.03515  0.00404 -0.02953   
-2025-02-12  0.0224  0.01838  0.02238  ... -0.0227  0.03515  0.00404 -0.02953   
-2025-02-13  0.0224  0.01838  0.02238  ... -0.0227  0.03515  0.00404 -0.02953   
-2025-02-14  0.0224  0.01838  0.02238  ... -0.0227  0.03515  0.00404 -0.02953   
-
-               9950     9951     9955     9958     9960     9962  
-t_date                                                            
-2005-01-03      NaN      NaN      NaN      NaN      NaN      NaN  
-2005-01-04      NaN      NaN      NaN      NaN      NaN      NaN  
-2005-01-05      NaN      NaN      NaN      NaN      NaN      NaN  
-2005-01-06      NaN      NaN      NaN      NaN      NaN      NaN  
-2005-01-07      NaN      NaN      NaN      NaN      NaN      NaN  
-...             ...      ...      ...      ...      ...      ...  
-2025-02-10  0.01065  0.01596 -0.01755  0.03058  0.02738  0.01489  
-2025-02-11  0.01065  0.01596 -0.01755  0.03058  0.02738  0.01489  
-2025-02-12  0.01065  0.01596 -0.01755  0.03058  0.02738  0.01489  
-2025-02-13  0.01065  0.01596 -0.01755  0.03058  0.02738  0.01489  
-2025-02-14  0.01065  0.01596 -0.01755  0.03058  0.02738  0.01489  
-
-[4955 rows x 2119 columns]
 2025-02-10 23:30:55,092 - root - INFO - Exported stock_return as DataFrame from parquet
 2025-02-10 23:30:56,909 - root - INFO - Exported stock_trading_notes as DataFrame from parquet
 2025-02-10 23:30:57,037 - root - INFO - Exported stock_trading_data as DataFrame from parquet
@@ -1633,3 +1590,357 @@ t_date
 2025-02-18 21:04:14,464 - root - INFO - Exported factor_model as DataFrame from parquet
 2025-02-18 21:04:30,464 - root - INFO - Exported factor_model as DataFrame from parquet
 2025-02-18 21:04:43,230 - root - INFO - Exported factor_model as DataFrame from parquet
+2025-02-19 00:57:05,709 - root - INFO - Starting databank update
+2025-02-19 00:57:05,822 - root - INFO - Exported monthly_rev as DataFrame from parquet
+2025-02-19 00:57:07,232 - root - INFO - Exported mkt_calendar as DataFrame from parquet
+2025-02-19 00:57:07,243 - root - INFO - Fetched monthly_rev from 2025-01-01 to 2025-01-01 from TEJ
+2025-02-19 00:57:07,774 - root - INFO - Saved monthly_rev as parquet from DataFrame
+2025-02-19 00:57:07,776 - root - INFO - Updated monthly_rev from tej
+2025-02-19 00:57:07,793 - root - INFO - Exported monthly_rev as DataFrame from parquet
+2025-02-19 00:57:09,808 - root - INFO - Saved monthly_rev_chng as parquet from DataFrame
+2025-02-19 00:57:09,814 - root - INFO - Updated processed data for monthly_rev_chng
+2025-02-19 00:57:09,814 - root - INFO - Updated processed data for monthly_rev_chng from monthly_rev
+2025-02-19 00:57:09,827 - root - INFO - Exported self_disclosed as DataFrame from parquet
+2025-02-19 00:57:12,086 - root - INFO - Exported mkt_calendar as DataFrame from parquet
+2025-02-19 00:57:12,089 - root - INFO - Fetched self_disclosed from 2024-12-01 to 2024-12-01 from TEJ
+2025-02-19 00:57:12,191 - root - INFO - Saved self_disclosed as parquet from DataFrame
+2025-02-19 00:57:12,193 - root - INFO - Updated self_disclosed from tej
+2025-02-19 00:57:12,269 - root - INFO - Exported fin_data as DataFrame from parquet
+2025-02-19 00:57:13,259 - root - INFO - Exported mkt_calendar as DataFrame from parquet
+2025-02-19 00:57:13,261 - root - INFO - Fetched fin_data from 2024-12-01 to 2024-12-01 from TEJ
+2025-02-19 00:57:14,118 - root - INFO - Saved fin_data as parquet from DataFrame
+2025-02-19 00:57:14,123 - root - INFO - Updated fin_data from tej
+2025-02-19 00:57:14,136 - root - INFO - Exported fin_data as DataFrame from parquet
+2025-02-19 00:57:19,525 - root - INFO - Saved fin_data_chng as parquet from DataFrame
+2025-02-19 00:57:19,534 - root - INFO - Updated processed data for fin_data_chng
+2025-02-19 00:57:19,534 - root - INFO - Updated processed data for fin_data_chng from fin_data
+2025-02-19 00:57:19,543 - root - INFO - Exported fin_data as DataFrame from parquet
+2025-02-19 00:57:58,022 - root - INFO - Saved fin_ratio_diff as parquet from DataFrame
+2025-02-19 00:57:58,038 - root - INFO - Updated processed data for fin_ratio_diff
+2025-02-19 00:57:58,038 - root - INFO - Updated processed data for fin_ratio_diff from fin_data
+2025-02-19 00:57:58,052 - root - INFO - Exported fin_data as DataFrame from parquet
+2025-02-19 00:57:58,091 - root - INFO - Saved roe_roa as parquet from DataFrame
+2025-02-19 00:57:58,092 - root - INFO - Updated processed data for roe_roa
+2025-02-19 00:57:58,092 - root - INFO - Updated processed data for roe_roa from fin_data
+2025-02-19 00:57:58,102 - root - INFO - Exported dividend_policy as DataFrame from parquet
+2025-02-19 00:57:58,887 - root - INFO - Fetched dividend_policy from TEJ
+2025-02-19 00:57:58,975 - root - INFO - Saved dividend_policy as parquet from DataFrame
+2025-02-19 00:57:58,976 - root - INFO - Updated dividend_policy from tej
+2025-02-19 00:57:59,008 - root - INFO - Exported capital_formation as DataFrame from parquet
+2025-02-19 00:57:59,896 - root - INFO - Fetched capital_formation from TEJ
+2025-02-19 00:58:00,299 - root - INFO - Saved capital_formation as parquet from DataFrame
+2025-02-19 00:58:00,304 - root - INFO - Updated capital_formation from tej
+2025-02-19 00:58:00,314 - root - INFO - Exported stock_basic_info as DataFrame from parquet
+2025-02-19 00:58:02,115 - root - INFO - Fetched stock_basic_info from TEJ
+2025-02-19 00:58:02,126 - root - INFO - Saved stock_basic_info as parquet from DataFrame
+2025-02-19 00:58:02,126 - root - INFO - Updated stock_basic_info from tej
+2025-02-19 00:58:04,579 - root - INFO - Exported stock_trading_data as DataFrame from parquet
+2025-02-19 00:58:13,810 - root - INFO - Exported mkt_calendar as DataFrame from parquet
+2025-02-19 00:58:13,821 - root - INFO - Fetched stock_trading_data from 2025-02-10 to 2025-02-18 from TEJ
+2025-02-19 00:58:37,113 - root - INFO - Saved stock_trading_data as parquet from DataFrame
+2025-02-19 00:58:37,191 - root - INFO - Updated stock_trading_data from tej
+2025-02-19 00:58:37,705 - root - INFO - Exported stock_trading_data as DataFrame from parquet
+2025-02-19 00:58:55,349 - root - INFO - Saved stock_momentum as parquet from DataFrame
+2025-02-19 00:58:55,410 - root - INFO - Updated processed data for stock_momentum
+2025-02-19 00:58:55,410 - root - INFO - Updated processed data for stock_momentum from stock_trading_data
+2025-02-19 00:58:55,735 - root - INFO - Exported stock_trading_data as DataFrame from parquet
+2025-02-19 00:58:58,585 - root - INFO - Saved stock_return as parquet from DataFrame
+2025-02-19 00:58:58,592 - root - INFO - Updated processed data for stock_return
+2025-02-19 00:58:58,592 - root - INFO - Updated processed data for stock_return from stock_trading_data
+2025-02-19 00:59:01,145 - root - INFO - Exported stock_trading_notes as DataFrame from parquet
+2025-02-19 00:59:09,616 - root - INFO - Exported mkt_calendar as DataFrame from parquet
+2025-02-19 00:59:09,665 - root - INFO - Fetched stock_trading_notes from 2025-02-11 to 2025-02-19 from TEJ
+2025-02-19 00:59:47,366 - root - INFO - Saved stock_trading_notes as parquet from DataFrame
+2025-02-19 00:59:48,161 - root - INFO - Updated stock_trading_notes from tej
+2025-02-19 00:59:49,182 - root - INFO - Exported mkt_calendar as DataFrame from parquet
+2025-02-19 00:59:49,183 - root - INFO - Updated mkt_calendar from tej
+2025-02-19 00:59:52,312 - root - INFO - Exported trading_activity as DataFrame from parquet
+2025-02-19 00:59:59,261 - root - INFO - Exported mkt_calendar as DataFrame from parquet
+2025-02-19 00:59:59,273 - root - INFO - Fetched trading_activity from 2025-02-10 to 2025-02-18 from TEJ
+2025-02-19 01:00:37,308 - root - INFO - Saved trading_activity as parquet from DataFrame
+2025-02-19 01:00:37,515 - root - INFO - Updated trading_activity from tej
+2025-02-19 01:00:38,026 - root - INFO - Exported trading_activity as DataFrame from parquet
+2025-02-19 01:02:08,885 - root - INFO - Saved inst_investor_ratio_diff as parquet from DataFrame
+2025-02-19 01:02:09,349 - root - INFO - Updated processed data for inst_investor_ratio_diff
+2025-02-19 01:02:09,349 - root - INFO - Updated processed data for inst_investor_ratio_diff from trading_activity
+2025-02-19 01:02:10,204 - root - INFO - Exported trading_activity as DataFrame from parquet
+2025-02-19 01:04:39,322 - root - INFO - Saved inst_investor_money_chng as parquet from DataFrame
+2025-02-19 01:04:40,495 - root - INFO - Updated processed data for inst_investor_money_chng
+2025-02-19 01:04:40,496 - root - INFO - Updated processed data for inst_investor_money_chng from trading_activity
+2025-02-19 01:04:41,083 - root - INFO - Exported stock_custody as DataFrame from parquet
+2025-02-19 01:04:44,379 - root - INFO - Exported mkt_calendar as DataFrame from parquet
+2025-02-19 01:04:44,383 - root - INFO - Fetched stock_custody from 2025-02-07 to 2025-02-14 from TEJ
+2025-02-19 01:04:46,519 - root - INFO - Saved stock_custody as parquet from DataFrame
+2025-02-19 01:04:46,533 - root - INFO - Updated stock_custody from tej
+2025-02-19 01:04:46,668 - root - INFO - Exported stock_custody as DataFrame from parquet
+2025-02-19 01:04:48,628 - root - INFO - Saved shareholding_pct as parquet from DataFrame
+2025-02-19 01:04:48,637 - root - INFO - Updated processed data for shareholding_pct
+2025-02-19 01:04:48,637 - root - INFO - Updated processed data for shareholding_pct from stock_custody
+2025-02-19 01:04:48,717 - root - INFO - Exported shareholding_pct as DataFrame from parquet
+2025-02-19 01:04:51,234 - root - INFO - Saved shareholding_pct_diff as parquet from DataFrame
+2025-02-19 01:04:51,264 - root - INFO - Updated processed data for shareholding_pct_diff
+2025-02-19 01:04:51,264 - root - INFO - Updated processed data for shareholding_pct_diff from stock_custody
+2025-02-19 01:04:54,878 - root - INFO - Saved rf_rate as parquet from DataFrame
+2025-02-19 01:04:54,878 - root - INFO - Updated public data for rf_rate
+2025-02-19 01:04:55,053 - root - INFO - Exported stock_trading_data as DataFrame from parquet
+2025-02-19 01:04:55,154 - root - INFO - Exported stock_trading_data as DataFrame from parquet
+2025-02-19 01:04:55,166 - root - INFO - Exported mkt_calendar as DataFrame from parquet
+2025-02-19 01:04:55,173 - root - INFO - Exported rf_rate as DataFrame from parquet
+2025-02-19 01:04:55,731 - root - INFO - Exported stock_trading_data as DataFrame from parquet
+2025-02-19 01:05:01,278 - root - INFO - Exported stock_return as DataFrame from parquet
+2025-02-19 01:05:02,282 - root - INFO - Exported stock_return as DataFrame from parquet
+2025-02-19 01:05:03,293 - root - INFO - Exported stock_trading_data as DataFrame from parquet
+2025-02-19 01:05:07,391 - root - INFO - Exported fin_data as DataFrame from parquet
+2025-02-19 01:05:09,185 - root - INFO - Exported stock_return as DataFrame from parquet
+2025-02-19 01:05:09,886 - root - INFO - Exported stock_return as DataFrame from parquet
+2025-02-19 01:05:10,967 - root - INFO - Exported stock_trading_data as DataFrame from parquet
+2025-02-19 01:05:15,976 - root - INFO - Exported stock_return as DataFrame from parquet
+2025-02-19 01:05:16,713 - root - INFO - Exported stock_return as DataFrame from parquet
+2025-02-19 01:05:17,770 - root - INFO - Exported stock_trading_data as DataFrame from parquet
+2025-02-19 01:05:23,016 - root - INFO - Exported stock_return as DataFrame from parquet
+2025-02-19 01:05:23,667 - root - INFO - Exported stock_return as DataFrame from parquet
+2025-02-19 01:05:24,765 - root - INFO - Exported stock_momentum as DataFrame from parquet
+2025-02-19 01:05:29,767 - root - INFO - Exported stock_return as DataFrame from parquet
+2025-02-19 01:05:30,527 - root - INFO - Exported stock_return as DataFrame from parquet
+2025-02-19 01:05:31,661 - root - INFO - Exported stock_momentum as DataFrame from parquet
+2025-02-19 01:05:36,746 - root - INFO - Exported stock_return as DataFrame from parquet
+2025-02-19 01:05:37,458 - root - INFO - Exported stock_return as DataFrame from parquet
+2025-02-19 01:05:38,415 - root - INFO - Exported roe_roa as DataFrame from parquet
+2025-02-19 01:05:39,878 - root - INFO - Exported stock_return as DataFrame from parquet
+2025-02-19 01:05:40,759 - root - INFO - Exported stock_return as DataFrame from parquet
+2025-02-19 01:05:41,808 - root - INFO - Exported fin_data as DataFrame from parquet
+2025-02-19 01:05:43,122 - root - INFO - Exported stock_return as DataFrame from parquet
+2025-02-19 01:05:43,768 - root - INFO - Exported stock_return as DataFrame from parquet
+2025-02-19 01:05:44,692 - root - INFO - Exported fin_data_chng as DataFrame from parquet
+2025-02-19 01:05:45,896 - root - INFO - Exported stock_return as DataFrame from parquet
+2025-02-19 01:05:46,551 - root - INFO - Exported stock_return as DataFrame from parquet
+2025-02-19 01:05:47,247 - root - INFO - Saved factor_model as parquet from DataFrame
+2025-02-19 01:05:47,247 - root - INFO - Factor model updated
+2025-02-19 01:05:47,247 - root - INFO - Completed databank update
+2025-02-19 09:22:40,684 - root - INFO - Exported factor_model as DataFrame from parquet
+2025-02-19 09:25:18,238 - root - INFO - Exported rf_rate as DataFrame from parquet
+2025-02-19 09:25:26,578 - root - INFO - Exported factor_model as DataFrame from parquet
+2025-02-19 09:26:07,164 - root - INFO - Exported factor_model as DataFrame from parquet
+2025-02-19 09:52:20,992 - root - INFO - Exported stock_trading_data as DataFrame from parquet
+2025-02-19 09:52:21,072 - root - INFO - Exported stock_trading_data as DataFrame from parquet
+2025-02-19 09:52:21,084 - root - INFO - Exported rf_rate as DataFrame from parquet
+2025-02-19 09:54:20,187 - root - INFO - Exported mkt_calendar as DataFrame from parquet
+2025-02-19 09:54:20,275 - root - INFO - Exported stock_trading_data as DataFrame from parquet
+2025-02-19 09:54:20,357 - root - INFO - Exported stock_trading_data as DataFrame from parquet
+2025-02-19 09:54:20,367 - root - INFO - Exported rf_rate as DataFrame from parquet
+2025-02-19 09:54:20,621 - root - INFO - Exported stock_trading_data as DataFrame from parquet
+2025-02-19 09:54:25,335 - root - INFO - Exported stock_return as DataFrame from parquet
+2025-02-19 09:54:26,022 - root - INFO - Exported stock_return as DataFrame from parquet
+2025-02-19 09:54:26,761 - root - INFO - Exported stock_trading_data as DataFrame from parquet
+2025-02-19 09:54:30,367 - root - INFO - Exported fin_data as DataFrame from parquet
+2025-02-19 09:54:31,935 - root - INFO - Exported stock_return as DataFrame from parquet
+2025-02-19 09:54:32,603 - root - INFO - Exported stock_return as DataFrame from parquet
+2025-02-19 09:54:33,413 - root - INFO - Exported stock_trading_data as DataFrame from parquet
+2025-02-19 09:54:38,370 - root - INFO - Exported stock_return as DataFrame from parquet
+2025-02-19 09:54:39,004 - root - INFO - Exported stock_return as DataFrame from parquet
+2025-02-19 09:54:39,792 - root - INFO - Exported stock_trading_data as DataFrame from parquet
+2025-02-19 09:54:44,932 - root - INFO - Exported stock_return as DataFrame from parquet
+2025-02-19 09:54:45,567 - root - INFO - Exported stock_return as DataFrame from parquet
+2025-02-19 09:54:46,371 - root - INFO - Exported stock_momentum as DataFrame from parquet
+2025-02-19 09:54:51,282 - root - INFO - Exported stock_return as DataFrame from parquet
+2025-02-19 09:54:52,008 - root - INFO - Exported stock_return as DataFrame from parquet
+2025-02-19 09:54:53,107 - root - INFO - Exported stock_momentum as DataFrame from parquet
+2025-02-19 09:54:58,539 - root - INFO - Exported stock_return as DataFrame from parquet
+2025-02-19 09:54:59,437 - root - INFO - Exported stock_return as DataFrame from parquet
+2025-02-19 09:55:00,195 - root - INFO - Exported roe_roa as DataFrame from parquet
+2025-02-19 09:55:01,525 - root - INFO - Exported stock_return as DataFrame from parquet
+2025-02-19 09:55:02,264 - root - INFO - Exported stock_return as DataFrame from parquet
+2025-02-19 09:55:03,019 - root - INFO - Exported fin_data as DataFrame from parquet
+2025-02-19 09:55:04,340 - root - INFO - Exported stock_return as DataFrame from parquet
+2025-02-19 09:55:05,519 - root - INFO - Exported stock_return as DataFrame from parquet
+2025-02-19 09:55:06,302 - root - INFO - Exported fin_data_chng as DataFrame from parquet
+2025-02-19 09:55:07,552 - root - INFO - Exported stock_return as DataFrame from parquet
+2025-02-19 09:55:08,297 - root - INFO - Exported stock_return as DataFrame from parquet
+2025-02-19 09:55:08,819 - root - INFO - Saved factor_model as parquet from DataFrame
+2025-02-19 09:55:08,819 - root - INFO - Factor model updated
+2025-02-19 09:55:45,327 - root - INFO - Exported factor_model as DataFrame from parquet
+2025-02-19 09:57:53,126 - root - INFO - Exported factor_model as DataFrame from parquet
+2025-02-19 10:02:59,876 - root - INFO - Exported roe_roa as DataFrame from parquet
+2025-02-19 10:03:01,226 - root - INFO - Exported stock_return as DataFrame from parquet
+2025-02-19 10:03:04,153 - root - INFO - Exported stock_trading_notes as DataFrame from parquet
+2025-02-19 10:03:04,278 - root - INFO - Exported stock_trading_data as DataFrame from parquet
+2025-02-19 10:04:06,774 - root - INFO - Exported mkt_calendar as DataFrame from parquet
+2025-02-19 10:04:09,049 - root - INFO - Exported factor_model as DataFrame from parquet
+2025-02-19 10:04:10,201 - root - INFO - Exported roe_roa as DataFrame from parquet
+2025-02-19 10:04:11,487 - root - INFO - Exported stock_return as DataFrame from parquet
+2025-02-19 10:04:14,452 - root - INFO - Exported stock_trading_notes as DataFrame from parquet
+2025-02-19 10:04:14,760 - root - INFO - Exported stock_trading_data as DataFrame from parquet
+2025-02-19 10:04:15,124 - root - INFO - Exported stock_basic_info as DataFrame from parquet
+2025-02-19 10:04:15,137 - root - INFO - Exported fin_data as DataFrame from parquet
+2025-02-19 10:04:15,152 - root - INFO - Exported monthly_rev as DataFrame from parquet
+2025-02-19 10:04:15,186 - root - INFO - Exported stock_trading_notes as DataFrame from parquet
+2025-02-19 10:04:15,209 - root - INFO - Exported stock_trading_data as DataFrame from parquet
+2025-02-19 10:04:15,216 - root - INFO - Created Strategy with AAR: 12.02%; MDD: -48.91%; Avol: 17.22%
+2025-02-19 10:13:21,934 - root - INFO - Exported mkt_calendar as DataFrame from parquet
+2025-02-19 10:13:21,988 - root - INFO - Exported factor_model as DataFrame from parquet
+2025-02-19 10:13:22,123 - root - INFO - Exported roe_roa as DataFrame from parquet
+2025-02-19 10:13:23,426 - root - INFO - Exported stock_return as DataFrame from parquet
+2025-02-19 10:13:26,519 - root - INFO - Exported stock_trading_notes as DataFrame from parquet
+2025-02-19 10:13:26,689 - root - INFO - Exported stock_trading_data as DataFrame from parquet
+2025-02-19 10:13:27,028 - root - INFO - Exported stock_basic_info as DataFrame from parquet
+2025-02-19 10:13:27,039 - root - INFO - Exported fin_data as DataFrame from parquet
+2025-02-19 10:13:27,055 - root - INFO - Exported monthly_rev as DataFrame from parquet
+2025-02-19 10:13:27,083 - root - INFO - Exported stock_trading_notes as DataFrame from parquet
+2025-02-19 10:13:27,105 - root - INFO - Exported stock_trading_data as DataFrame from parquet
+2025-02-19 10:13:27,112 - root - INFO - Created Strategy with AAR: 12.02%; MDD: -48.91%; Avol: 17.22%
+2025-02-19 10:21:46,324 - root - INFO - Exported stock_trading_data as DataFrame from parquet
+2025-02-19 10:21:46,415 - root - INFO - Exported stock_trading_data as DataFrame from parquet
+2025-02-19 10:21:46,430 - root - INFO - Exported rf_rate as DataFrame from parquet
+2025-02-19 10:22:52,158 - root - INFO - Exported mkt_calendar as DataFrame from parquet
+2025-02-19 10:22:54,625 - root - INFO - Exported stock_trading_data as DataFrame from parquet
+2025-02-19 10:22:54,722 - root - INFO - Exported stock_trading_data as DataFrame from parquet
+2025-02-19 10:22:54,734 - root - INFO - Exported rf_rate as DataFrame from parquet
+2025-02-19 10:22:54,971 - root - INFO - Exported stock_trading_data as DataFrame from parquet
+2025-02-19 10:22:59,868 - root - INFO - Exported stock_return as DataFrame from parquet
+2025-02-19 10:23:00,553 - root - INFO - Exported stock_return as DataFrame from parquet
+2025-02-19 10:23:01,321 - root - INFO - Exported stock_trading_data as DataFrame from parquet
+2025-02-19 10:23:04,926 - root - INFO - Exported fin_data as DataFrame from parquet
+2025-02-19 10:23:06,517 - root - INFO - Exported stock_return as DataFrame from parquet
+2025-02-19 10:23:07,182 - root - INFO - Exported stock_return as DataFrame from parquet
+2025-02-19 10:23:07,995 - root - INFO - Exported stock_trading_data as DataFrame from parquet
+2025-02-19 10:23:13,008 - root - INFO - Exported stock_return as DataFrame from parquet
+2025-02-19 10:23:13,640 - root - INFO - Exported stock_return as DataFrame from parquet
+2025-02-19 10:23:14,430 - root - INFO - Exported stock_trading_data as DataFrame from parquet
+2025-02-19 10:23:19,547 - root - INFO - Exported stock_return as DataFrame from parquet
+2025-02-19 10:23:20,199 - root - INFO - Exported stock_return as DataFrame from parquet
+2025-02-19 10:23:21,033 - root - INFO - Exported stock_momentum as DataFrame from parquet
+2025-02-19 10:23:26,112 - root - INFO - Exported stock_return as DataFrame from parquet
+2025-02-19 10:23:26,800 - root - INFO - Exported stock_return as DataFrame from parquet
+2025-02-19 10:23:27,698 - root - INFO - Exported stock_momentum as DataFrame from parquet
+2025-02-19 10:23:32,746 - root - INFO - Exported stock_return as DataFrame from parquet
+2025-02-19 10:23:33,468 - root - INFO - Exported stock_return as DataFrame from parquet
+2025-02-19 10:23:34,187 - root - INFO - Exported roe_roa as DataFrame from parquet
+2025-02-19 10:23:35,456 - root - INFO - Exported stock_return as DataFrame from parquet
+2025-02-19 10:23:36,106 - root - INFO - Exported stock_return as DataFrame from parquet
+2025-02-19 10:23:36,789 - root - INFO - Exported fin_data as DataFrame from parquet
+2025-02-19 10:23:38,065 - root - INFO - Exported stock_return as DataFrame from parquet
+2025-02-19 10:23:38,725 - root - INFO - Exported stock_return as DataFrame from parquet
+2025-02-19 10:23:39,462 - root - INFO - Exported fin_data_chng as DataFrame from parquet
+2025-02-19 10:23:40,664 - root - INFO - Exported stock_return as DataFrame from parquet
+2025-02-19 10:23:41,302 - root - INFO - Exported stock_return as DataFrame from parquet
+2025-02-19 10:23:41,792 - root - INFO - Saved factor_model as parquet from DataFrame
+2025-02-19 10:23:41,792 - root - INFO - Factor model updated
+2025-02-19 10:23:41,808 - root - INFO - Exported factor_model as DataFrame from parquet
+2025-02-19 10:23:42,072 - root - INFO - Exported roe_roa as DataFrame from parquet
+2025-02-19 10:23:43,356 - root - INFO - Exported stock_return as DataFrame from parquet
+2025-02-19 10:23:46,404 - root - INFO - Exported stock_trading_notes as DataFrame from parquet
+2025-02-19 10:23:46,562 - root - INFO - Exported stock_trading_data as DataFrame from parquet
+2025-02-19 10:23:46,921 - root - INFO - Exported stock_basic_info as DataFrame from parquet
+2025-02-19 10:23:46,933 - root - INFO - Exported fin_data as DataFrame from parquet
+2025-02-19 10:23:46,951 - root - INFO - Exported monthly_rev as DataFrame from parquet
+2025-02-19 10:23:46,976 - root - INFO - Exported stock_trading_notes as DataFrame from parquet
+2025-02-19 10:23:46,999 - root - INFO - Exported stock_trading_data as DataFrame from parquet
+2025-02-19 10:23:47,004 - root - INFO - Created Strategy with AAR: 12.02%; MDD: -48.91%; Avol: 17.22%
+2025-02-19 10:24:48,325 - root - INFO - Exported mkt_calendar as DataFrame from parquet
+2025-02-19 10:24:48,435 - root - INFO - Exported stock_trading_data as DataFrame from parquet
+2025-02-19 10:24:48,525 - root - INFO - Exported stock_trading_data as DataFrame from parquet
+2025-02-19 10:24:48,539 - root - INFO - Exported rf_rate as DataFrame from parquet
+2025-02-19 10:24:48,779 - root - INFO - Exported stock_trading_data as DataFrame from parquet
+2025-02-19 10:24:53,481 - root - INFO - Exported stock_return as DataFrame from parquet
+2025-02-19 10:24:54,156 - root - INFO - Exported stock_return as DataFrame from parquet
+2025-02-19 10:24:54,904 - root - INFO - Exported stock_trading_data as DataFrame from parquet
+2025-02-19 10:24:58,556 - root - INFO - Exported fin_data as DataFrame from parquet
+2025-02-19 10:25:00,154 - root - INFO - Exported stock_return as DataFrame from parquet
+2025-02-19 10:25:00,818 - root - INFO - Exported stock_return as DataFrame from parquet
+2025-02-19 10:25:01,625 - root - INFO - Exported stock_trading_data as DataFrame from parquet
+2025-02-19 10:25:06,565 - root - INFO - Exported stock_return as DataFrame from parquet
+2025-02-19 10:25:07,247 - root - INFO - Exported stock_return as DataFrame from parquet
+2025-02-19 10:25:08,210 - root - INFO - Exported stock_trading_data as DataFrame from parquet
+2025-02-19 10:25:13,656 - root - INFO - Exported stock_return as DataFrame from parquet
+2025-02-19 10:25:14,347 - root - INFO - Exported stock_return as DataFrame from parquet
+2025-02-19 10:25:15,203 - root - INFO - Exported stock_momentum as DataFrame from parquet
+2025-02-19 10:25:20,359 - root - INFO - Exported stock_return as DataFrame from parquet
+2025-02-19 10:25:21,078 - root - INFO - Exported stock_return as DataFrame from parquet
+2025-02-19 10:25:22,018 - root - INFO - Exported stock_momentum as DataFrame from parquet
+2025-02-19 10:25:27,228 - root - INFO - Exported stock_return as DataFrame from parquet
+2025-02-19 10:25:27,970 - root - INFO - Exported stock_return as DataFrame from parquet
+2025-02-19 10:25:28,752 - root - INFO - Exported roe_roa as DataFrame from parquet
+2025-02-19 10:25:30,021 - root - INFO - Exported stock_return as DataFrame from parquet
+2025-02-19 10:25:30,683 - root - INFO - Exported stock_return as DataFrame from parquet
+2025-02-19 10:25:31,391 - root - INFO - Exported fin_data as DataFrame from parquet
+2025-02-19 10:25:32,811 - root - INFO - Exported stock_return as DataFrame from parquet
+2025-02-19 10:25:33,487 - root - INFO - Exported stock_return as DataFrame from parquet
+2025-02-19 10:25:34,237 - root - INFO - Exported fin_data_chng as DataFrame from parquet
+2025-02-19 10:25:35,438 - root - INFO - Exported stock_return as DataFrame from parquet
+2025-02-19 10:25:36,087 - root - INFO - Exported stock_return as DataFrame from parquet
+2025-02-19 10:25:36,613 - root - INFO - Saved factor_model as parquet from DataFrame
+2025-02-19 10:25:36,614 - root - INFO - Factor model updated
+2025-02-19 10:25:36,682 - root - INFO - Exported factor_model as DataFrame from parquet
+2025-02-19 10:25:37,068 - root - INFO - Exported roe_roa as DataFrame from parquet
+2025-02-19 10:25:38,369 - root - INFO - Exported stock_return as DataFrame from parquet
+2025-02-19 10:25:41,552 - root - INFO - Exported stock_trading_notes as DataFrame from parquet
+2025-02-19 10:25:41,644 - root - INFO - Exported stock_trading_data as DataFrame from parquet
+2025-02-19 10:25:42,147 - root - INFO - Exported stock_basic_info as DataFrame from parquet
+2025-02-19 10:25:42,155 - root - INFO - Exported fin_data as DataFrame from parquet
+2025-02-19 10:25:42,164 - root - INFO - Exported monthly_rev as DataFrame from parquet
+2025-02-19 10:25:42,179 - root - INFO - Exported stock_trading_notes as DataFrame from parquet
+2025-02-19 10:25:42,192 - root - INFO - Exported stock_trading_data as DataFrame from parquet
+2025-02-19 10:25:42,197 - root - INFO - Created Strategy with AAR: 12.02%; MDD: -48.91%; Avol: 17.22%
+2025-02-19 11:15:15,788 - root - INFO - Exported factor_model as DataFrame from parquet
+2025-02-19 11:16:23,749 - root - INFO - Exported factor_model as DataFrame from parquet
+2025-02-19 11:21:15,457 - root - INFO - Exported roe_roa as DataFrame from parquet
+2025-02-19 11:21:16,904 - root - INFO - Exported stock_return as DataFrame from parquet
+2025-02-19 11:21:18,961 - root - INFO - Exported stock_trading_notes as DataFrame from parquet
+2025-02-19 11:21:19,071 - root - INFO - Exported stock_trading_data as DataFrame from parquet
+2025-02-19 11:21:19,631 - root - INFO - Exported stock_basic_info as DataFrame from parquet
+2025-02-19 11:21:19,638 - root - INFO - Exported fin_data as DataFrame from parquet
+2025-02-19 11:21:19,648 - root - INFO - Exported monthly_rev as DataFrame from parquet
+2025-02-19 11:21:19,662 - root - INFO - Exported stock_trading_notes as DataFrame from parquet
+2025-02-19 11:21:19,675 - root - INFO - Exported stock_trading_data as DataFrame from parquet
+2025-02-19 11:21:19,679 - root - INFO - Created Strategy with AAR: 12.44%; MDD: -53.65%; Avol: 17.41%
+2025-02-19 11:48:19,104 - root - INFO - Exported roe_roa as DataFrame from parquet
+2025-02-19 11:48:20,541 - root - INFO - Exported stock_return as DataFrame from parquet
+2025-02-19 11:48:22,425 - root - INFO - Exported stock_trading_notes as DataFrame from parquet
+2025-02-19 11:48:22,544 - root - INFO - Exported stock_trading_data as DataFrame from parquet
+2025-02-19 11:48:22,904 - root - INFO - Exported stock_basic_info as DataFrame from parquet
+2025-02-19 11:48:22,920 - root - INFO - Exported fin_data as DataFrame from parquet
+2025-02-19 11:48:22,938 - root - INFO - Exported monthly_rev as DataFrame from parquet
+2025-02-19 11:48:22,970 - root - INFO - Exported stock_trading_notes as DataFrame from parquet
+2025-02-19 11:48:22,995 - root - INFO - Exported stock_trading_data as DataFrame from parquet
+2025-02-19 11:48:23,002 - root - INFO - Created Strategy with AAR: 12.44%; MDD: -53.65%; Avol: 17.41%
+2025-02-19 11:57:47,934 - root - INFO - Exported roe_roa as DataFrame from parquet
+2025-02-19 11:57:49,458 - root - INFO - Exported fin_data as DataFrame from parquet
+2025-02-19 11:57:52,093 - root - INFO - Exported stock_return as DataFrame from parquet
+2025-02-19 11:57:53,903 - root - INFO - Exported stock_trading_notes as DataFrame from parquet
+2025-02-19 11:57:54,063 - root - INFO - Exported stock_trading_data as DataFrame from parquet
+2025-02-19 11:57:54,384 - root - INFO - Exported stock_basic_info as DataFrame from parquet
+2025-02-19 11:57:54,395 - root - INFO - Exported fin_data as DataFrame from parquet
+2025-02-19 11:57:54,410 - root - INFO - Exported monthly_rev as DataFrame from parquet
+2025-02-19 11:57:54,441 - root - INFO - Exported stock_trading_notes as DataFrame from parquet
+2025-02-19 11:57:54,464 - root - INFO - Exported stock_trading_data as DataFrame from parquet
+2025-02-19 11:57:54,472 - root - INFO - Created Strategy with AAR: 10.44%; MDD: -74.11%; Avol: 22.44%
+2025-02-19 11:58:47,771 - root - INFO - Exported roe_roa as DataFrame from parquet
+2025-02-19 11:58:49,656 - root - INFO - Exported stock_trading_data as DataFrame from parquet
+2025-02-19 11:58:55,746 - root - INFO - Exported stock_return as DataFrame from parquet
+2025-02-19 11:58:57,658 - root - INFO - Exported stock_trading_notes as DataFrame from parquet
+2025-02-19 11:58:57,840 - root - INFO - Exported stock_trading_data as DataFrame from parquet
+2025-02-19 11:58:58,202 - root - INFO - Exported stock_basic_info as DataFrame from parquet
+2025-02-19 11:58:58,214 - root - INFO - Exported fin_data as DataFrame from parquet
+2025-02-19 11:58:58,234 - root - INFO - Exported monthly_rev as DataFrame from parquet
+2025-02-19 11:58:58,269 - root - INFO - Exported stock_trading_notes as DataFrame from parquet
+2025-02-19 11:58:58,299 - root - INFO - Exported stock_trading_data as DataFrame from parquet
+2025-02-19 11:58:58,309 - root - INFO - Created Strategy with AAR: 11.62%; MDD: -73.37%; Avol: 22.79%
+2025-02-19 12:04:09,024 - root - INFO - Exported roe_roa as DataFrame from parquet
+2025-02-19 12:04:10,892 - root - INFO - Exported stock_trading_data as DataFrame from parquet
+2025-02-19 12:04:16,182 - root - INFO - Exported stock_momentum as DataFrame from parquet
+2025-02-19 12:04:22,581 - root - INFO - Exported stock_return as DataFrame from parquet
+2025-02-19 12:04:24,593 - root - INFO - Exported stock_trading_notes as DataFrame from parquet
+2025-02-19 12:04:24,742 - root - INFO - Exported stock_trading_data as DataFrame from parquet
+2025-02-19 12:04:25,312 - root - INFO - Exported stock_basic_info as DataFrame from parquet
+2025-02-19 12:04:25,323 - root - INFO - Exported fin_data as DataFrame from parquet
+2025-02-19 12:04:25,338 - root - INFO - Exported monthly_rev as DataFrame from parquet
+2025-02-19 12:04:25,369 - root - INFO - Exported stock_trading_notes as DataFrame from parquet
+2025-02-19 12:04:25,392 - root - INFO - Exported stock_trading_data as DataFrame from parquet
+2025-02-19 12:04:25,398 - root - INFO - Created Strategy with AAR: 17.37%; MDD: -78.42%; Avol: 26.48%
+2025-02-20 12:34:38,495 - root - INFO - Exported factor_model as DataFrame from parquet
+2025-02-20 12:34:53,543 - root - INFO - Exported factor_model as DataFrame from parquet
+2025-02-20 12:35:22,397 - root - INFO - Exported factor_model as DataFrame from parquet
+2025-02-20 12:35:52,390 - root - INFO - Exported factor_model as DataFrame from parquet
+2025-02-20 12:37:54,831 - root - INFO - Exported factor_model as DataFrame from parquet
+2025-02-20 12:38:19,710 - root - INFO - Exported factor_model as DataFrame from parquet
+2025-02-20 12:38:58,749 - root - INFO - Exported factor_model as DataFrame from parquet

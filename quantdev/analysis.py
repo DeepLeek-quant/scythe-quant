@@ -1,12 +1,194 @@
 from typing import Union, Literal, Tuple
+from numerize.numerize import numerize
+from statsmodels.regression.rolling import RollingOLS
+from linearmodels import FamaMacBeth
+import statsmodels.api as sm
+from scipy import stats
 import pandas as pd
+import numpy as np
+
 from plotly.colors import sample_colorscale
 from plotly.subplots import make_subplots
 import plotly.graph_objects as go
 
 
 # utils
+def calc_maemfe(buy_list:pd.DataFrame, portfolio_df:pd.DataFrame, return_df:pd.DataFrame):        
+        portfolio_return = (portfolio_df != 0).astype(int) * return_df[portfolio_df.columns].loc[portfolio_df.index]
+        period_starts = portfolio_df.index.intersection(buy_list.index)[:-1]
+        period_ends = period_starts[1:].map(lambda x: portfolio_df.loc[:x].index[-1])
+        trades = pd.DataFrame()
+        for start_date, end_date in zip(period_starts, period_ends):
+            start_idx = portfolio_return.index.get_indexer([start_date])[0]
+            end_idx = portfolio_return.index.get_indexer([end_date])[0] + 1
+            r = portfolio_return.iloc[start_idx:end_idx, :]
+            trades = pd.concat([trades, r\
+                .loc[:, (r != 0).any() & ~r.isna().any()]\
+                .rename(columns=lambda x: r.index[0].strftime('%Y%m%d') + '_' + str(x))\
+                .reset_index(drop=True)], axis=1)
+        
+        c_returns = (1 + trades).cumprod(axis=0) - 1
+        returns = c_returns.apply(lambda x: x.dropna().iloc[-1] if not x.dropna().empty else np.nan, axis=0)
+        gmfe = c_returns.max(axis=0)
+        bmfe = c_returns.apply(lambda x: x.iloc[:x.idxmin()+1].max(), axis=0)
+        mae = c_returns.min(axis=0).where(lambda x: x <= 0, 0)
+        mdd = ((1 + c_returns) / (1 + c_returns).cummax(axis=0) - 1).min(axis=0)
 
+        return pd.DataFrame({
+            'return': returns,
+            'gmfe': gmfe,
+            'bmfe': bmfe,
+            'mae': mae,
+            'mdd': mdd
+        }, index=trades.columns)
+
+def calc_liquidity_metrics(portfolio_df:pd.DataFrame=None, money_threshold:int=500000, volume_threshold:int=50):
+    # get buy sell dates for each trade
+    last_portfolio = portfolio_df.shift(1).fillna(0).infer_objects(copy=False)
+    buys = (last_portfolio == 0) & (portfolio_df != 0)
+    sells = (last_portfolio != 0) & (portfolio_df == 0)
+
+    buy_sells = pd.concat([
+        buys.stack().loc[lambda x: x].reset_index(name='action').assign(action='b'),
+        sells.stack().loc[lambda x: x].reset_index(name='action').assign(action='s')
+        ])\
+        .rename(columns={'t_date':'buy_date', 'level_1': 'stock_id'})\
+        .sort_values(by=['stock_id', 'buy_date'])\
+        .assign(sell_date=lambda x: x.groupby('stock_id')['buy_date'].shift(-1))
+
+    buy_sells = buy_sells[buy_sells['action'] == 'b']\
+        .dropna()\
+        .sort_values(by=['stock_id', 'buy_date'])\
+        .reset_index(drop=True)\
+        [['stock_id', 'buy_date', 'sell_date']]
+
+    # load data
+    filters=[
+        ('stock_id', 'in', list(buy_sells['stock_id'].unique())),
+        ('date', 'in', list(set(list(buy_sells['buy_date'].unique().strftime('%Y-%m-%d')) + list(buy_sells.sell_date.unique().strftime('%Y-%m-%d'))))),
+        ]
+
+    liquidity_status=pd.merge(
+        _db.read_dataset(
+            'stock_trading_notes', 
+            columns=['date', 'stock_id', '是否為注意股票', '是否為處置股票', '是否全額交割', '漲跌停註記'],
+            filters=filters
+        ),
+        _db.read_dataset(
+            'stock_trading_data',
+            columns=['date', 'stock_id', '成交量(千股)', '成交金額(元)'],
+            filters=filters,
+        ),
+        on=['date', 'stock_id'],
+        how='inner',
+        )
+
+    # merge
+    df = pd.concat([
+        pd.merge(buy_sells, liquidity_status, left_on=['stock_id', 'buy_date'], right_on=['stock_id', 'date'], how='left'), 
+        pd.merge(buy_sells, liquidity_status, left_on=['stock_id', 'sell_date'], right_on=['stock_id', 'date'], how='left'),
+        ])
+        
+    # Calculate warning stats
+    warning_stats = pd.DataFrame({      
+        f'money < {numerize(money_threshold)}': [(df['成交金額(元)'] < money_threshold).mean()],
+        f'volume < {numerize(volume_threshold)}': [(df['成交量(千股)'] < volume_threshold).mean()],
+        '全額交割': [(df['是否全額交割']=='Y').mean()],
+        '注意股票': [(df['是否為注意股票']=='Y').mean()],
+        '處置股票': [(df['是否為處置股票']=='Y').mean()],
+        'buy limit up': [((df['date']==df['sell_date'])&(df['漲跌停註記'] == '-')).mean()],
+        'sell limit down': [((df['date']==df['buy_date'])&(df['漲跌停註記'] == '+')).mean()],
+    }, index=[0])
+
+    # Calculate safety capacity
+    principles = [500000, 1000000, 5000000, 10000000, 50000000, 100000000]
+    buys_lqd = df[df['buy_date']==df['date']]
+    vol_ratio = 10
+    capacity = pd.DataFrame({
+        'principle': [numerize(p) for p in principles],
+        'safety_capacity': [
+            1 - (buys_lqd.assign(
+                capacity=lambda x: x['成交金額(元)'] / vol_ratio - (principle / x.groupby('buy_date')['stock_id'].transform('nunique')),
+                spill=lambda x: np.where(x['capacity'] < 0, x['capacity'], 0)
+            )
+            .groupby('buy_date')['spill'].sum() * -1 / principle).mean()
+            for principle in principles
+        ]
+    })
+
+    # Calculate volume distribution
+    def calc_volume_dist(df):
+        thresholds = [100000, 500000, 1000000, 10000000, 100000000]
+        labels = [f'{numerize(thresholds[i-1])}-{numerize(th)}' 
+                    if i > 0 else f'<= {numerize(th)}'
+                    for i, th in enumerate(thresholds)]
+        labels.append(f'> {numerize(thresholds[-1])}')
+        
+        return df.assign(
+            money_threshold=pd.cut(df['成交金額(元)'], [0] + thresholds + [np.inf], labels=labels)
+            )\
+            .groupby('money_threshold', observed=True)['stock_id']\
+            .count()\
+            .pipe(lambda x: (x / x.sum()))
+
+    volume_dist = pd.concat([
+        calc_volume_dist(df[df['buy_date']==df['date']]).rename('buy'),
+        calc_volume_dist(df[df['sell_date']==df['date']]).rename('sell')
+    ], axis=1)
+
+    return {
+        'warning_stats': warning_stats,
+        'capacity': capacity,
+        'volume_dist': volume_dist,
+        'vol_ratio': vol_ratio
+    }
+
+def calc_info_ratio(daily_rtn:pd.DataFrame, bmk_daily_rtn:pd.DataFrame, window:int=240):
+    excess_return = (1 + daily_rtn - bmk_daily_rtn).rolling(window).apply(np.prod, raw=True) - 1
+    tracking_error = excess_return.rolling(window).std()
+    return (excess_return / tracking_error).dropna()
+
+def calc_info_coef(factor:pd.DataFrame, return_df:pd.DataFrame, group:int=10, rebalance:Literal['MR', 'QR', 'W', 'M', 'Q', 'Y']=None):
+    # factor rank
+    from quantdev.backtest import _get_rebalance_date
+    r_date = _get_rebalance_date(rebalance)
+    f_rank = (pd.qcut(factor[factor.index.isin(r_date)].stack(), q=group, labels=False, duplicates='drop') + 1)\
+    .reset_index()\
+    .rename(columns={'level_1':'stock_id', 0:'f_rank'})    
+
+    # return rank
+    factor_r =  return_df\
+        .groupby(pd.cut(return_df.index, bins=r_date))\
+        .apply(lambda x: (1 + x).prod() - 1).dropna()\
+        .stack()\
+        .reset_index()\
+        .rename(columns={'level_0':'t_date', 'level_1':'stock_id', 0: 'return'})\
+        .assign(t_date=lambda df: df['t_date'].apply(lambda x: x.left).astype('datetime64[ns]'))
+    
+    # ic
+    factor_return_rank = pd.merge(f_rank, factor_r, on=['t_date', 'stock_id'], how='inner')\
+        .dropna()\
+        .groupby(['t_date', 'f_rank'])['return']\
+        .mean()\
+        .reset_index()\
+        .assign(r_rank = lambda df: df.groupby('t_date')['return'].rank())
+    return factor_return_rank.groupby('t_date', group_keys=False)\
+        .apply(lambda group: stats.spearmanr(group['f_rank'], group['r_rank'])[0], include_groups=False)
+
+def calc_relative_return(daily_return:pd.DataFrame, bmk_daily_return:pd.DataFrame, downtrend_window:int=3):
+    relative_return = (1 + daily_return - bmk_daily_return).cumprod() - 1
+
+    relative_return_diff = relative_return.diff()
+    downtrend_mask = relative_return_diff < 0
+    downtrend_mask = pd.DataFrame({'alpha': relative_return, 'downward': downtrend_mask})
+    downtrend_mask['group'] = (downtrend_mask['downward'] != downtrend_mask['downward'].shift()).cumsum()
+    downtrend_return = np.where(
+        downtrend_mask['downward'] & downtrend_mask.groupby('group')['downward'].transform('sum').ge(downtrend_window), 
+        downtrend_mask['alpha'], 
+        np.nan
+    )
+
+    return relative_return, downtrend_return
 
 # factor analysis
 def calc_factor_longshort_return(factor:Union[pd.DataFrame, str], asc:bool=True, rebalance:str='QR', group:int=10):
@@ -26,6 +208,41 @@ def calc_factor_quantiles_return(factor:pd.DataFrame, asc:bool=True, rebalance:s
         results[q_start*group] = quick_backtesting(condition, show=False, rebalance=rebalance)
 
     return results
+
+def resample_returns(data: pd.DataFrame, t: Literal['YE', 'QE', 'ME', 'W-FRI']):
+    return data.resample(t).apply(lambda x: (np.nan if x.isna().all() else (x + 1).prod() - 1))
+
+# FM2
+def calc_factor_beta(data:Union[pd.DataFrame, pd.Series], model:pd.DataFrame=None, resample:Literal['YE', 'QE', 'ME', 'W-FRI']=None, window:int=None):    
+    data = pd.concat([data, model], axis=1)
+    
+    if resample:
+        data = data.apply(lambda df: resample_returns(df, resample))
+    
+    X = sm.add_constant(data[model.columns])
+    y = data.drop(columns=model.columns)
+
+    rolling_reg = RollingOLS(y, X, window=round(len(data)*.2) if window is None else window)
+    return rolling_reg.fit().params
+
+def calc_cross_sec_factor_return(model:pd.DataFrame=None, resample:Literal['YE', 'QE', 'ME', 'W-FRI']=None):
+    model
+
+def calc_factor_attr(data:Union[pd.DataFrame, pd.Series], model:pd.DataFrame=None, resample:Literal['YE', 'QE', 'ME', 'W-FRI']=None, window:int=None):
+    from quantdev.data import Databank
+    db = Databank()
+    model = db.read_dataset('factor_model') if model is None else model
+    
+    factor_beta = calc_factor_beta(data=data, model=model, resample=resample, window=window)
+    factor_return = calc_cross_sec_factor_return()
+
+# sector
+def calc_sector_attr(factor:pd.DataFrame, return_df:pd.DataFrame, window:int=120):
+    return calc_factor_beta(factor, return_df, window).apply(lambda x: x*factor)
+
+
+
+
 
 def plot_factor(factor:pd.DataFrame, asc:bool=True, rebalance:str='QR', group:int=10):
     results = calc_factor_quantiles_return(factor, asc=asc, rebalance=rebalance, group=group)
@@ -48,7 +265,7 @@ def plot_factor(factor:pd.DataFrame, asc:bool=True, rebalance:str='QR', group:in
     #         break
     f_daily_rtn = (1 + results[max(results.keys())]).pct_change() - (1 + results[base_key]).pct_change()
     f_rtn  = (1+f_daily_rtn).cumprod()-1
-    f_relative_rtn, downtrend_rtn = self._calc_relative_return(f_daily_rtn)
+    f_relative_rtn, downtrend_rtn = calc_relative_return(f_daily_rtn, bmk_daily_rtn)
     bmk_rtn = self.bmk_equity_df
 
     # relative return
@@ -124,8 +341,10 @@ def plot_factor(factor:pd.DataFrame, asc:bool=True, rebalance:str='QR', group:in
         row=2, col=1)
 
     # IC
-    from quantdev.backtest import Strategy
-    ic = Strategy._calc_ic(factor)
+    from quantdev.data import Databank
+    _db = Databank()
+    return_df = _db.read_dataset('stock_return', filter_date='t_date')
+    ic = calc_info_coef(factor, return_df, group, rebalance)
 
     fig.add_trace(go.Scatter(
         x=ic.index, 
