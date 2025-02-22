@@ -115,7 +115,6 @@ class DataBankInfra:
                 'backtest':{
                     'stock_return',
                     'factor_model',
-                    'fama_macbeth',
                 },
             },
             'public_data':{
@@ -1247,14 +1246,11 @@ class FactorModelHandler(DataBankInfra):
             'MTM6m':calc_factor_longshort_return('mtm_6m', rebalance='Q'),
             'ROE':calc_factor_longshort_return('roe', rebalance='QR'),
             'OPM':calc_factor_longshort_return('營業利益率', rebalance='QR'),
-            'CMA':calc_factor_longshort_return('資產總計_yoy'),
+            'CMA':calc_factor_longshort_return('資產成長率', rebalance='QR'),
         }).dropna(how='all')
 
         self.write_dataset('factor_model', model)
         logging.info('Factor model updated')
-
-    def _update_FM2_result(self):
-        pass
 
     def _calc_market_factor(self, mkt_idx:Literal['TR', None]=None):
         # define market indices mapping

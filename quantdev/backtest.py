@@ -7,7 +7,6 @@ import numpy as np
 import calendar
 import logging
 
-from plotly.colors import sample_colorscale
 from plotly.subplots import make_subplots
 from numerize.numerize import numerize
 import plotly.figure_factory as ff

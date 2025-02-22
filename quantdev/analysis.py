@@ -212,9 +212,12 @@ def calc_factor_quantiles_return(factor:pd.DataFrame, asc:bool=True, rebalance:s
 def resample_returns(data: pd.DataFrame, t: Literal['YE', 'QE', 'ME', 'W-FRI']):
     return data.resample(t).apply(lambda x: (np.nan if x.isna().all() else (x + 1).prod() - 1))
 
-# FM2
-def calc_factor_beta(data:Union[pd.DataFrame, pd.Series], model:pd.DataFrame=None, resample:Literal['YE', 'QE', 'ME', 'W-FRI']=None, window:int=None):    
-    data = pd.concat([data, model], axis=1)
+# style analysis
+def calc_portfolio_style(portfolio_daily_rtn:Union[pd.DataFrame, pd.Series], resample:Literal['YE', 'QE', 'ME', 'W-FRI']=None, window:int=None):    
+    from quantdev.data import Databank
+    db = Databank()
+    model = db.read_dataset('factor_model').drop(['MTM6m', 'CMA'], axis=1)
+    data = pd.concat([portfolio_daily_rtn, model], axis=1).dropna(how='all')
     
     if resample:
         data = data.apply(lambda df: resample_returns(df, resample))
@@ -224,17 +227,6 @@ def calc_factor_beta(data:Union[pd.DataFrame, pd.Series], model:pd.DataFrame=Non
 
     rolling_reg = RollingOLS(y, X, window=round(len(data)*.2) if window is None else window)
     return rolling_reg.fit().params
-
-def calc_cross_sec_factor_return(model:pd.DataFrame=None, resample:Literal['YE', 'QE', 'ME', 'W-FRI']=None):
-    model
-
-def calc_factor_attr(data:Union[pd.DataFrame, pd.Series], model:pd.DataFrame=None, resample:Literal['YE', 'QE', 'ME', 'W-FRI']=None, window:int=None):
-    from quantdev.data import Databank
-    db = Databank()
-    model = db.read_dataset('factor_model') if model is None else model
-    
-    factor_beta = calc_factor_beta(data=data, model=model, resample=resample, window=window)
-    factor_return = calc_cross_sec_factor_return()
 
 # sector
 def calc_sector_attr(factor:pd.DataFrame, return_df:pd.DataFrame, window:int=120):
