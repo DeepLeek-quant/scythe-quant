@@ -214,7 +214,7 @@ def resample_returns(data: pd.DataFrame, t: Literal['YE', 'QE', 'ME', 'W-FRI']):
     return data.resample(t).apply(lambda x: (np.nan if x.isna().all() else (x + 1).prod() - 1))
 
 # style analysis
-def calc_portfolio_style(portfolio_daily_rtn:Union[pd.DataFrame, pd.Series], rolling:bool=True, window:int=None):    
+def calc_portfolio_style(portfolio_daily_rtn:Union[pd.DataFrame, pd.Series], window:int=None, total:bool=False):
     from quantdev.data import Databank
     db = Databank()
     model = db.read_dataset('factor_model').drop(['MTM6m', 'CMA'], axis=1)
@@ -224,12 +224,14 @@ def calc_portfolio_style(portfolio_daily_rtn:Union[pd.DataFrame, pd.Series], rol
     X = sm.add_constant(data[model.columns])
     y = data.drop(columns=model.columns)
 
-    if rolling:
-        rolling_reg = RollingOLS(y, X, window=round(len(data)*.2) if window is None else window)
-        return rolling_reg.fit().params.dropna(how='all')
-    else:
+    
+    rolling_reg = RollingOLS(y, X, window=round(len(data)*.2) if window is None else window).fit().params.dropna(how='all')
+
+    if total:
         reg = OLS(y, X)
-        return reg.fit().params
+        return pd.concat([rolling_reg, pd.DataFrame(reg.fit().params, columns=['total']).T])
+    else:
+        return rolling_reg
 
 def calc_brinson_model(portfolio_df:pd.DataFrame, return_df:pd.DataFrame, benchmark:list[str]):
     from quantdev.data import Databank

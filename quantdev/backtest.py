@@ -474,8 +474,7 @@ class PlotMaster(ABC):
             'rebalance': 'str',
             'daily_return': 'pd.Series or pd.DataFrame',
             'maemfe': 'pd.DataFrame',
-            'portfolio_style': 'pd.DataFrame',
-            'brinson_model': 'pd.DataFrame',
+            'betas': 'pd.DataFrame',
         }
 
     def _bold(self, text):
@@ -1329,226 +1328,92 @@ class PlotMaster(ABC):
         
         return fig
 
-    def _plot_return_attribution(self):
-        portfolio_style = self.portfolio_style
-        brinson_model = self.brinson_model
-        
-        warnings.filterwarnings('ignore', message="Series.__getitem__ treating keys as positions is deprecated.*", category=FutureWarning)
+    def _plot_style_analysis(self):
+        betas = self.betas
         fig = make_subplots(
-            rows=2, cols=2,
+            rows=2, cols=1,
             specs=[
-                [{"secondary_y": True}, None],
-                [{}, {"type": "scatterpolar"}],
+                [{"secondary_y": True}],
+                [{}],
             ],
             vertical_spacing=0.05,
             horizontal_spacing=0.1,
         )
 
-        # style analysis
-        betas = portfolio_style.drop(columns=['const']).round(2)
-        alpha = (1+portfolio_style['const']).cumprod()-1
+        # rolling beta
+        alpha = (1 + betas.iloc[:-1]['const']).cumprod() - 1
+        betas = betas.drop(columns=['const'])
+        betas = betas.reindex(columns=betas.iloc[-1].sort_values(ascending=False).index).round(3)
 
         colors = sample_colorscale('Spectral', len(betas.columns))
         for i, col in enumerate(betas.columns):
+            rolling_beta = betas.iloc[:-1]
+            total_beta = betas.iloc[-1]
+            # return (total_beta)
             fig.add_trace(
                 go.Scatter(
-                    x=betas.index, 
-                    y=betas[col], 
+                    x=rolling_beta.index, 
+                    y=rolling_beta[col], 
                     name=col,
                     line=dict(color=colors[i]),
-                    showlegend=False,
+                    showlegend=True,
+                    legendgroup=col,
                 ),
                 secondary_y=True,
                 row=1, col=1,
             )
 
-            fig.add_annotation(
-                x=betas.index[0],
-                y=betas[col][0]+0.05, 
-                xref="x", 
-                yref="y", 
-                text=col,  
-                showarrow=False, 
-                xanchor="left", 
-                yanchor="middle", 
-                font=dict(color="white", size=12),
-                secondary_y=True,
-                row=1, col=1)
-        
+            fig.add_trace(
+                go.Bar(
+                    x=[col],
+                    y=[total_beta[col]],
+                    text=[f'{total_beta[col]:.3f}'],
+                    textposition='auto',
+                    marker_color=colors[i],
+                    name=col,
+                    showlegend=False,
+                    legendgroup=col,
+                    width=0.6,
+                ),
+                row=2, col=1
+            )
+
         fig.add_trace(
             go.Scatter(
                 x=alpha.index, 
                 y=alpha.values, 
-                name='Alpha',
+                name='Alpha (rhs)',
                 line=dict(color=PlotMaster().fig_param['colors']['Light Grey'], width=2),
-                showlegend=False,
+                showlegend=True,
             ),
             secondary_y=False,
             row=1, col=1,
         )
 
-        fig.add_annotation(
-                x=alpha.index[0],
-                y=alpha.values[0]+0.1, 
-                xref="x", 
-                yref="y", 
-                text='Alpha (rhs)',  
-                showarrow=False, 
-                xanchor="left", 
-                yanchor="middle", 
-                font=dict(color="white", size=12),
-                secondary_y=False,
-                row=1, col=1)
-
-        # Brinson model
-
-        # trend
-        bm_trend = brinson_model[['allocation_effect','selection_effect']]\
-            .groupby('t_date')\
-            .sum()\
-            .assign(excess_return=lambda x: x.sum(axis=1))
-        bm_trend = (1+bm_trend).cumprod()-1
-
-        # Define colors for consistent legend
-        allocation_color = PlotMaster().fig_param['colors']['Bright Magenta']
-        selection_color = PlotMaster().fig_param['colors']['Light Blue']
-
-        fig.add_trace(
-            go.Scatter(
-                x=bm_trend.index, 
-                y=bm_trend['allocation_effect'].values, 
-                name='Allocation Effect',
-                line=dict(color=allocation_color, width=2),
-                legendgroup='allocation',
-                showlegend=True,
-            ),
-            row=2, col=1,
-        )
-
-        fig.add_trace(
-            go.Scatter(
-                x=bm_trend.index, 
-                y=bm_trend['selection_effect'].values, 
-                name='Selection Effect',
-                line=dict(color=selection_color, width=2),
-                legendgroup='selection',
-                showlegend=True,
-            ),
-            row=2, col=1,
-        )
-
-        fig.add_trace(
-            go.Scatter(
-                x=bm_trend.index, 
-                y=bm_trend['excess_return'].values, 
-                name='Excess Return',
-                line=dict(color=PlotMaster().fig_param['colors']['Dark Blue'], width=2),
-                showlegend=True,
-            ),
-            row=2, col=1,
-        )
-
-        # Scatterpolar
-        sector_mapping = {
-            # 電子 (Electronics & Technology)
-            '電子': '電子',
-            '數位': '電子',
-            '電器': '電子',
-            '電機': '電子',
-            
-            # 金融 (Financial)
-            '金融': '金融',
-            '證券': '金融',
-            
-            # 傳產 (Traditional Industries)
-            '化學': '傳產',
-            '塑膠': '傳產',
-            '建材': '傳產',
-            '橡膠': '傳產',
-            '水泥': '傳產',
-            '玻璃': '傳產',
-            '紡織': '傳產',
-            '航運': '傳產',
-            '汽車': '傳產',
-            '油電': '傳產',
-            '鋼鐵': '傳產',
-            '農業': '傳產',
-            
-            # 消費 (Consumer)
-            '居家': '消費',
-            '百貨': '消費',
-            '觀光': '消費',
-            '貿易': '消費',
-            '運動': '消費',
-            '食品': '消費',
-            '文化': '消費',
-            
-            # Others (map to 傳產 as default)
-            '其它': '傳產'
-        }
-
-        bm_scatter = brinson_model[['allocation_effect','selection_effect']]\
-                .groupby('sector').apply(lambda x: (1 + x).cumprod() - 1).groupby('sector').last()\
-                .assign(sec=lambda x: x.index.map(sector_mapping))\
-                .groupby('sec').sum()\
-                .assign(excess_return=lambda x: x.sum(axis=1))
-
-        fig.add_trace(go.Scatterpolar(
-            r=bm_scatter['allocation_effect'],
-            theta=bm_scatter.index,
-            line=dict(color=allocation_color, width=2),
-            name='Allocation Effect',
-            mode='lines',
-            fill='toself',
-            legendgroup='allocation',
-            showlegend=False,
-        ),
-        row=2, col=2,
-        )
-
-        fig.add_trace(go.Scatterpolar(
-            r=bm_scatter['selection_effect'], 
-            theta=bm_scatter.index,
-            line=dict(color=selection_color, width=2),
-            name='Selection Effect',
-            mode='lines',
-            fill='toself',
-            legendgroup='selection',
-            showlegend=False,
-        ),
-        row=2, col=2,
-        )
-
         # adjust axes
         fig.update_yaxes(tickformat=".0%", row=1, col=1, secondary_y=False, showgrid=False)
-        fig.update_yaxes(tickformat=".0%", row=2, col=1, showgrid=False)
-
+        fig.update_yaxes(row=2, col=1, showgrid=False)
 
         # position
         fig.update_xaxes(domain=[0.025, 0.975], row=1, col=1)
-        fig.update_xaxes(domain=[0.025, 0.575], row=2, col=1)
+        fig.update_xaxes(domain=[0.025, 0.975], row=2, col=1)
 
         fig.update_yaxes(domain=[0.55, 0.975], row=1, col=1)
-        fig.update_yaxes(domain=[0, 0.4], row=2, col=1)
+        fig.update_yaxes(domain=[0, 0.3], row=2, col=1)
 
         # titles
-        fig.add_annotation(text=self._bold('Style Analysis'), x=0, y = 1, yshift=30, xref="x domain", yref="y domain", showarrow=False, row=1, col=1)
-        fig.add_annotation(text=self._bold('BF Model - subperiod'), x=0, y = 1, yshift=30, xref="x domain", yref="y domain", showarrow=False, row=2, col=1)
-        fig.add_annotation(text=self._bold('BF Model - subsector'), x=0, y = 1, yshift=30, xshift=400, xref="x domain", yref="y domain", showarrow=False, row=2, col=1)
+        fig.add_annotation(text=self._bold('Rolling beta'), x=0, y = 1, yshift=30, xref="x domain", yref="y domain", showarrow=False, row=1, col=1)
+        fig.add_annotation(text=self._bold('Total beta'), x=0, y = 1, yshift=40, xref="x domain", yref="y domain", showarrow=False, row=2, col=1)
 
         # layout
         fig.update_layout(
-            legend = dict(x=0.05, y=0.4, xanchor='left', yanchor='top', bgcolor='rgba(0,0,0,0)', tracegroupgap=2.5),
-            width = self.fig_param['size']['w'],
-            height = self.fig_param['size']['h'],
-            margin = self.fig_param['margin'],
-            template = self.fig_param['template'],
+            legend = dict(x=0.05, y=0.5, xanchor='left', yanchor='top', bgcolor='rgba(0,0,0,0)', tracegroupgap=.25, orientation='h'),
+            width = PlotMaster().fig_param['size']['w'],
+            height = PlotMaster().fig_param['size']['h'],
+            margin = PlotMaster().fig_param['margin'],
+            template = PlotMaster().fig_param['template'],
             yaxis = dict(side='right'),
             yaxis2 = dict(side='left'),
-            polar = dict(
-                domain=dict(x=[0.6, 0.975], y=[0, 0.35]), # Adjust size and position of polar plot
-                radialaxis_angle = 90,
-            )
         )
         fig.update_polars(radialaxis_showline=False)
 
@@ -1626,8 +1491,7 @@ class Strategy(PlotMaster):
         self.daily_return = backtest_df.sum(axis=1)
         self.c_return = (1 + self.daily_return).cumprod() - 1
         self.maemfe = calc_maemfe(self.buy_list, self.portfolio_df, self.return_df)
-        self.portfolio_style = calc_portfolio_style(self.daily_return)
-        self.brinson_model = calc_brinson_model(self.portfolio_df, self.return_df, self.benchmark)
+        self.betas = calc_portfolio_style(self.daily_return, total=True)
         
         # performance
         self.summary = self._calc_summary()
@@ -1762,7 +1626,7 @@ class Strategy(PlotMaster):
         plot_funcs = {
             'Equity curve': self._plot_equity_curve,
             'Relative return': self._plot_relative_return,
-            'Return attribution': self._plot_return_attribution,
+            'Portfolio style': self._plot_style_analysis,
             'Return heatmap': self._plot_return_heatmap,
             'Liquidity': self._plot_liquidity,
             'MAE/MFE': self._plot_maemfe,
