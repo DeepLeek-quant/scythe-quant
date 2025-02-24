@@ -6,11 +6,11 @@ import datetime as dt
 import pandas as pd
 import numpy as np
 import calendar
-import warnings
 import logging
 
 from plotly.subplots import make_subplots
 from numerize.numerize import numerize
+from IPython.display import display
 import plotly.express as px
 import plotly.figure_factory as ff
 import plotly.graph_objects as go
@@ -1056,6 +1056,8 @@ class PlotMaster(ABC):
             y = win['mae']*-1, 
             mode='markers', 
             marker_color=light_blue, 
+            text=win.index,
+            textposition="top center",
             name='win',
             legendgroup='win',
         ), row=1, col=2)
@@ -1064,6 +1066,8 @@ class PlotMaster(ABC):
             y = lose['mae']*-1, 
             mode='markers', 
             marker_color=light_red, 
+            text=lose.index,
+            textposition="top center",
             name='lose',
             legendgroup ='lose',
         ), row=1, col=2)
@@ -1075,6 +1079,8 @@ class PlotMaster(ABC):
             mode='markers', 
             marker_color=light_blue, 
             name='win',
+            text=win.index,
+            textposition="top center",
             legendgroup='win',
         ), row=1, col=3)
         fig.add_trace(go.Scatter(
@@ -1083,6 +1089,8 @@ class PlotMaster(ABC):
             mode='markers', 
             marker_color=light_red, 
             name='lose',
+            text=lose.index,
+            textposition="top center",
             legendgroup ='lose',
         ), row=1, col=3)
         fig.add_shape(
@@ -1498,6 +1506,8 @@ class Strategy(PlotMaster):
         self.report = self._generate_report()
         self.position_info = self._position_info()
 
+        # display
+        display(self.summary)
 
         logging.info(f"Created Strategy with AAR: {self.summary['strategy']['Annual return']}; MDD: {self.summary['strategy']['Max drawdown']}; Avol: {self.summary['strategy']['Annual volatility']}")
 

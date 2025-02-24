@@ -15,33 +15,33 @@ import plotly.graph_objects as go
 
 # utils
 def calc_maemfe(buy_list:pd.DataFrame, portfolio_df:pd.DataFrame, return_df:pd.DataFrame):        
-        portfolio_return = (portfolio_df != 0).astype(int) * return_df[portfolio_df.columns].loc[portfolio_df.index]
-        period_starts = portfolio_df.index.intersection(buy_list.index)[:-1]
-        period_ends = period_starts[1:].map(lambda x: portfolio_df.loc[:x].index[-1])
-        trades = pd.DataFrame()
-        for start_date, end_date in zip(period_starts, period_ends):
-            start_idx = portfolio_return.index.get_indexer([start_date])[0]
-            end_idx = portfolio_return.index.get_indexer([end_date])[0] + 1
-            r = portfolio_return.iloc[start_idx:end_idx, :]
-            trades = pd.concat([trades, r\
-                .loc[:, (r != 0).any() & ~r.isna().any()]\
-                .rename(columns=lambda x: r.index[0].strftime('%Y%m%d') + '_' + str(x))\
-                .reset_index(drop=True)], axis=1)
-        
-        c_returns = (1 + trades).cumprod(axis=0) - 1
-        returns = c_returns.apply(lambda x: x.dropna().iloc[-1] if not x.dropna().empty else np.nan, axis=0)
-        gmfe = c_returns.max(axis=0)
-        bmfe = c_returns.apply(lambda x: x.iloc[:x.idxmin()+1].max(), axis=0)
-        mae = c_returns.min(axis=0).where(lambda x: x <= 0, 0)
-        mdd = ((1 + c_returns) / (1 + c_returns).cummax(axis=0) - 1).min(axis=0)
+    portfolio_return = (portfolio_df != 0).astype(int) * return_df[portfolio_df.columns].loc[portfolio_df.index]
+    period_starts = portfolio_df.index.intersection(buy_list.index)[:-1]
+    period_ends = period_starts[1:].map(lambda x: portfolio_df.loc[:x].index[-1])
+    trades = pd.DataFrame()
+    for start_date, end_date in zip(period_starts, period_ends):
+        start_idx = portfolio_return.index.get_indexer([start_date])[0]
+        end_idx = portfolio_return.index.get_indexer([end_date])[0] + 1
+        r = portfolio_return.iloc[start_idx:end_idx, :]
+        trades = pd.concat([trades, r\
+            .loc[:, (r != 0).any() & ~r.isna().any()]\
+            .rename(columns=lambda x: f"{r.index[0].strftime('%y/%m/%d')} {x}")\
+            .reset_index(drop=True)], axis=1)
+    
+    c_returns = (1 + trades).cumprod(axis=0) - 1
+    returns = c_returns.apply(lambda x: x.dropna().iloc[-1] if not x.dropna().empty else np.nan, axis=0)
+    gmfe = c_returns.max(axis=0)
+    bmfe = c_returns.apply(lambda x: x.iloc[:x.idxmin()+1].max(), axis=0)
+    mae = c_returns.min(axis=0).where(lambda x: x <= 0, 0)
+    mdd = ((1 + c_returns) / (1 + c_returns).cummax(axis=0) - 1).min(axis=0)
 
-        return pd.DataFrame({
-            'return': returns,
-            'gmfe': gmfe,
-            'bmfe': bmfe,
-            'mae': mae,
-            'mdd': mdd
-        }, index=trades.columns)
+    return pd.DataFrame({
+        'return': returns,
+        'gmfe': gmfe,
+        'bmfe': bmfe,
+        'mae': mae,
+        'mdd': mdd
+    }, index=trades.columns)
 
 def calc_liquidity_metrics(portfolio_df:pd.DataFrame=None, money_threshold:int=500000, volume_threshold:int=50):
     # get buy sell dates for each trade
