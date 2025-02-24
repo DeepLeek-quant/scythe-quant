@@ -1,6 +1,7 @@
 from typing import Union, Literal, Tuple
 from numerize.numerize import numerize
 from statsmodels.regression.rolling import RollingOLS
+from statsmodels.regression.linear_model import OLS
 from linearmodels import FamaMacBeth
 import statsmodels.api as sm
 from scipy import stats
@@ -213,29 +214,93 @@ def resample_returns(data: pd.DataFrame, t: Literal['YE', 'QE', 'ME', 'W-FRI']):
     return data.resample(t).apply(lambda x: (np.nan if x.isna().all() else (x + 1).prod() - 1))
 
 # style analysis
-def calc_portfolio_style(portfolio_daily_rtn:Union[pd.DataFrame, pd.Series], resample:Literal['YE', 'QE', 'ME', 'W-FRI']=None, window:int=None):    
+def calc_portfolio_style(portfolio_daily_rtn:Union[pd.DataFrame, pd.Series], rolling:bool=True, window:int=None):    
     from quantdev.data import Databank
     db = Databank()
     model = db.read_dataset('factor_model').drop(['MTM6m', 'CMA'], axis=1)
-    data = pd.concat([portfolio_daily_rtn, model], axis=1).dropna(how='all')
+    data = pd.concat([portfolio_daily_rtn, model], axis=1).dropna()
     
-    if resample:
-        data = data.apply(lambda df: resample_returns(df, resample))
-    
+    # rolling
     X = sm.add_constant(data[model.columns])
     y = data.drop(columns=model.columns)
 
-    rolling_reg = RollingOLS(y, X, window=round(len(data)*.2) if window is None else window)
-    return rolling_reg.fit().params
+    if rolling:
+        rolling_reg = RollingOLS(y, X, window=round(len(data)*.2) if window is None else window)
+        return rolling_reg.fit().params.dropna(how='all')
+    else:
+        reg = OLS(y, X)
+        return reg.fit().params
 
-# sector
-def calc_sector_attr(factor:pd.DataFrame, return_df:pd.DataFrame, window:int=120):
-    return calc_factor_beta(factor, return_df, window).apply(lambda x: x*factor)
+def calc_brinson_model(portfolio_df:pd.DataFrame, return_df:pd.DataFrame, benchmark:list[str]):
+    from quantdev.data import Databank
+    db = Databank()
 
+    portfolio_df = portfolio_df[portfolio_df!=0].stack()
 
+    benchmark_sector = db.read_dataset('stock_sector',
+                    columns=['stock_id', 't_date', 'sector'],
+                    filters=[['is_tw50', '==', 'Y']])
 
+    portfolio_sector = db.read_dataset('stock_sector',
+                    columns=['stock_id', 't_date', 'sector'],
+                    filters=[['stock_id', 'in', portfolio_df.index.get_level_values(1).unique()]])
 
+    benckmark_weight = db.read_dataset('stock_trading_data',
+                    columns=['t_date', 'stock_id', '個股市值(元)'],
+                    filters=[['stock_id', 'in', benchmark_sector['stock_id'].unique()]])\
+                    .rename(columns={'個股市值(元)':'weight'})
 
+    portfolio_weight = portfolio_df\
+        .reset_index()\
+        .rename(columns={0:'weight', 'level_1':'stock_id'})
+
+    rtn = return_df.stack().reset_index().rename(columns={0:'rtn'})
+
+    # Process benchmark data
+    benchmark_data = (benchmark_sector
+        .merge(benckmark_weight, on=['t_date', 'stock_id'])
+        .merge(rtn, on=['t_date', 'stock_id'])
+        .dropna()
+        .assign(w_rtn=lambda x: x['weight'] * x['rtn'])
+        .groupby(['t_date', 'sector'], as_index=False)
+        .agg({'weight': 'sum', 'w_rtn': 'sum'})
+    ).assign(
+        benchmark_w=lambda x: x['weight'] / x.groupby('t_date')['weight'].transform('sum'),
+        benchmark_r=lambda x: x['w_rtn'] / x['weight']
+    ).set_index(['t_date', 'sector'])[['benchmark_w', 'benchmark_r']]
+
+    # Process portfolio data similarly
+    portfolio_data = (portfolio_sector
+        .merge(portfolio_weight, on=['t_date', 'stock_id'])
+        .merge(rtn, on=['t_date', 'stock_id'])
+        .dropna()
+        .assign(w_rtn=lambda x: x['weight'] * x['rtn'])
+        .groupby(['t_date', 'sector'], as_index=False)
+        .agg({'weight': 'sum', 'w_rtn': 'sum'})
+    ).assign(
+        portfolio_w=lambda x: x['weight'] / x.groupby('t_date')['weight'].transform('sum'),
+        portfolio_r=lambda x: x['w_rtn'] / x['weight']
+    ).set_index(['t_date', 'sector'])[['portfolio_w', 'portfolio_r']]
+
+    # Combine the data
+    data = pd.concat([benchmark_data, portfolio_data], axis=1)\
+        .fillna(0)\
+        .join(
+            pd.DataFrame(return_df[benchmark[0]].rename('benchmark_R')),
+            on='t_date',
+            how='left'
+        )
+    
+    # BF
+    brinson_model = data.assign(
+        allocation_effect=lambda x: (x['portfolio_w'] - x['benchmark_w']) * (x['benchmark_r'] - x['benchmark_R']),
+        selection_effect=lambda x: x['portfolio_w'] * (x['portfolio_r'] - x['benchmark_r']),
+    )\
+    [['allocation_effect', 'selection_effect']]
+
+    return brinson_model
+
+# factor analysis
 def plot_factor(factor:pd.DataFrame, asc:bool=True, rebalance:str='QR', group:int=10):
     results = calc_factor_quantiles_return(factor, asc=asc, rebalance=rebalance, group=group)
 
@@ -391,5 +456,3 @@ def plot_factor(factor:pd.DataFrame, asc:bool=True, rebalance:str='QR', group:in
         template=self.fig_param['template'],
     )
     return fig
-
-# strategy analysis

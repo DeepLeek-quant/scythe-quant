@@ -115,6 +115,7 @@ class DataBankInfra:
                 'backtest':{
                     'stock_return',
                     'factor_model',
+                    'stock_sector',
                 },
             },
             'public_data':{
@@ -1353,6 +1354,7 @@ class ProcessedDataHandler(DataBankInfra):
             'inst_investor_ratio_diff':{'source':'trading_activity', 'func':self._update_inst_investor_ratio_diff},
             'inst_investor_money_chng':{'source':'trading_activity', 'func':self._update_inst_investor_money_chng},
             'stock_return':{'source':'stock_trading_data', 'func':self._update_stock_return},
+            'stock_sector':{'source':'stock_trading_notes', 'func':self._update_stock_sector},
         }
         # self.processed_datasets.update(self.factors_datasets)
     
@@ -1757,6 +1759,14 @@ class ProcessedDataHandler(DataBankInfra):
             .dropna(axis=0, how='all')
         return self.write_dataset(dataset='stock_return', df=df)
  
+    def _update_stock_sector(self):
+        df = self.read_dataset('stock_trading_notes', columns=['date', 'stock_id', '主產業別(中)', '是否為臺灣50成分股', 't_date'])\
+            .assign(sector=lambda df: df['主產業別(中)'].str.split(' ').str[-1].str[0:2].fillna('').replace({'其他': '其它', '証券':'證券'}))\
+            .drop(columns=['主產業別(中)'])\
+            .rename(columns={'是否為臺灣50成分股':'is_tw50'})\
+            [['date', 'stock_id', 'sector', 'is_tw50', 't_date']]
+        return self.write_dataset(dataset='stock_sector', df=df)
+    
     # all/ any
     def update_processed_data(self, dataset:str=None, tej_dataset:str=None):
         """更新處理後的資料集

@@ -1,3 +1,4 @@
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Literal, Union, Tuple
 from abc import ABC
 from scipy import stats
@@ -5,10 +6,12 @@ import datetime as dt
 import pandas as pd
 import numpy as np
 import calendar
+import warnings
 import logging
 
 from plotly.subplots import make_subplots
 from numerize.numerize import numerize
+import plotly.express as px
 import plotly.figure_factory as ff
 import plotly.graph_objects as go
 import panel as pn
@@ -470,7 +473,9 @@ class PlotMaster(ABC):
             'benchmark': 'list',
             'rebalance': 'str',
             'daily_return': 'pd.Series or pd.DataFrame',
-            'maemfe': 'pd.DataFrame'
+            'maemfe': 'pd.DataFrame',
+            'portfolio_style': 'pd.DataFrame',
+            'brinson_model': 'pd.DataFrame',
         }
 
     def _bold(self, text):
@@ -1325,9 +1330,229 @@ class PlotMaster(ABC):
         return fig
 
     def _plot_return_attribution(self):
-        pass
+        portfolio_style = self.portfolio_style
+        brinson_model = self.brinson_model
+        
+        warnings.filterwarnings('ignore', message="Series.__getitem__ treating keys as positions is deprecated.*", category=FutureWarning)
+        fig = make_subplots(
+            rows=2, cols=2,
+            specs=[
+                [{"secondary_y": True}, None],
+                [{}, {"type": "scatterpolar"}],
+            ],
+            vertical_spacing=0.05,
+            horizontal_spacing=0.1,
+        )
+
+        # style analysis
+        betas = portfolio_style.drop(columns=['const']).round(2)
+        alpha = (1+portfolio_style['const']).cumprod()-1
+
+        colors = sample_colorscale('Spectral', len(betas.columns))
+        for i, col in enumerate(betas.columns):
+            fig.add_trace(
+                go.Scatter(
+                    x=betas.index, 
+                    y=betas[col], 
+                    name=col,
+                    line=dict(color=colors[i]),
+                    showlegend=False,
+                ),
+                secondary_y=True,
+                row=1, col=1,
+            )
+
+            fig.add_annotation(
+                x=betas.index[0],
+                y=betas[col][0]+0.05, 
+                xref="x", 
+                yref="y", 
+                text=col,  
+                showarrow=False, 
+                xanchor="left", 
+                yanchor="middle", 
+                font=dict(color="white", size=12),
+                secondary_y=True,
+                row=1, col=1)
+        
+        fig.add_trace(
+            go.Scatter(
+                x=alpha.index, 
+                y=alpha.values, 
+                name='Alpha',
+                line=dict(color=PlotMaster().fig_param['colors']['Light Grey'], width=2),
+                showlegend=False,
+            ),
+            secondary_y=False,
+            row=1, col=1,
+        )
+
+        fig.add_annotation(
+                x=alpha.index[0],
+                y=alpha.values[0]+0.1, 
+                xref="x", 
+                yref="y", 
+                text='Alpha (rhs)',  
+                showarrow=False, 
+                xanchor="left", 
+                yanchor="middle", 
+                font=dict(color="white", size=12),
+                secondary_y=False,
+                row=1, col=1)
+
+        # Brinson model
+
+        # trend
+        bm_trend = brinson_model[['allocation_effect','selection_effect']]\
+            .groupby('t_date')\
+            .sum()\
+            .assign(excess_return=lambda x: x.sum(axis=1))
+        bm_trend = (1+bm_trend).cumprod()-1
+
+        # Define colors for consistent legend
+        allocation_color = PlotMaster().fig_param['colors']['Bright Magenta']
+        selection_color = PlotMaster().fig_param['colors']['Light Blue']
+
+        fig.add_trace(
+            go.Scatter(
+                x=bm_trend.index, 
+                y=bm_trend['allocation_effect'].values, 
+                name='Allocation Effect',
+                line=dict(color=allocation_color, width=2),
+                legendgroup='allocation',
+                showlegend=True,
+            ),
+            row=2, col=1,
+        )
+
+        fig.add_trace(
+            go.Scatter(
+                x=bm_trend.index, 
+                y=bm_trend['selection_effect'].values, 
+                name='Selection Effect',
+                line=dict(color=selection_color, width=2),
+                legendgroup='selection',
+                showlegend=True,
+            ),
+            row=2, col=1,
+        )
+
+        fig.add_trace(
+            go.Scatter(
+                x=bm_trend.index, 
+                y=bm_trend['excess_return'].values, 
+                name='Excess Return',
+                line=dict(color=PlotMaster().fig_param['colors']['Dark Blue'], width=2),
+                showlegend=True,
+            ),
+            row=2, col=1,
+        )
+
+        # Scatterpolar
+        sector_mapping = {
+            # 電子 (Electronics & Technology)
+            '電子': '電子',
+            '數位': '電子',
+            '電器': '電子',
+            '電機': '電子',
+            
+            # 金融 (Financial)
+            '金融': '金融',
+            '證券': '金融',
+            
+            # 傳產 (Traditional Industries)
+            '化學': '傳產',
+            '塑膠': '傳產',
+            '建材': '傳產',
+            '橡膠': '傳產',
+            '水泥': '傳產',
+            '玻璃': '傳產',
+            '紡織': '傳產',
+            '航運': '傳產',
+            '汽車': '傳產',
+            '油電': '傳產',
+            '鋼鐵': '傳產',
+            '農業': '傳產',
+            
+            # 消費 (Consumer)
+            '居家': '消費',
+            '百貨': '消費',
+            '觀光': '消費',
+            '貿易': '消費',
+            '運動': '消費',
+            '食品': '消費',
+            '文化': '消費',
+            
+            # Others (map to 傳產 as default)
+            '其它': '傳產'
+        }
+
+        bm_scatter = brinson_model[['allocation_effect','selection_effect']]\
+                .groupby('sector').apply(lambda x: (1 + x).cumprod() - 1).groupby('sector').last()\
+                .assign(sec=lambda x: x.index.map(sector_mapping))\
+                .groupby('sec').sum()\
+                .assign(excess_return=lambda x: x.sum(axis=1))
+
+        fig.add_trace(go.Scatterpolar(
+            r=bm_scatter['allocation_effect'],
+            theta=bm_scatter.index,
+            line=dict(color=allocation_color, width=2),
+            name='Allocation Effect',
+            mode='lines',
+            fill='toself',
+            legendgroup='allocation',
+            showlegend=False,
+        ),
+        row=2, col=2,
+        )
+
+        fig.add_trace(go.Scatterpolar(
+            r=bm_scatter['selection_effect'], 
+            theta=bm_scatter.index,
+            line=dict(color=selection_color, width=2),
+            name='Selection Effect',
+            mode='lines',
+            fill='toself',
+            legendgroup='selection',
+            showlegend=False,
+        ),
+        row=2, col=2,
+        )
+
+        # adjust axes
+        fig.update_yaxes(tickformat=".0%", row=1, col=1, secondary_y=False, showgrid=False)
+        fig.update_yaxes(tickformat=".0%", row=2, col=1, showgrid=False)
 
 
+        # position
+        fig.update_xaxes(domain=[0.025, 0.975], row=1, col=1)
+        fig.update_xaxes(domain=[0.025, 0.575], row=2, col=1)
+
+        fig.update_yaxes(domain=[0.55, 0.975], row=1, col=1)
+        fig.update_yaxes(domain=[0, 0.4], row=2, col=1)
+
+        # titles
+        fig.add_annotation(text=self._bold('Style Analysis'), x=0, y = 1, yshift=30, xref="x domain", yref="y domain", showarrow=False, row=1, col=1)
+        fig.add_annotation(text=self._bold('BF Model - subperiod'), x=0, y = 1, yshift=30, xref="x domain", yref="y domain", showarrow=False, row=2, col=1)
+        fig.add_annotation(text=self._bold('BF Model - subsector'), x=0, y = 1, yshift=30, xshift=400, xref="x domain", yref="y domain", showarrow=False, row=2, col=1)
+
+        # layout
+        fig.update_layout(
+            legend = dict(x=0.05, y=0.4, xanchor='left', yanchor='top', bgcolor='rgba(0,0,0,0)', tracegroupgap=2.5),
+            width = self.fig_param['size']['w'],
+            height = self.fig_param['size']['h'],
+            margin = self.fig_param['margin'],
+            template = self.fig_param['template'],
+            yaxis = dict(side='right'),
+            yaxis2 = dict(side='left'),
+            polar = dict(
+                domain=dict(x=[0.6, 0.975], y=[0, 0.35]), # Adjust size and position of polar plot
+                radialaxis_angle = 90,
+            )
+        )
+        fig.update_polars(radialaxis_showline=False)
+
+        return fig
 
 class Strategy(PlotMaster):
     """
@@ -1401,6 +1626,8 @@ class Strategy(PlotMaster):
         self.daily_return = backtest_df.sum(axis=1)
         self.c_return = (1 + self.daily_return).cumprod() - 1
         self.maemfe = calc_maemfe(self.buy_list, self.portfolio_df, self.return_df)
+        self.portfolio_style = calc_portfolio_style(self.daily_return)
+        self.brinson_model = calc_brinson_model(self.portfolio_df, self.return_df, self.benchmark)
         
         # performance
         self.summary = self._calc_summary()
@@ -1535,7 +1762,7 @@ class Strategy(PlotMaster):
         plot_funcs = {
             'Equity curve': self._plot_equity_curve,
             'Relative return': self._plot_relative_return,
-            'Return attr': self._plot_return_attribution,
+            'Return attribution': self._plot_return_attribution,
             'Return heatmap': self._plot_return_heatmap,
             'Liquidity': self._plot_liquidity,
             'MAE/MFE': self._plot_maemfe,
@@ -1547,6 +1774,36 @@ class Strategy(PlotMaster):
             if name not in exclude_tabs
         }
         tab_items = list(figs.items())
+
+        return pn.Tabs(*tab_items)
+    
+    def _generate_report_thread(self, exclude_tabs:list[str]=[]):
+        plot_funcs = {
+            'Equity curve': self._plot_equity_curve,
+            'Relative return': self._plot_relative_return,
+            'Return attr': self._plot_return_attribution,
+            'Return heatmap': self._plot_return_heatmap,
+            'Liquidity': self._plot_liquidity,
+            'MAE/MFE': self._plot_maemfe,
+        }
+        
+        figs = {}
+        with ThreadPoolExecutor(max_workers=len(plot_funcs)) as executor:
+            future_to_name = {
+                executor.submit(plot_funcs[name]): name 
+                for name in plot_funcs
+                if name not in exclude_tabs
+            }
+            
+            for future in as_completed(future_to_name):
+                name = future_to_name[future]
+                try:
+                    fig = future.result()
+                    figs[name] = pn.pane.Plotly(fig)
+                except Exception as e:
+                    print(f'Plot {name} generated an exception: {e}')
+
+        tab_items = [(name, figs[name]) for name in plot_funcs.keys() if name in figs]
 
         return pn.Tabs(*tab_items)
 

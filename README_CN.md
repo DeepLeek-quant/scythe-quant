@@ -186,7 +186,7 @@ pm = PortfolioManager(
 )
 
 # 新的投資組合 (例如，基於新的策略信號)
-new_portfolio = Portfolio({
+neportfolio_w = Portfolio({
     'tech_leaders': [
         Position(('2330', 120000)),  # 增加 台積電 部位
         Position(('2317', 30000))    # 減少 鴻海 部位
@@ -198,7 +198,7 @@ new_portfolio = Portfolio({
 })
 
 # 更新投資組合
-pm.update(new_portfolio)
+pm.update(neportfolio_w)
 
 # 開始自動投資組合管理 - 這將：
 # 1. 計算位置差異

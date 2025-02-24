@@ -185,7 +185,7 @@ pm = PortfolioManager(
 )
 
 # new portfolio (e.g., based on new strategy signals)
-new_portfolio = Portfolio({
+neportfolio_w = Portfolio({
     'tech_leaders': [
         Position(('2330', 120000)),  # Increase TSMC position
         Position(('2317', 30000))    # Decrease Hon Hai position
@@ -197,7 +197,7 @@ new_portfolio = Portfolio({
 })
 
 # Update the portfolio
-pm.update(new_portfolio)
+pm.update(neportfolio_w)
 
 # Start automated portfolio management - this will:
 # 1. Calculate position differences
