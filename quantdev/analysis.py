@@ -2,7 +2,6 @@ from typing import Union, Literal, Tuple
 from numerize.numerize import numerize
 from statsmodels.regression.rolling import RollingOLS
 from statsmodels.regression.linear_model import OLS
-from linearmodels import FamaMacBeth
 import statsmodels.api as sm
 from scipy import stats
 import pandas as pd
@@ -14,14 +13,64 @@ import plotly.graph_objects as go
 
 
 # utils
-def calc_maemfe(buy_list:pd.DataFrame, portfolio_df:pd.DataFrame, return_df:pd.DataFrame):        
+def calc_metrics(daily_returns:Union[pd.Series, pd.DataFrame], benchmark_daily_returns:Union[pd.Series, pd.DataFrame]=None) -> dict:
+        
+    c_return = (1 + daily_returns).cumprod() - 1
+    total_return = c_return.iloc[-1]
+    annual_return = (1 + total_return) ** (240 / len(c_return)) - 1 # annual return
+    mdd = ((1 + c_return) / (1 + c_return).cummax() - 1).min() # mdd
+    annual_vol = daily_returns.std() * np.sqrt(240) # annual vol
+    calmar_ratio = annual_return / abs(mdd) # calmar Ratio
+    sharpe_ratio = annual_return/ annual_vol # sharpe Ratio
+    if benchmark_daily_returns is not None:
+        beta = daily_returns.cov(benchmark_daily_returns) / benchmark_daily_returns.var() # beta
+    else:
+        beta = '-'
+
+    return {
+        'Annual return':f'{annual_return:.2%}',
+        'Total return':f'{total_return:.2%}',
+        'Max drawdown':f'{mdd:.2%}',
+        'Annual volatility':f'{annual_vol:.2%}',
+        'Sharpe ratio':f'{sharpe_ratio:.2}',
+        'Calmar ratio':f'{calmar_ratio:.2}',
+        'beta':f'{beta:.2}',
+    }
+
+def calc_maemfe(buy_list:pd.DataFrame, portfolio_df:pd.DataFrame, return_df:pd.DataFrame):
+    """計算每筆交易的最大不利變動(MAE)和最大有利變動(MFE)
+
+    Args:
+        buy_list (pd.DataFrame): 買入訊號矩陣，index為日期，columns為股票代號
+        portfolio_df (pd.DataFrame): 持倉矩陣，index為日期，columns為股票代號
+        return_df (pd.DataFrame): 報酬率矩陣，index為日期，columns為股票代號
+
+    Returns:
+        pd.DataFrame: 包含以下欄位的DataFrame:
+            
+            - return: 每筆交易的報酬率
+            - gmfe: 每筆交易的全域最大有利變動(Global Maximum Favorable Excursion)
+            - bmfe: 每筆交易在最大不利變動前的最大有利變動(Before MAE Maximum Favorable Excursion)
+            - mae: 每筆交易的最大不利變動(Maximum Adverse Excursion)
+            - mdd: 每筆交易的最大回撤(Maximum Drawdown)
+
+    Examples:
+        計算每筆交易的MAE/MFE:
+        ```python
+        maemfe = calc_maemfe(buy_list, portfolio_df, return_df)
+        ```
+
+    Note:
+        - 交易期間的報酬率會以 'YY/MM/DD stock_id' 的格式作為index
+        - MAE只計算負值，正值會被設為0
+    """
     portfolio_return = (portfolio_df != 0).astype(int) * return_df[portfolio_df.columns].loc[portfolio_df.index]
     period_starts = portfolio_df.index.intersection(buy_list.index)[:-1]
     period_ends = period_starts[1:].map(lambda x: portfolio_df.loc[:x].index[-1])
     trades = pd.DataFrame()
     for start_date, end_date in zip(period_starts, period_ends):
         start_idx = portfolio_return.index.get_indexer([start_date])[0]
-        end_idx = portfolio_return.index.get_indexer([end_date])[0] + 1
+        end_idx = portfolio_return.index.get_indexer([end_date])[0]
         r = portfolio_return.iloc[start_idx:end_idx, :]
         trades = pd.concat([trades, r\
             .loc[:, (r != 0).any() & ~r.isna().any()]\
@@ -193,6 +242,29 @@ def calc_relative_return(daily_return:pd.DataFrame, bmk_daily_return:pd.DataFram
 
 # factor analysis
 def calc_factor_longshort_return(factor:Union[pd.DataFrame, str], asc:bool=True, rebalance:str='QR', group:int=10):
+    """計算因子多空組合報酬率
+
+    Args:
+        factor (Union[pd.DataFrame, str]): 因子值矩陣或因子名稱
+        asc (bool, optional): 因子值是否為越小越好. Defaults to True.
+        rebalance (str, optional): 調倉頻率. Defaults to 'QR'.
+        group (int, optional): 分組數量. Defaults to 10.
+
+    Returns:
+        pd.Series: 多空組合報酬率時間序列
+
+    Examples:
+        計算ROE因子的多空組合報酬率:
+        ```python
+        roe_ls = calc_factor_longshort_return('roe', asc=True, rebalance='QR', group=10)
+        ```
+
+    Note:
+        - 多頭為因子值前1/group的股票
+        - 空頭為因子值後1/group的股票
+        - 報酬率為多頭減去空頭的報酬率
+    """
+    
     from quantdev.backtest import get_factor, quick_backtesting
     factor = get_factor(item=factor, asc=asc)
     long = quick_backtesting(factor>=(1-1/group), rebalance=rebalance)
@@ -200,7 +272,29 @@ def calc_factor_longshort_return(factor:Union[pd.DataFrame, str], asc:bool=True,
 
     return (long-short).dropna()
 
-def calc_factor_quantiles_return(factor:pd.DataFrame, asc:bool=True, rebalance:str='QR', group:int=10):
+def calc_factor_quantiles_return(factor:Union[pd.DataFrame, str], asc:bool=True, rebalance:str='QR', group:int=10):
+    """計算因子分位數報酬率
+
+    Args:
+        factor (Union[pd.DataFrame, str]): 因子值矩陣或因子名稱
+        asc (bool, optional): 因子值是否為越小越好. Defaults to True.
+        rebalance (str, optional): 調倉頻率. Defaults to 'QR'.
+        group (int, optional): 分組數量. Defaults to 10.
+
+    Returns:
+        dict: 各分位數報酬率時間序列
+
+    Examples:
+        計算ROE因子的十分位數報酬率:
+        ```python
+        roe_quantiles = calc_factor_quantiles_return('roe', asc=True, rebalance='QR', group=10)
+        ```
+
+    Note:
+        - 將因子值依照大小分成group組
+        - 每組報酬率為等權重持有該組內所有股票
+        - 字典的key為分位數起始點*group (例如: 0代表第一組, 1代表第二組...)
+    """
     from quantdev.backtest import get_factor, quick_backtesting
     results = {}
     factor = get_factor(item=factor, asc=asc)
@@ -211,10 +305,57 @@ def calc_factor_quantiles_return(factor:pd.DataFrame, asc:bool=True, rebalance:s
     return results
 
 def resample_returns(data: pd.DataFrame, t: Literal['YE', 'QE', 'ME', 'W-FRI']):
+    """重新取樣報酬率時間序列
+
+    Args:
+        data (pd.DataFrame): 報酬率時間序列
+        t (Literal['YE', 'QE', 'ME', 'W-FRI']): 重新取樣頻率
+            - YE: 年底
+            - QE: 季底
+            - ME: 月底
+            - W-FRI: 週五
+
+    Returns:
+        pd.DataFrame: 重新取樣後的報酬率時間序列
+
+    Examples:
+        將日報酬率轉換為月報酬率:
+        ```python
+        monthly_returns = resample_returns(daily_returns, 'ME')
+        ```
+
+    Note:
+        - 報酬率會以複利方式計算
+        - 若某期間內所有值皆為NA，則該期間的報酬率為NA
+    """
     return data.resample(t).apply(lambda x: (np.nan if x.isna().all() else (x + 1).prod() - 1))
 
 # style analysis
 def calc_portfolio_style(portfolio_daily_rtn:Union[pd.DataFrame, pd.Series], window:int=None, total:bool=False):
+    """計算投資組合的風格分析
+
+    Args:
+        portfolio_daily_rtn (Union[pd.DataFrame, pd.Series]): 投資組合的日報酬率
+        window (int, optional): 滾動視窗大小. Defaults to None.
+        total (bool, optional): 是否計算全期間的風格分析. Defaults to False.
+
+    Returns:
+        pd.DataFrame: 投資組合的風格分析結果
+            - 若total=False，回傳滾動視窗的風格分析結果
+            - 若total=True，回傳滾動視窗及全期間的風格分析結果
+
+    Examples:
+        計算投資組合的滾動風格分析:
+        ```python
+        style = calc_portfolio_style(portfolio_returns, window=60)
+        ```
+
+    Note:
+        - 使用因子模型進行風格分析
+        - 若window=None，則使用全期間20%的資料作為滾動視窗
+        - 因子包含市場、規模、價值等常見因子
+    """
+
     from quantdev.data import Databank
     db = Databank()
     model = db.read_dataset('factor_model').drop(['MTM6m', 'CMA'], axis=1)
@@ -302,8 +443,36 @@ def calc_brinson_model(portfolio_df:pd.DataFrame, return_df:pd.DataFrame, benchm
 
     return brinson_model
 
+# portfolio analysis
+def calc_random_portfolios(returns:pd.DataFrame, num_portfolios:int=None):
+    def _calc_portfolio_return(weights, mean_returns, cov_matrix):
+        returns = np.sum(mean_returns*weights ) *240
+        std = np.sqrt(np.dot(weights.T, np.dot(cov_matrix, weights))) * np.sqrt(240)
+        return std, returns
+    
+    mean_returns = returns.mean()
+    cov_matrix = returns.cov()
+    num_assets = returns.shape[1]
+    
+    results_list = []
+    num_portfolios = 2000*num_assets if num_portfolios is None else num_portfolios
+    for _ in range(num_portfolios):
+        weights = np.random.random(num_assets)
+        weights /= np.sum(weights)
+        portfolio_std_dev, portfolio_return = _calc_portfolio_return(weights, mean_returns, cov_matrix)
+        results_list.append({
+            'std_dev': portfolio_std_dev,
+            'return': portfolio_return,
+            'sharpe': portfolio_return / portfolio_std_dev,
+            'weights': np.round(weights, 4).tolist()
+        })
+    
+    results = pd.DataFrame(results_list).round({'std_dev': 5, 'return': 5, 'sharpe': 5})
+    return results
+
 # factor analysis
 def plot_factor(factor:pd.DataFrame, asc:bool=True, rebalance:str='QR', group:int=10):
+    from quantdev.backtest import PlotMaster
     results = calc_factor_quantiles_return(factor, asc=asc, rebalance=rebalance, group=group)
 
     fig = make_subplots(
@@ -352,7 +521,7 @@ def plot_factor(factor:pd.DataFrame, asc:bool=True, rebalance:str='QR', group:in
         x=f_rtn.index,
         y=f_rtn.values,
         name='Factor Return (rhs)',
-        line=dict(color=self.fig_param['colors']['White'], width=2),
+        line=dict(color=PlotMaster().fig_param['colors']['White'], width=2),
         mode='lines',
         yaxis='y2',
     )
@@ -362,7 +531,7 @@ def plot_factor(factor:pd.DataFrame, asc:bool=True, rebalance:str='QR', group:in
         x=bmk_rtn.index,
         y=bmk_rtn.values,
         name='Benchmark Return (rhs)',
-        line=dict(color=self.fig_param['colors']['Dark Grey'], width=2),
+        line=dict(color=PlotMaster().fig_param['colors']['Dark Grey'], width=2),
         mode='lines',
         yaxis='y2',
     )
