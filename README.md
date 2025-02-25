@@ -1,7 +1,5 @@
 # QuantDev
 
-English | [中文](README_CN.md)
-
 A Python module for quantitative trading.
 
 ## Table of Contents

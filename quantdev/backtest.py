@@ -468,6 +468,10 @@ def meta_backtesting(
         period_ends = pd.Series(rebalance_dates + [strategies_rtn.index[-1]]).shift(-1).dropna()
         equity = pd.DataFrame(columns=strategies_rtn.columns, index=strategies_rtn.index)
 
+        if period_starts[0] != strategies_rtn.index[0]:
+            period_starts = pd.Series([strategies_rtn.index[0]] + list(period_starts))
+            period_ends = pd.Series([period_starts[1]] + list(period_ends))
+
         for start_date, end_date in zip(period_starts, period_ends):
             start_idx = strategies_rtn.index.get_indexer([start_date])[0]
             end_idx = strategies_rtn.index.get_indexer([end_date])[0]
@@ -517,6 +521,10 @@ def quick_meta_backtesting(strategies:dict[str, Union['Strategy', Tuple['Strateg
         period_starts = pd.Series(rebalance_dates)
         period_ends = pd.Series(rebalance_dates + [strategies_rtn.index[-1]]).shift(-1).dropna()
         equity = pd.DataFrame(columns=strategies_rtn.columns, index=strategies_rtn.index)
+
+        if period_starts[0] != strategies_rtn.index[0]:
+            period_starts = pd.Series([strategies_rtn.index[0]] + list(period_starts))
+            period_ends = pd.Series([period_starts[1]] + list(period_ends))
 
         for start_date, end_date in zip(period_starts, period_ends):
             start_idx = strategies_rtn.index.get_indexer([start_date])[0]
@@ -1847,7 +1855,7 @@ class MetaStrategy(Strategy):
         self.benchmark = [benchmark] if isinstance(benchmark, str) else benchmark
         self.return_df = return_df
         self.daily_return = daily_return
-        self.portfolio_df = sum(v[0].portfolio_df * v[1]/sum(w[1] for w in strategies.values()) for v in strategies.values()).fillna(0)
+        self.portfolio_df = sum(v[0].portfolio_df * v[1]/sum(w[1] for w in strategies.values()) for v in strategies.values()).dropna(how='all', axis=0).fillna(0)
 
         # analysis
         self.c_return = (1 + daily_return).cumprod() - 1
@@ -1867,12 +1875,13 @@ class MetaStrategy(Strategy):
         display(self.summary)
 
     def _generate_meta_summary(self) -> pd.DataFrame:
-        summary = pd.DataFrame.from_dict(calc_metrics(self.daily_return, self.return_df[self.benchmark[0]]), orient='index', columns=['Meta strategy'])
+        bmk = self.return_df[self.benchmark[0]]
+        summary = pd.DataFrame.from_dict(calc_metrics(self.daily_return, bmk), orient='index', columns=['Meta strategy'])
         
         for k, v in self.strategies.items():
             summary = pd.concat([
                 summary,
-                v[0].summary[['Strategy']].rename(columns={'Strategy': k})
+                pd.DataFrame.from_dict(calc_metrics(v[0].daily_return.loc[self.daily_return.index], bmk), orient='index', columns=[k])
             ], axis=1)
 
         for bmk in self.benchmark:

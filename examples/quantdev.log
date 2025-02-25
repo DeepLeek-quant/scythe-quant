@@ -3811,3 +3811,27 @@
 2025-02-25 20:35:07,012 - root - INFO - Created Strategy with AAR: 15.33%; MDD: -66.14%; Avol: 21.93%
 2025-02-25 20:35:08,182 - root - INFO - Exported factor_model as DataFrame from parquet
 2025-02-25 20:35:38,483 - root - INFO - Exported factor_model as DataFrame from parquet
+2025-02-25 22:10:40,431 - root - INFO - Exported mkt_calendar as DataFrame from parquet
+2025-02-25 22:10:44,534 - root - INFO - Exported roe_roa as DataFrame from parquet
+2025-02-25 22:10:46,202 - root - INFO - Exported stock_trading_data as DataFrame from parquet
+2025-02-25 22:10:51,990 - root - INFO - Exported stock_return as DataFrame from parquet
+2025-02-25 22:10:52,872 - root - INFO - Exported factor_model as DataFrame from parquet
+2025-02-25 22:10:55,612 - root - INFO - Exported stock_trading_notes as DataFrame from parquet
+2025-02-25 22:10:55,728 - root - INFO - Exported stock_trading_data as DataFrame from parquet
+2025-02-25 22:10:56,066 - root - INFO - Exported stock_basic_info as DataFrame from parquet
+2025-02-25 22:10:56,075 - root - INFO - Exported fin_data as DataFrame from parquet
+2025-02-25 22:10:56,092 - root - INFO - Exported monthly_rev as DataFrame from parquet
+2025-02-25 22:10:56,122 - root - INFO - Exported stock_trading_notes as DataFrame from parquet
+2025-02-25 22:10:56,140 - root - INFO - Exported stock_trading_data as DataFrame from parquet
+2025-02-25 22:10:56,151 - root - INFO - Created Strategy with AAR: 12.44%; MDD: -53.65%; Avol: 17.42%
+2025-02-25 22:10:56,324 - root - INFO - Exported stock_return as DataFrame from parquet
+2025-02-25 22:10:57,874 - root - INFO - Exported factor_model as DataFrame from parquet
+2025-02-25 22:10:59,786 - root - INFO - Exported stock_trading_notes as DataFrame from parquet
+2025-02-25 22:10:59,909 - root - INFO - Exported stock_trading_data as DataFrame from parquet
+2025-02-25 22:11:00,371 - root - INFO - Exported stock_basic_info as DataFrame from parquet
+2025-02-25 22:11:00,383 - root - INFO - Exported fin_data as DataFrame from parquet
+2025-02-25 22:11:00,402 - root - INFO - Exported monthly_rev as DataFrame from parquet
+2025-02-25 22:11:00,441 - root - INFO - Exported stock_trading_notes as DataFrame from parquet
+2025-02-25 22:11:00,469 - root - INFO - Exported stock_trading_data as DataFrame from parquet
+2025-02-25 22:11:00,477 - root - INFO - Created Strategy with AAR: 16.50%; MDD: -66.87%; Avol: 16.07%
+2025-02-25 22:11:00,976 - root - INFO - Exported factor_model as DataFrame from parquet
