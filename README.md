@@ -10,12 +10,12 @@ A Python package for quantitative research and trading in Taiwan stock market.
     - [backtesting](#backtesting)
     - [meta_backtesting](#meta_backtesting)
 - Trade
-    - [Position](#position)
-    - [Portfolio](#portfolio)
-    - [PortfolioManager](#portfoliomanager)
+    - [Position](#Position)
+    - [Portfolio](#Portfolio)
+    - [PortfolioManager](#PortfolioManager)
 - How do I use it?
-    - [before you start](#before-you-start)
-    - [configuration](#configuration)
+    - [Prerequisites](#Prerequisites)
+    - [Configuration](#Configuration)
 
 # Data
 
@@ -272,7 +272,7 @@ pm.run_portfolio_manager(
 
 # How do I use it?
 
-## before you start
+## Prerequisites
 
 Before using QuantDev, ensure access to the following:
 
@@ -280,7 +280,7 @@ Before using QuantDev, ensure access to the following:
 - SinoPac securities trading account
 - Fugle MarketData subscription
 
-## configuration
+## Configuration
 
 One last thing, you'll need to set up your configuration files in a `config` directory. The module supports custom configuration paths:
 
