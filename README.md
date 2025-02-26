@@ -8,13 +8,7 @@ A Python package for quantitative research and trading in Taiwan stock market.
     - [Databank](#Databank)
 - Backtest
     - [backtesting](#backtesting)
-        - [summary](#summary)
-        - [report](#report)
-        - [position_info](#position_info)
     - [meta_backtesting](#meta_backtesting)
-        - [meta summary](#meta-summary)
-        - [meta report](#meta-report)
-        - [meta position info](#meta-position-info)
 - Trade
     - [Position](#position)
     - [Portfolio](#portfolio)
@@ -158,13 +152,13 @@ metastrategy = meta_backtesting(
 
 ```
 
-### meta summary
+### summary
 ```python
 metastrategy.summary
 ```
 <img src="figure/meta_strategy/meta_strategy_summary.png" height="200"/>
 
-### meta report
+### report
 ```python
 metastrategy.report
 ```
@@ -175,7 +169,7 @@ Particularly, the `MetaStrategy().report` includes efficiency frontier and corre
 
 <img src="figure/meta_strategy/meta_strategy_report_ef.png" width="600"/>
 
-### meta position info
+### position info
 
 The `MetaStrategy().position_info` includes position information of all strategies, also calculated the designated weight of each holding in the portfolio.
 
