@@ -274,11 +274,13 @@ pm.run_portfolio_manager(
 
 ## Prerequisites
 
-Before using QuantDev, ensure access to the following:
+Before using QuantDev, ensure you have:
 
+- Python 3.10.14 or higher
 - Tej TQuantLab API credentials
 - SinoPac securities trading account
 - Fugle MarketData subscription
+- Jupyter Notebook/Lab (for interactive analysis)  # Optional but Recommended
 
 ## Configuration
 
