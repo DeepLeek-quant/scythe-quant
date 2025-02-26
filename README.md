@@ -278,12 +278,10 @@ Before using QuantDev, ensure you have:
 
 ### System Requirements
 - Python 3.10.14 or higher
-
 ### API Access & Accounts
 - Tej TQuantLab API credentials
 - SinoPac securities trading account
 - Fugle MarketData subscription
-
 ### Optional but Recommended
 - Jupyter Notebook/Lab (for interactive analysis)
 
