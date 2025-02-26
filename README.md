@@ -6,7 +6,6 @@ A Python package for quantitative research and trading in Taiwan stock market.
 
 - Data
     - [Databank](#Databank)
-
 - Backtest
     - [backtesting](#backtesting)
         - [summary](#summary)
@@ -16,12 +15,10 @@ A Python package for quantitative research and trading in Taiwan stock market.
         - [meta summary](#meta-summary)
         - [meta report](#meta-report)
         - [meta position info](#meta-position-info)
-
 - Trade
     - [Position](#position)
     - [Portfolio](#portfolio)
     - [PortfolioManager](#portfoliomanager)
-
 - How do I use it?
     - [before you start](#before-you-start)
     - [configuration](#configuration)
