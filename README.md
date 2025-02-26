@@ -288,7 +288,7 @@ Before using QuantDev, ensure access to the following:
 
 ## configuration
 
-Before using QuantDev, you'll need to set up your configuration files in a `config` directory. The module supports custom configuration paths:
+One last thing, you'll need to set up your configuration files in a `config` directory. The module supports custom configuration paths:
 
 ```python
 import quantdev
