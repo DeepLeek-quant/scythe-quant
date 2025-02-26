@@ -1,6 +1,6 @@
 # QuantDev
 
-A Python module for quantitative trading in Taiwan stock market.
+A Python package for quantitative research and trading in Taiwan stock market.
 
 ## Table of Contents
 
