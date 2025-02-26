@@ -1,23 +1,34 @@
 # QuantDev
 
-A Python module for quantitative trading.
+A Python module for quantitative trading in Taiwan stock market.
 
 ## Table of Contents
-1. Configuration
-2. Data Management
-3. Backtesting
-4. Portfolio Management
 
-## Configuration
+- Data
+    - [Databank](#Databank)
 
-Before using QuantDev, you'll need to set up your configuration files in a `config` directory. The module supports custom configuration paths:
+- Backtest
+    - [backtesting](#backtesting)
+        - [summary](#summary)
+        - [report](#report)
+        - [position_info](#position_info)
+    - [meta_backtesting](#meta_backtesting)
+        - [meta summary](#meta-summary)
+        - [meta report](#meta-report)
+        - [meta position info](#meta-position-info)
 
-```python
-import quantdev
-quantdev.set_config_dir('/path/to/config') # if not set, the default is ./config
-```
+- Trade
+    - [Position](#position)
+    - [Portfolio](#portfolio)
+    - [PortfolioManager](#portfoliomanager)
 
-## Data Management
+- How do I use it?
+    - [before you start](#before-you-start)
+    - [configuration](#configuration)
+
+# Data
+
+## Databank
 
 The `Databank` class integrates multiple data sources and provides unified access to:
 
@@ -25,8 +36,6 @@ The `Databank` class integrates multiple data sources and provides unified acces
 - FinMind data
 - Public data (company information, risk-free rates)
 - Processed (self-calculated) data (e.g., technical indicators)
-
-### Examples
 
 ```python
 from quantdev.data import Databank
@@ -54,78 +63,139 @@ dataset = db.find_dataset('收盤價')  # Returns 'stock_trading_data'
 # Update data
 db.update_databank(include=['monthly_rev'])  # Update specific dataset
 db.update_databank(exclude=['stock_basic_info'])  # Update all except specified
-db.update_processed_data(dataset='fin_data_chng')  # Update processed data
+db.update_processed_data()  # Update processed data
 ```
 
-## Backtest
+# Backtest
 
+## backtesting
 The `backtesting()` function under the `quantdev.backtest` module tests trading strategies and returns a `Strategy` instance with analysis tools including:
 - Performance metrics vs benchmark
 - Position information tracking
 - Interactive reporting with multiple views:
-  - Equity Curve
-  - Relative Return
-  - Return Heatmap
-  - Liquidity Analysis
+  - Equity curve
+  - Relative return
+  - Portfolio style
+  - Return heatmap
+  - Liquidity analysis
   - ...
 
 ```python
-import quantdev.backtest as bts
+from quantdev.backtest import *
 
 # Get data for strategy condition
-data = bts.get_data('ROE')  # Get ROE data
+data = get_factor('roe')  # Get ROE factor data
 
-# Define strategy condition
-condition = data > 0
-
-# Run backtest with quarterly rebalancing
-strategy = bts.backtesting(
-    data=condition,
-    rebalance='QR',         # Quarterly report release date rebalancing
-    signal_shift=1,         # 1 day delay for signal execution
-    hold_period=None,       # Hold until next rebalance date
-    stop_loss=None,         # No stop loss
-    stop_profit=None,       # No stop profit
-    benchmark='0050',      # Use 0050 as benchmark
-    start='2020-01-01',   # Backtest start date
-    end='2023-12-31'      # Backtest end date
+# Run backtest
+strategy = backtesting(
+    data > 0.9,  # condition
+    rebalance='QR', # rebalance the weight every quarterly report release date
+    signal_shift=1, # signal delay 1 day
+    hold_period=20, # hold for 20 days
+    stop_loss=-0.1, # stop loss 10%
+    stop_profit=0.2, # stop profit 20%
+    stop_at='next_day', # stop loss/profit at the next day of the condition
+    start='2005-01-01', # backtest start date
+    end='2023-12-31', # backtest end date
+    benchmark='0050', # benchmark
 )
 ```
 
-### Examples
+### summary
+```python
+strategy.summary
+```
+<img src="figure/strategy/strategy_summary.png" height="200"/>
+
+### report
+```python
+strategy.report
+```
+<img src="figure/strategy/strategy_report.png" width="600"/>
+
+The `Strategy().report` includes several more tabs, including:
+
+<img src="figure/strategy/strategy_report_rr.png" width="600"/>
+<img src="figure/strategy/strategy_report_ps.png" width="600"/>
+<img src="figure/strategy/strategy_report_rh.png" width="600"/>
+<img src="figure/strategy/strategy_report_lq.png" width="600"/>
+<img src="figure/strategy/strategy_report_mm.png" width="600"/>
+
+### position_info
+```python
+strategy.position_info
+```
+<img src="figure/strategy/strategy_position_info.png" width="600"/>
+
+## meta_backtesting
+
+The `meta_backtesting()` function under the `quantdev.backtest` module allows you to combine multiple strategies into a portfolio strategy. It returns a `MetaStrategy` instance with analysis tools including:
+- Performance metrics vs original strategies and benchmark
+- Position information tracking
+- Interactive reporting with multiple views:
+  - Equity curve
+  - Efficient frontier
+  - ...
 
 ```python
-# Access strategy performance metrics
-strategy.summary
-'''
-                   strategy    0050.TT
-Annual return       12.5%       8.2%
-Total return        45.3%      28.4%
-Max drawdown       -15.2%     -18.5%
-Annual vol          18.2%      16.8%
-Sharpe ratio         0.69       0.49
-Calmar ratio         0.82       0.44
-beta                 0.85         --
-'''
+from quantdev.backtest import *
 
-# Get detailed position information
-strategy.position_info
-'''
-            name       buy_date   sell_date  警示狀態  漲跌停  前次成交量_K  前次成交額_M  季報公佈日期    月營收公佈日期  板塊別      主產業別
-stock_id                                                                                       
-1436         全家     2024-11-15  2025-04-01    =      =        32        6.08    2024-11-06  2025-01-09   上櫃一般版  OTC38 OTC 居家生活
-1446         宏和     2024-11-15  2025-04-01    =      =       254        9.79    2024-11-12  2025-01-10   上市一般版  M1400 紡織纖維  
-'''
+roe = get_factor('roe')
+pbr = get_factor('股價淨值比')
+mtm = get_factor('mtm_3m')
 
-# Generate interactive analysis report
-strategy.report  # Shows interactive plots with multiple analysis tabs
+roe_strategy = backtesting(roe>=0.99, 'QR')
+pbr_strategy = backtesting(pbr>=0.95, 'QR')
+mtm_strategy = backtesting(mtm>=0.95, 'Q')
+
+strategies = {
+    'roe': (roe_strategy, 1),
+    'pbr': (pbr_strategy, 1),
+    'mtm': (mtm_strategy, 1),
+}
+
+metastrategy = meta_backtesting(
+    strategies, 
+    'QR', # rebalance the weight every quarterly report release date
+)
+
 ```
 
-## Portfolio Management
+### meta summary
+```python
+metastrategy.summary
+```
+<img src="figure/meta_strategy/meta_strategy_summary.png" height="200"/>
 
-The portfolio management system executes trades via SinoPac's API with real-time data from Fugle MarketData. The system consists of three main components that work together:
+### meta report
+```python
+metastrategy.report
+```
+<img src="figure/meta_strategy/meta_strategy_report_ec.png" width="600"/>
 
-### Position Class
+
+Particularly, the `meta_strategy.report` includes efficiency frontier and correlation matrix among all strategies:
+
+<img src="figure/meta_strategy/meta_strategy_report_ef.png" width="600"/>
+
+### meta position info
+
+The `meta_strategy.position_info` includes position information of all strategies, also calculated the designated weight of each holding in the portfolio.
+
+```python
+metastrategy.position_info
+```
+<img src="figure/meta_strategy/meta_strategy_position_info.png" width="600"/>
+
+# Trade
+
+The trading system implements institutional-grade execution via SinoPac's API with real-time market data integration from Fugle MarketData. The architecture consists of three core components:
+
+1. `Position`: Precise position management with granular trade execution
+2. `Portfolio`: Strategic portfolio construction and rebalancing
+3. `PortfolioManager`: Automated execution engine with comprehensive risk controls
+
+## Position
 
 The `Position` class represents individual stock positions that will be managed in your portfolio:
 
@@ -143,7 +213,7 @@ hon_hai_position.refresh_quotes(price_tolerance=0.02, odd=True)
 mediatek_position.refresh_quotes(price_tolerance=0.02, odd=True)
 ```
 
-### Portfolio Class
+## Portfolio
 
 The `Portfolio` class combines multiple positions into strategy-based portfolios that will be executed:
 
@@ -166,7 +236,7 @@ portfolio = Portfolio({
 portfolio.refresh_quotes()
 ```
 
-### Portfolio Manager
+## PortfolioManager
 
 The `PortfolioManager` class executes and monitors your portfolio strategies in real-time:
 
@@ -209,8 +279,23 @@ pm.run_portfolio_manager(
 
 ```
 
-The above components work together to:
-1. Define individual positions with `Position` class
-2. Group positions into strategies using `Portfolio` class
-3. Execute and monitor trades through `PortfolioManager`
-4. Update positions dynamically based on strategy signals
+# How do I use it?
+
+## before you start
+
+Before using QuantDev, ensure access to the following:
+
+- Tej TQuantLab API credentials
+- SinoPac securities trading account
+- Fugle MarketData subscription
+
+## configuration
+
+Before using QuantDev, you'll need to set up your configuration files in a `config` directory. The module supports custom configuration paths:
+
+```python
+import quantdev
+quantdev.set_config_dir('/path/to/config') # if not set, the default is ./config
+```
+
+The configuration directory should contain necessary API keys, trading parameters, and risk management settings.

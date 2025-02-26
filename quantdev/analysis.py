@@ -1,7 +1,7 @@
 from typing import Union, Literal, Tuple
-from numerize.numerize import numerize
 from statsmodels.regression.rolling import RollingOLS
 from statsmodels.regression.linear_model import OLS
+from numerize.numerize import numerize
 import statsmodels.api as sm
 from scipy import stats
 import pandas as pd
@@ -10,7 +10,6 @@ import numpy as np
 from plotly.colors import sample_colorscale
 from plotly.subplots import make_subplots
 import plotly.graph_objects as go
-
 
 # utils
 def calc_metrics(daily_returns:Union[pd.Series, pd.DataFrame], benchmark_daily_returns:Union[pd.Series, pd.DataFrame]=None) -> dict:

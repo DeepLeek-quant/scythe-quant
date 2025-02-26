@@ -5,6 +5,8 @@ Available Functions:
     - get_factor: 將資料轉換為因子值
     - backtesting: 進行回測並返回完整的回測結果
     - quick_backtesting: 進行快速回測並返回每日報酬率
+    - meta_backtesting: 進行多重策略回測並返回組合策略回測結果
+    - quick_meta_backtesting: 進行快速多重策略回測並返回每日報酬率
 
 Examples:
     取得資料並進行回測:
@@ -33,6 +35,25 @@ Examples:
     result.position_info
     result.report
     ```
+
+    進行多重策略回測:
+    ```python
+    # 建立兩個策略
+    strategy1 = backtesting(data1, rebalance='Q')
+    strategy2 = backtesting(data2, rebalance='M')
+
+    # 組合策略回測(等權重)
+    meta = meta_backtesting({
+        'strategy1': strategy1,
+        'strategy2': strategy2
+    })
+
+    # 組合策略回測(自訂權重)
+    meta = meta_backtesting({
+        'strategy1': (strategy1, 0.7),
+        'strategy2': (strategy2, 0.3)
+    })
+    ```
 """
 
 from typing import Literal, Union, Tuple
@@ -44,6 +65,7 @@ import numpy as np
 import calendar
 import logging
 
+from plotly.colors import sample_colorscale
 from plotly.subplots import make_subplots
 from numerize.numerize import numerize
 from IPython.display import display
@@ -368,41 +390,46 @@ def _stop_loss_or_profit(buy_list:pd.DataFrame, portfolio_df:pd.DataFrame, retur
 def backtesting(
     data:pd.DataFrame, 
     rebalance:Literal['MR', 'QR', 'W', 'M', 'Q', 'Y']='QR', 
-    trade_at:Literal['open', 'close']='close',
     signal_shift:int=0, hold_period:int=None, 
     stop_loss:Union[float, pd.DataFrame]=None, stop_profit:Union[float, pd.DataFrame]=None, stop_at:Literal['intraday', 'next_day']='next_day',
-    eval_function:dict=None,
     start:Union[int, str]=None, end:Union[int, str]=None, 
     benchmark:Union[str, list[str]]='0050')-> 'Strategy':
     """
-    進行回測並返回回測結果
+    進行回測並返回回測結果。
 
     Args:
         data (pd.DataFrame): 選股條件矩陣，index為日期，columns為股票代碼
         rebalance (str): 再平衡頻率，可選 'MR'(月營收公布後), 'QR'(財報公布後), 'W'(每週), 'M'(每月), 'Q'(每季), 'Y'(每年)
         signal_shift (int): 訊號延遲天數，用於模擬實際交易延遲
         hold_period (int): 持有期間，若為None則持有至下次再平衡日
-        stop_loss (float): 停損點，例如-0.1代表跌幅超過10%時停損
-        stop_profit (float): 停利點，例如0.2代表漲幅超過20%時停利
-        start (Union[int, str]): 回測起始日期
-        end (Union[int, str]): 回測結束日期
-        universe (pd.DataFrame): 投資範圍，用於篩選股票池
-        benchmark (Union[str, list[str]]): 基準指標，可為單一或多個股票代碼
+        stop_loss (float | pd.DataFrame): 停損點，例如-0.1代表跌幅超過10%時停損
+        stop_profit (float | pd.DataFrame): 停利點，例如0.2代表漲幅超過20%時停利
+        stop_at (str): 停損停利執行時點，可選 'intraday'(當日) 或 'next_day'(次日)
+        start (int | str): 回測起始日期
+        end (int | str): 回測結束日期
+        benchmark (str | list[str]): 基準指標，可為單一或多個股票代碼
 
     Returns:
         Strategy: 回測結果物件，包含:
+
             - summary: 策略績效摘要，包含總報酬率、年化報酬率、最大回撤等重要指標
             - position_info: 持股資訊，包含每日持股數量、換手率、個股權重等資訊
-            - report: 完整的回測報告，包含月報酬分析、風險指標、績效歸因等詳細分析
+            - report: 完整的回測報告，包含:
+                - Equity curve, Relative return, Portfolio style, MAE/MFE... etc.
 
     Examples:
-        進行每季再平衡、訊號延遲1天的回測:
         ```python
         result = backtesting(
             data, 
-            rebalance='Q',
-            signal_shift=1,
-            benchmark='0050'
+            rebalance='Q', # 每季再平衡
+            signal_shift=1, # 訊號延遲1天
+            hold_period=20, # 持有20天
+            stop_loss=-0.1, # 停損10%
+            stop_profit=0.2, # 停利20%
+            stop_at='next_day', # 停損/停利於觸及條件後次日執行
+            start='2023-01-01', # 回測起始日期
+            end='2023-12-31', # 回測結束日期
+            benchmark='0050' # 基準指標
         )
         ```
 
@@ -442,9 +469,34 @@ def backtesting(
 def quick_backtesting(
     data:pd.DataFrame, 
     rebalance:Literal['MR', 'QR', 'W', 'M', 'Q', 'Y']='QR', 
-    signal_shift:int=0, hold_period:int=None, 
+    signal_shift:int=0, 
+    hold_period:int=None, 
     )-> pd.DataFrame:
-    
+    """快速回測函數，僅返回投資組合每日報酬率序列。
+
+    Attributes:
+        data: 策略選股條件，True代表買入訊號
+        rebalance: 再平衡頻率，可選MR(月營收公布日)、QR(季報公布日)、W(週)、M(月)、Q(季)、Y(年)
+        signal_shift: 訊號延遲天數，用於模擬實際交易延遲
+        hold_period: 持有期間天數，若為None則持有至下次再平衡日
+
+    Returns:
+        pd.DataFrame: 投資組合每日報酬率序列
+
+    Examples:
+        ```python
+        daily_return = quick_backtesting(
+            data,
+            rebalance='QR', # 季報公布日再平衡
+            signal_shift=1,  # 訊號延遲1天
+            hold_period=20   # 持有20天
+        )
+        ```
+
+    Note:
+        - 投資組合權重為等權重配置
+        - 若無持有期間限制，則持有至下次再平衡日
+    """
     return_df = _db.read_dataset('stock_return', filter_date='t_date')
     _, portfolio_df = _get_portfolio(data, return_df, rebalance, signal_shift, hold_period)
     return (return_df * portfolio_df)\
@@ -456,6 +508,62 @@ def meta_backtesting(
     rebalance:Literal['MR', 'QR', 'W', 'M', 'Q', 'Y']=None,
     benchmark:Union[str, list[str]]='0050')-> 'MetaStrategy':
     
+    """多重策略回測並返回組合策略回測結果。
+
+    Args:
+        
+        - strategies (dict[str, Union['Strategy', Tuple['Strategy', float]]]): 策略字典，格式為:  
+            - key: 策略名稱
+            - value: Strategy物件，或是(Strategy物件, 權重)的tuple
+        - rebalance (Literal['MR', 'QR', 'W', 'M', 'Q', 'Y'], optional): 再平衡頻率，可選:  
+            - MR: 每月10日後第一個交易日
+            - QR: 每季財報公布日後第一個交易日(3/31, 5/15, 8/14, 11/14)
+            - W: 每週一
+            - M: 每月第一個交易日
+            - Q: 每季第一個交易日
+            - Y: 每年第一個交易日
+        - benchmark (Union[str, list[str]], optional): 基準指標，可為單一或多個股票代碼
+
+    Returns:
+        MetaStrategy: 組合策略回測結果物件，包含:
+
+            - summary: 策略績效摘要，包含總報酬率、年化報酬率、最大回撤等重要指標
+            - position_info: 持股資訊，包含每日持股數量、換手率、個股權重等資訊
+            - report: 完整的回測報告，包含:
+                - Equity curve, Efficiency frontier, Portfolio style, MAE/MFE... etc.
+
+    Examples:
+        ```python
+        # 建立兩個策略
+        strategy1 = backtesting(data1, rebalance='Q')
+        strategy2 = backtesting(data2, rebalance='M')
+
+        # 組合策略回測(等權重)
+        meta = meta_backtesting({
+            'strategy1': strategy1,
+            'strategy2': strategy2
+        })
+
+        # 組合策略回測(自訂權重)
+        meta = meta_backtesting({
+            'strategy1': (strategy1, 0.7),
+            'strategy2': (strategy2, 0.3)
+        })
+
+        # 組合策略回測(每月再平衡)
+        meta = meta_backtesting({
+            'strategy1': (strategy1, 0.7),
+            'strategy2': (strategy2, 0.3)
+        }, rebalance='M')
+        ```
+
+    Note:
+        - 若未指定權重，則預設為等權重配置
+        - 若未指定再平衡頻率，則不進行再平衡
+        - 若指定再平衡頻率，則會在再平衡日重新配置權重
+        - 回測區間為所有策略重疊的時間區間
+    """
+
     if all(isinstance(v, Strategy) for v in strategies.values()):
         strategies = {k: (v, 1/len(strategies)) for k, v in strategies.items()}
     
@@ -790,6 +898,37 @@ class PlotMaster(ABC):
             rows=3, cols=1, vertical_spacing=0.05, 
             shared_xaxes=True,
             )
+        
+        # meta strategy section
+        if hasattr(self, 'strategies') and self.strategies:
+            strategies_rtn = pd.concat([v[0].daily_return.rename(k) for k, v in self.strategies.items()], axis=1).dropna()
+            strategies_c_rtn = (1 + strategies_rtn).cumprod() - 1
+            strategies_drawdown = (strategies_c_rtn+1 - (strategies_c_rtn+1).cummax()) / (strategies_c_rtn+1).cummax()
+
+
+            n_strategies = len(strategies_c_rtn.columns)
+            colors = sample_colorscale('Teal', [0.6 + (n * 0.4/(n_strategies-1)) for n in range(n_strategies)])
+            # colors = sample_colorscale(c, [n / (n_strategies-1) for n in range(n_strategies)])
+            color_scale = dict(zip(strategies_c_rtn.columns, colors))
+            
+            for col in strategies_c_rtn.columns:
+                fig.append_trace(go.Scatter(
+                    x=strategies_c_rtn.index,
+                    y=strategies_c_rtn[col].values,
+                    name=col,
+                    legendgroup=col,
+                    legendrank=10000+strategies_c_rtn.columns.get_loc(col),
+                    line=dict(color=color_scale[col], width=2),
+                    ), row=1, col=1)
+                fig.append_trace(go.Scatter(
+                    x=strategies_drawdown.index,
+                    y=strategies_drawdown[col].values,
+                    name=col,
+                    legendgroup=col,
+                    legendrank=10000+strategies_c_rtn.columns.get_loc(col),
+                    showlegend=False,
+                    line=dict(color=color_scale[col], width=1.5),
+                    ), row=2, col=1)
 
         # equity curve
         fig.append_trace(go.Scatter(
@@ -852,7 +991,7 @@ class PlotMaster(ABC):
 
         # fig layout
         fig.update_layout(
-            legend=dict(x=0.01, y=0.95, xanchor='left', yanchor='top', bgcolor='rgba(0,0,0,0)'),
+            legend=dict(x=0.01, y=0.95, xanchor='left', yanchor='top', bgcolor='rgba(0,0,0,0)', traceorder='normal'),
             width=self.fig_param['size']['w'],
             height=self.fig_param['size']['h'],
             margin=self.fig_param['margin'],
@@ -1136,7 +1275,7 @@ class PlotMaster(ABC):
 
         # laoyout
         fig.update_layout(
-            legend=dict(x=0.55, y=0.65, xanchor='left', yanchor='top', bgcolor='rgba(0,0,0,0)'),
+            legend=dict(x=0.55, y=0.65, xanchor='left', yanchor='top', bgcolor='rgba(0,0,0,0)', traceorder='normal'),
             coloraxis1_showscale=False,
             coloraxis1=dict(colorscale='Plasma'),
             width=self.fig_param['size']['w'],
@@ -1576,7 +1715,7 @@ class PlotMaster(ABC):
             mode='markers',
             marker=dict(
                 size=5,
-                color=results['return'],
+                color=results['sharpe'],
                 colorscale='PuBu',
                 # showscale=True,
                 opacity=0.3
@@ -1637,7 +1776,7 @@ class PlotMaster(ABC):
 
         # Update layout
         fig.update_layout(
-            legend=dict(x=0.01, y=1, xanchor='left', yanchor='top', bgcolor='rgba(0,0,0,0)'),
+            legend=dict(x=0.01, y=1, xanchor='left', yanchor='top', bgcolor='rgba(0,0,0,0)', traceorder='normal'),
             xaxis_title='Annualised volatility',
             yaxis_title='Annualised returns',
             width=self.fig_param['size']['w'],
@@ -1848,6 +1987,70 @@ class Strategy(PlotMaster):
         return pn.Tabs(*tab_items)
 
 class MetaStrategy(Strategy):
+    """
+    多重策略組合類別，用於組合多個策略並提供分析功能。
+
+    Attributes:
+    - strategies (dict[str, Tuple[Strategy, Union[float, int]]]): 策略字典，格式為:
+            
+            - key: 策略名稱
+            - value: (Strategy物件, 權重)的tuple
+    - benchmark (Union[str, list[str]]): 基準指標，可為單一或多個股票代碼
+    - rebalance (str): 再平衡頻率，可選:
+
+            - MR: 每月10日後第一個交易日
+            - QR: 每季財報公布日後第一個交易日(3/31, 5/15, 8/14, 11/14)
+            - W: 每週一
+            - M: 每月第一個交易日
+            - Q: 每季第一個交易日
+            - Y: 每年第一個交易日
+        return_df (Union[pd.Series, pd.DataFrame]): 個股報酬率資料
+        daily_return (Union[pd.Series, pd.DataFrame]): 策略每日報酬率序列
+
+    Returns:
+        MetaStrategy: 多重策略組合物件，包含:
+
+            - summary: 策略績效摘要，包含總報酬率、年化報酬率、最大回撤等重要指標
+            - position_info: 持股資訊，包含每日持股數量、換手率、個股權重等資訊
+            - report: 完整的回測報告，包含:
+                - Equity curve: 淨值曲線
+                - Efficiency frontier: 效率前緣
+                - Portfolio style: 投資風格分析
+                - Return heatmap: 報酬率熱圖
+                - MAE/MFE: 最大不利變動/最大有利變動分析
+
+    Examples:
+        ```python
+        # 建立兩個策略
+        strategy1 = backtesting(data1, rebalance='Q')
+        strategy2 = backtesting(data2, rebalance='M')
+
+        # 組合策略回測(等權重)
+        meta = meta_backtesting({
+            'strategy1': strategy1,
+            'strategy2': strategy2
+        })
+
+        # 組合策略回測(自訂權重)
+        meta = meta_backtesting({
+            'strategy1': (strategy1, 0.7),
+            'strategy2': (strategy2, 0.3)
+        })
+
+        # 組合策略回測(每月再平衡)
+        meta = meta_backtesting({
+            'strategy1': (strategy1, 0.7),
+            'strategy2': (strategy2, 0.3)
+        }, rebalance='M')
+        ```
+
+    Note:
+        - 繼承自Strategy類別，保留原有的分析功能
+        - 新增效率前緣分析，用於最佳化策略權重配置
+        - 可設定再平衡頻率，定期調整策略權重
+        - 支援多個基準指標的比較
+    """
+    
     def __init__(self, strategies:dict[str, Tuple[Strategy, Union[float, int]]], benchmark:Union[str, list[str]], rebalance:str, return_df:Union[pd.Series, pd.DataFrame], daily_return:Union[pd.Series, pd.DataFrame]):
         PlotMaster.__init__(self)
         self.strategies = strategies
