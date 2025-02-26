@@ -171,13 +171,13 @@ metastrategy.report
 <img src="figure/meta_strategy/meta_strategy_report_ec.png" width="600"/>
 
 
-Particularly, the `meta_strategy.report` includes efficiency frontier and correlation matrix among all strategies:
+Particularly, the `MetaStrategy().report` includes efficiency frontier and correlation matrix among all strategies:
 
 <img src="figure/meta_strategy/meta_strategy_report_ef.png" width="600"/>
 
 ### meta position info
 
-The `meta_strategy.position_info` includes position information of all strategies, also calculated the designated weight of each holding in the portfolio.
+The `MetaStrategy().position_info` includes position information of all strategies, also calculated the designated weight of each holding in the portfolio.
 
 ```python
 metastrategy.position_info
