@@ -9,28 +9,26 @@ import numpy as np
 
 # utils
 def calc_metrics(daily_returns:Union[pd.Series, pd.DataFrame], benchmark_daily_returns:Union[pd.Series, pd.DataFrame]=None) -> dict:
-        
-    c_return = (1 + daily_returns).cumprod() - 1
-    total_return = c_return.iloc[-1]
-    annual_return = (1 + total_return) ** (240 / len(c_return)) - 1 # annual return
-    mdd = ((1 + c_return) / (1 + c_return).cummax() - 1).min() # mdd
-    annual_vol = daily_returns.std() * np.sqrt(240) # annual vol
-    calmar_ratio = annual_return / abs(mdd) # calmar Ratio
-    sharpe_ratio = annual_return/ annual_vol # sharpe Ratio
-    if benchmark_daily_returns is not None:
-        beta = daily_returns.cov(benchmark_daily_returns) / benchmark_daily_returns.var() # beta
-    else:
-        beta = '-'
+    metrics = daily_returns\
+    .agg({
+        'total_return': lambda x: ((1 + x).cumprod() - 1).iloc[-1],
+        'annual_return': lambda x: (1 + ((1 + x).cumprod() - 1).iloc[-1]) ** (240 / len(x)) - 1,
+        'mdd': lambda x: ((1 + (1 + x).cumprod() - 1) / (1 + (1 + x).cumprod() - 1).cummax() - 1).min(),
+        'annual_vol': lambda x: x.std() * np.sqrt(240)
+    })
+    metrics['calmar_ratio'] = metrics['annual_return'] / abs(metrics['mdd'])
+    metrics['sharpe_ratio'] = metrics['annual_return'] / metrics['annual_vol']
 
-    return {
-        'Annual return':f'{annual_return:.2%}',
-        'Total return':f'{total_return:.2%}',
-        'Max drawdown':f'{mdd:.2%}',
-        'Annual volatility':f'{annual_vol:.2%}',
-        'Sharpe ratio':f'{sharpe_ratio:.2}',
-        'Calmar ratio':f'{calmar_ratio:.2}',
-        'beta':f'{beta:.2}',
-    }
+    if benchmark_daily_returns is not None:
+        metrics['beta'] = daily_returns.cov(benchmark_daily_returns) / benchmark_daily_returns.var() # beta
+    else:
+        metrics['beta'] = '-'
+
+    return pd.Series({
+        name: f'{metrics[name]:.2%}' if name in ['total_return', 'annual_return', 'mdd', 'annual_vol'] 
+        else f'{metrics[name]:.2}'
+        for name in metrics.index
+    })
 
 def calc_maemfe(buy_list:pd.DataFrame, portfolio_df:pd.DataFrame, return_df:pd.DataFrame):
     """計算每筆交易的最大不利變動(MAE)和最大有利變動(MFE)
@@ -387,7 +385,7 @@ def resample_returns(data: pd.DataFrame, t: Literal['YE', 'QE', 'ME', 'W-FRI']):
     """
     return data.resample(t).apply(lambda x: (np.nan if x.isna().all() else (x + 1).prod() - 1))
 
-# style analysis
+# portfolio analysis
 def calc_portfolio_style(portfolio_daily_rtn:Union[pd.DataFrame, pd.Series], window:int=None, total:bool=False):
     """計算投資組合的風格分析
 
@@ -500,7 +498,7 @@ def calc_brinson_model(portfolio_df:pd.DataFrame, return_df:pd.DataFrame, benchm
 
     return brinson_model
 
-# portfolio analysis
+# efficiency frontier
 def create_random_portfolios(returns:pd.DataFrame, num_portfolios:int=None):
     def _calc_portfolio_return(weights, mean_returns, cov_matrix):
         returns = np.sum(mean_returns*weights ) *240

@@ -57,6 +57,7 @@ Examples:
 """
 
 from typing import Literal, Union, Tuple
+from IPython.display import display, HTML
 from abc import ABC
 from scipy import stats
 import datetime as dt
@@ -68,7 +69,6 @@ import logging
 from plotly.colors import sample_colorscale
 from plotly.subplots import make_subplots
 from numerize.numerize import numerize
-from IPython.display import display
 import plotly.figure_factory as ff
 import plotly.graph_objects as go
 import panel as pn
@@ -1880,11 +1880,11 @@ class Strategy(PlotMaster):
 
     def _generate_summary(self) -> pd.DataFrame:
         
-        summary = pd.DataFrame.from_dict(calc_metrics(self.daily_return, self.return_df[self.benchmark[0]]), orient='index', columns=['Strategy'])
+        summary = calc_metrics(self.daily_return, self.return_df[self.benchmark[0]]).to_frame('Strategy')
         for bmk in self.benchmark:
             summary = pd.concat([
                 summary, 
-                pd.DataFrame.from_dict(calc_metrics(self.return_df[bmk], None), orient='index', columns=[f'{bmk}.TT'])
+                calc_metrics(self.return_df[bmk], None).to_frame(f'{bmk}.TT')
             ], axis=1)
         return summary
     
@@ -2083,18 +2083,18 @@ class MultiStrategy(Strategy):
 
     def _generate_meta_summary(self) -> pd.DataFrame:
         bmk = self.return_df[self.benchmark[0]]
-        summary = pd.DataFrame.from_dict(calc_metrics(self.daily_return, bmk), orient='index', columns=['Meta strategy'])
+        summary = calc_metrics(self.daily_return, bmk).to_frame('Strategy')
         
         for k, v in self.strategies.items():
             summary = pd.concat([
                 summary,
-                pd.DataFrame.from_dict(calc_metrics(v[0].daily_return.loc[self.daily_return.index], bmk), orient='index', columns=[k])
+                calc_metrics(v[0].daily_return.loc[self.daily_return.index], bmk).to_frame(k)
             ], axis=1)
 
         for bmk in self.benchmark:
             summary = pd.concat([
                 summary, 
-                pd.DataFrame.from_dict(calc_metrics(self.return_df[bmk], None), orient='index', columns=[f'{bmk}.TT'])
+                calc_metrics(self.return_df[bmk], None).to_frame(f'{bmk}.TT')
             ], axis=1)
         return summary
 
@@ -2132,11 +2132,11 @@ class MultiStrategy(Strategy):
 
 
 # factor analysis
-def factor_analysis(factor:pd.DataFrame, asc:bool=True, rebalance:str='QR', group:int=10)-> 'FactorAnalysis':
-    return FactorAnalysis(factor, asc=asc, rebalance=rebalance, group=group)
+def factor_analysis(factor:pd.DataFrame, asc:bool=True, rebalance:str='QR', group:int=10, benchmark:str='0050')-> 'FactorAnalysis':
+    return FactorAnalysis(factor, asc=asc, rebalance=rebalance, group=group, benchmark=benchmark)
 
 class FactorAnalysis(PlotMaster):
-    def __init__(self, factor:Union[pd.DataFrame, str], asc:bool=True, rebalance:str='QR', group:int=10):
+    def __init__(self, factor:Union[pd.DataFrame, str], asc:bool=True, rebalance:str='QR', group:int=10, benchmark:str='0050'):
         super().__init__()
         self.factor = get_factor(factor, asc=asc)
         self.rebalance = rebalance
@@ -2148,10 +2148,18 @@ class FactorAnalysis(PlotMaster):
         self.return_df = db.read_dataset('stock_return', filter_date='t_date')
         self.quantiles_returns = calc_factor_quantiles_return(self.factor, rebalance=rebalance, group=group, return_df=self.return_df)
         self.ls_returns = (1 + self.quantiles_returns[max(self.quantiles_returns.keys())]) - (1 + self.quantiles_returns[0])
+        self.benchmark = benchmark
+        self.benchmark_returns = self.return_df[benchmark]
 
         # analysis
         self.betas = calc_portfolio_style(self.ls_returns, total=True)
+        self.info_coef = calc_info_coef(self.factor, self.return_df, 10, 'W')
+        
+        # result
+        self.summary = self._generate_summary()
         self.report = self._generate_report()
+
+        display(self.summary)
 
     def _plot_factor_returns(self):
         returns = self.quantiles_returns
@@ -2255,7 +2263,7 @@ class FactorAnalysis(PlotMaster):
             row=2, col=1)
 
         # IC
-        ic = calc_info_coef(self.factor, return_df, 10, 'W').rolling(window=20).mean()
+        ic = self.info_coef.rolling(window=20).mean()
 
         fig.add_trace(go.Scatter(
             x=ic.index, 
@@ -2311,6 +2319,62 @@ class FactorAnalysis(PlotMaster):
         )
         return fig
 
+    def _generate_summary(self):
+        # Factor Returns
+        returns = pd.concat([self.ls_returns.rename('f_return'), self.benchmark_returns], axis=1)\
+            .dropna()\
+            .assign(rel_return = lambda df: df['f_return']-df[self.benchmark])\
+            [['f_return', 'rel_return', self.benchmark]]\
+            .rename(columns={self.benchmark: f'{self.benchmark}.TT'})
+
+        summary_metrics = pd.concat([calc_metrics(returns[col]).to_frame(('Performance', col)) for col in returns.columns], axis=1)\
+            .drop(['beta'], axis=0)
+        summary_metrics.columns = pd.MultiIndex.from_tuples(summary_metrics.columns)
+
+        # Quantiles Returns
+        quantiles = pd.DataFrame(self.quantiles_returns, columns=range(len(self.quantiles_returns))).dropna()\
+            .assign(LS = lambda df: df[9]-df[0])\
+            .apply(lambda x: ((1+x).cumprod()).iloc[-1] ** (240 / len(x)) -1)\
+            .apply(lambda x: f'{x:.2%}')\
+            .to_frame('Quantiles Returns')
+
+        # Style
+        betas = self.betas\
+            .loc['total']\
+            .drop('const')\
+            .sort_values(ascending=False)\
+            .to_frame('Style')\
+            .round(4)
+        alpha = self.betas[['const']]\
+            .iloc[:-1]\
+            .apply(lambda x: (1+x).cumprod().iloc[-1]** (240 / len(x)) -1)\
+            .apply(lambda x: f'{x:.2%}')\
+            .rename(index={'const': 'Annualized Alpha'})\
+            .to_frame('Style')
+        styles = pd.concat([betas, alpha], axis=0)
+
+        # IC
+        ic = self.info_coef.agg({
+            'mean': lambda x: x.mean().round(4),
+            'std': lambda x: x.std().round(4),
+            'IR': lambda x: f'{x.mean()/x.std():.2%}', 
+            'positive ratio': lambda x: f'{len(x[x>0])/len(x):.2%}',
+        }).to_frame('Information Coefficient')
+
+        html = """
+        <div style="display: flex; gap: 5px;row-gap: 10px;">
+            <div>{}<br>{}</div>
+            <div>{}</div>
+            <div>{}</div>
+        </div>
+        """.format(
+            summary_metrics.to_html(), 
+            ic.to_html(), 
+            quantiles.to_html(), 
+            styles.to_html(),
+        )
+        return HTML(html)
+    
     def _generate_report(self):
         
         # main plots
