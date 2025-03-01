@@ -1,4 +1,4 @@
-from typing import Union, Literal, Tuple
+from typing import Union, Literal
 from statsmodels.regression.rolling import RollingOLS
 from statsmodels.regression.linear_model import OLS
 from numerize.numerize import numerize
@@ -6,10 +6,6 @@ import statsmodels.api as sm
 from scipy import stats
 import pandas as pd
 import numpy as np
-
-from plotly.colors import sample_colorscale
-from plotly.subplots import make_subplots
-import plotly.graph_objects as go
 
 # utils
 def calc_metrics(daily_returns:Union[pd.Series, pd.DataFrame], benchmark_daily_returns:Union[pd.Series, pd.DataFrame]=None) -> dict:
@@ -192,8 +188,8 @@ def calc_liquidity_metrics(portfolio_df:pd.DataFrame=None, money_threshold:int=5
         'vol_ratio': vol_ratio
     }
 
-def calc_info_ratio(daily_rtn:pd.DataFrame, bmk_daily_rtn:pd.DataFrame, window:int=240):
-    excess_return = (1 + daily_rtn - bmk_daily_rtn).rolling(window).apply(np.prod, raw=True) - 1
+def calc_info_ratio(daily_rtn:pd.DataFrame, benchmark_daily_returns:pd.DataFrame, window:int=240):
+    excess_return = (1 + daily_rtn - benchmark_daily_returns).rolling(window).apply(np.prod, raw=True) - 1
     tracking_error = excess_return.rolling(window).std()
     return (excess_return / tracking_error).dropna()
 
@@ -201,13 +197,14 @@ def calc_info_coef(factor:pd.DataFrame, return_df:pd.DataFrame, group:int=10, re
     # factor rank
     from quantdev.backtest import _get_rebalance_date
     r_date = _get_rebalance_date(rebalance)
+    r_date = pd.Index(r_date).intersection(return_df.index)
     f_rank = (pd.qcut(factor[factor.index.isin(r_date)].stack(), q=group, labels=False, duplicates='drop') + 1)\
     .reset_index()\
     .rename(columns={'level_1':'stock_id', 0:'f_rank'})    
 
     # return rank
     factor_r =  return_df\
-        .groupby(pd.cut(return_df.index, bins=r_date))\
+        .groupby(pd.cut(return_df.index, bins=r_date), observed=True)\
         .apply(lambda x: (1 + x).prod() - 1).dropna()\
         .stack()\
         .reset_index()\
@@ -240,7 +237,7 @@ def calc_relative_return(daily_return:pd.DataFrame, bmk_daily_return:pd.DataFram
     return relative_return, downtrend_return
 
 # factor analysis
-def calc_factor_longshort_return(factor:Union[pd.DataFrame, str], asc:bool=True, rebalance:str='QR', group:int=10):
+def calc_factor_longshort_return(factor:pd.DataFrame, rebalance:str='QR', group:int=10, **kwargs):
     """計算因子多空組合報酬率
 
     Args:
@@ -264,14 +261,56 @@ def calc_factor_longshort_return(factor:Union[pd.DataFrame, str], asc:bool=True,
         - 報酬率為多頭減去空頭的報酬率
     """
     
-    from quantdev.backtest import get_factor, quick_backtesting
-    factor = get_factor(item=factor, asc=asc)
-    long = quick_backtesting(factor>=(1-1/group), rebalance=rebalance)
-    short = quick_backtesting(factor<(1/group), rebalance=rebalance)
+    from quantdev.backtest import quick_backtesting
+    return_df = kwargs.get('return_df')
+    if return_df is None:
+        from quantdev.data import Databank
+        db = Databank()
+        return_df = db.read_dataset('stock_return', filter_date='t_date')
+    # factor = get_factor(item=factor, asc=asc)
+    long = quick_backtesting(factor>=(1-1/group), rebalance=rebalance, return_df=return_df)
+    short = quick_backtesting(factor<(1/group), rebalance=rebalance, return_df=return_df)
 
     return (long-short).dropna()
 
-def calc_factor_quantiles_return(factor:Union[pd.DataFrame, str], asc:bool=True, rebalance:str='QR', group:int=10):
+def calc_factor_quantiles_return(factor:pd.DataFrame, rebalance:str='QR', group:int=10, **kwargs):
+    """計算因子分位數報酬率
+
+    Args:
+        factor (Union[pd.DataFrame, str]): 因子值矩陣或因子名稱
+        asc (bool, optional): 因子值是否為越小越好. Defaults to True.
+        rebalance (str, optional): 調倉頻率. Defaults to 'QR'.
+        group (int, optional): 分組數量. Defaults to 10.
+
+    Returns:
+        dict: 各分位數報酬率時間序列
+
+    Examples:
+        計算ROE因子的十分位數報酬率:
+        ```python
+        roe_quantiles = calc_factor_quantiles_return('roe', asc=True, rebalance='QR', group=10)
+        ```
+
+    Note:
+        - 將因子值依照大小分成group組
+        - 每組報酬率為等權重持有該組內所有股票
+        - 字典的key為分位數起始點*group (例如: 0代表第一組, 1代表第二組...)
+    """
+    from quantdev.backtest import quick_backtesting
+    results = {}
+    return_df = kwargs.get('return_df')
+    if return_df is None:
+        from quantdev.data import Databank
+        db = Databank()
+        return_df = db.read_dataset('stock_return', filter_date='t_date')
+    
+    for q_start, q_end in [(i/group, (i+1)/group) for i in range(group)]:
+        condition = (q_start <= factor) & (factor < q_end)
+        results[q_start*group] = quick_backtesting(condition, rebalance=rebalance, return_df=return_df)
+
+    return results
+
+def calc_factor_quantiles_return_thread(factor:Union[pd.DataFrame, str], asc:bool=True, rebalance:str='QR', group:int=10, **kwargs):
     """計算因子分位數報酬率
 
     Args:
@@ -295,11 +334,30 @@ def calc_factor_quantiles_return(factor:Union[pd.DataFrame, str], asc:bool=True,
         - 字典的key為分位數起始點*group (例如: 0代表第一組, 1代表第二組...)
     """
     from quantdev.backtest import get_factor, quick_backtesting
+    import concurrent.futures
+    import threading
+    
     results = {}
+    results_lock = threading.Lock()
     factor = get_factor(item=factor, asc=asc)
-    for q_start, q_end in [(i/group, (i+1)/group) for i in range(group)]:
+    return_df = kwargs.get('return_df')
+    if return_df is None:
+        from quantdev.data import Databank
+        db = Databank()
+        return_df = db.read_dataset('stock_return', filter_date='t_date')
+
+    def calc_quantile(q_start, q_end):
         condition = (q_start <= factor) & (factor < q_end)
-        results[q_start*group] = quick_backtesting(condition, show=False, rebalance=rebalance)
+        result = quick_backtesting(condition, rebalance=rebalance, return_df=return_df)
+        with results_lock:
+            results[q_start*group] = result
+
+    with concurrent.futures.ThreadPoolExecutor() as executor:
+        futures = []
+        for q_start, q_end in [(i/group, (i+1)/group) for i in range(group)]:
+            futures.append(executor.submit(calc_quantile, q_start, q_end))
+        
+        concurrent.futures.wait(futures)
 
     return results
 
@@ -443,7 +501,7 @@ def calc_brinson_model(portfolio_df:pd.DataFrame, return_df:pd.DataFrame, benchm
     return brinson_model
 
 # portfolio analysis
-def calc_random_portfolios(returns:pd.DataFrame, num_portfolios:int=None):
+def create_random_portfolios(returns:pd.DataFrame, num_portfolios:int=None):
     def _calc_portfolio_return(weights, mean_returns, cov_matrix):
         returns = np.sum(mean_returns*weights ) *240
         std = np.sqrt(np.dot(weights.T, np.dot(cov_matrix, weights))) * np.sqrt(240)
@@ -468,161 +526,3 @@ def calc_random_portfolios(returns:pd.DataFrame, num_portfolios:int=None):
     
     results = pd.DataFrame(results_list).round({'std_dev': 5, 'return': 5, 'sharpe': 5})
     return results
-
-# factor analysis
-def plot_factor(factor:pd.DataFrame, asc:bool=True, rebalance:str='QR', group:int=10):
-    from quantdev.backtest import PlotMaster
-    results = calc_factor_quantiles_return(factor, asc=asc, rebalance=rebalance, group=group)
-
-    fig = make_subplots(
-                rows=2, cols=2,
-                specs=[
-                    [{"colspan": 2, "secondary_y": True}, None],
-                    [{}, {}],
-                ],
-                vertical_spacing=0.05,
-                horizontal_spacing=0.1,
-            )
-
-    # relative return
-    base_key = 0
-    # for key in sorted(results.keys()):
-    #     if (results[key]).isna().count() / len(pd.DataFrame(results)) >0.5:
-    #         base_key = key
-    #         break
-    f_daily_rtn = (1 + results[max(results.keys())]).pct_change() - (1 + results[base_key]).pct_change()
-    f_rtn  = (1+f_daily_rtn).cumprod()-1
-    f_relative_rtn, downtrend_rtn = calc_relative_return(f_daily_rtn, bmk_daily_rtn)
-    bmk_rtn = self.bmk_equity_df
-
-    # relative return
-    strategy_trace = go.Scatter(
-        x=f_relative_rtn.index,
-        y=f_relative_rtn.values,
-        name='Relative Return (lhs)',
-        line=dict(color=self.fig_param['colors']['Dark Blue'], width=2),
-        mode='lines',
-        yaxis='y1',
-    )
-
-    # downtrend
-    downtrend_trace = go.Scatter(
-        x=f_relative_rtn.index,
-        y=downtrend_rtn,
-        name='Downtrend (lhs)',
-        line=dict(color=self.fig_param['colors']['Bright Red'], width=2),
-        mode='lines',
-        yaxis='y1',
-    )
-
-    # factor return
-    factor_return_trace = go.Scatter(
-        x=f_rtn.index,
-        y=f_rtn.values,
-        name='Factor Return (rhs)',
-        line=dict(color=PlotMaster().fig_param['colors']['White'], width=2),
-        mode='lines',
-        yaxis='y2',
-    )
-
-
-    benchmark_trace = go.Scatter(
-        x=bmk_rtn.index,
-        y=bmk_rtn.values,
-        name='Benchmark Return (rhs)',
-        line=dict(color=PlotMaster().fig_param['colors']['Dark Grey'], width=2),
-        mode='lines',
-        yaxis='y2',
-    )
-
-    fig.add_trace(strategy_trace, row=1, col=1)
-    fig.add_trace(downtrend_trace, row=1, col=1)
-    fig.add_trace(factor_return_trace, row=1, col=1, secondary_y=True)
-    fig.add_trace(benchmark_trace, row=1, col=1, secondary_y=True)
-
-    # c return
-    num_lines = len(results)
-    color_scale = sample_colorscale('PuBu', [n / num_lines for n in range(num_lines)])
-    for (key, value), color in zip(reversed(list(results.items())), color_scale):
-        annual_rtn = (1 + value.iloc[-1]) ** (240 / len(value)) - 1 if not value.empty else 0
-        fig.add_trace(go.Scatter(
-            x=value.index,
-            y=value.values,
-            name=int(key),
-            line=dict(color=color),
-            showlegend=False,
-        ),
-        row=2, col=1)
-
-        # annual return
-        fig.add_annotation(
-            x=value.index[-1],
-            y=value.values[-1], 
-            xref="x", 
-            yref="y", 
-            text=f'{int(key)}: {annual_rtn: .2%}',  
-            showarrow=False, 
-            xanchor="left", 
-            yanchor="middle", 
-            font=dict(color="white", size=10),
-        row=2, col=1)
-
-    # IC
-    from quantdev.data import Databank
-    _db = Databank()
-    return_df = _db.read_dataset('stock_return', filter_date='t_date')
-    ic = calc_info_coef(factor, return_df, group, rebalance)
-
-    fig.add_trace(go.Scatter(
-        x=ic.index, 
-        y=ic.values, 
-        mode='lines', 
-        name='IC', 
-        line=dict(color=self.fig_param['colors']['Bright Orange'], width=1),
-        showlegend=False,
-        ),
-        row=2, col=2)
-    fig.add_hline(
-        y=0,
-        line=dict(color="white", width=1),
-        row=2, col=2
-    )
-
-    # rangeslider_visible
-    fig.update_xaxes(rangeslider_visible=True, rangeslider=dict(thickness=0.01), row=1, col=1)
-
-    # position
-    fig.update_xaxes(domain=[0.025, 0.975], row=1, col=1)
-    fig.update_xaxes(domain=[0.025, 0.45], row=2, col=1)
-    fig.update_xaxes(domain=[0.55, 0.975], row=2, col=2)
-
-    fig.update_yaxes(domain=[0.6, .95], row=1, col=1)
-    fig.update_yaxes(domain=[0, 0.4], row=2, col=1)
-    fig.update_yaxes(domain=[0, 0.4], row=2, col=2)
-
-    # adjust axes
-    fig.update_xaxes(tickfont=dict(size=12), row=1, col=1)
-    fig.update_yaxes(tickformat=".0%", row=1, col=1, secondary_y=False)
-    fig.update_yaxes(tickformat=".0%", row=1, col=1, secondary_y=True, showgrid=False) # second y-axis
-    fig.update_yaxes(tickformat=".0%", row=2, col=1)
-
-    # add titles
-    fig.add_annotation(text=self.bold(f'Factor Relative Returns'), x=0, y = 1, yshift=30, xref="x domain", yref="y domain", showarrow=False, row=1, col=1)
-    fig.add_annotation(text=self.bold(f'Factor Return by Quantiles'), x=0, y = 1, yshift=50, xref="x domain", yref="y domain", showarrow=False, row=2, col=1)
-    fig.add_annotation(text=self.bold(f'Information Coefficient(IC)'), x=0, y = 1, yshift=50, xref="x domain", yref="y domain", showarrow=False, row=2, col=2)
-
-    ic_mean = ic.mean()
-    ic_std = ic.std()
-    info_ratio = ic_mean/ic_std
-    positive_ratio = len(ic[ic>0])/len(ic)
-    fig.add_annotation(text=f'Mean: {ic_mean :.2f}, SD: {ic_std :.2f}, IR: {info_ratio :.2f}, Positive Ratio: {positive_ratio:.0%}', x=0, y = 1, yshift=30, xref="x domain", yref="y domain", showarrow=False, row=2, col=2)
-
-    # wrap up
-    fig.update_layout(
-        legend=dict(x=0.05, y=0.94, xanchor='left', yanchor='top', bgcolor='rgba(0,0,0,0)'),    
-        height=self.fig_param['size']['h'], 
-        width=self.fig_param['size']['w'], 
-        margin= self.fig_param['margin'],
-        template=self.fig_param['template'],
-    )
-    return fig

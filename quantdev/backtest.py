@@ -471,6 +471,7 @@ def quick_backtesting(
     rebalance:Literal['MR', 'QR', 'W', 'M', 'Q', 'Y']='QR', 
     signal_shift:int=0, 
     hold_period:int=None, 
+    return_df:pd.DataFrame=None,
     )-> pd.DataFrame:
     """快速回測函數，僅返回投資組合每日報酬率序列。
 
@@ -497,7 +498,8 @@ def quick_backtesting(
         - 投資組合權重為等權重配置
         - 若無持有期間限制，則持有至下次再平衡日
     """
-    return_df = _db.read_dataset('stock_return', filter_date='t_date')
+    if return_df is None:
+        return_df = _db.read_dataset('stock_return', filter_date='t_date')
     _, portfolio_df = _get_portfolio(data, return_df, rebalance, signal_shift, hold_period)
     return (return_df * portfolio_df)\
         .dropna(axis=0, how='all')\
@@ -829,34 +831,34 @@ class PlotMaster(ABC):
     
     def _calc_relative_return(self, daily_return:pd.DataFrame=None, downtrend_window:int=3):
         daily_rtn = daily_return or self.daily_return
-        bmk_daily_rtn = self.return_df[self.benchmark[0]]
-        relative_rtn = (1 + daily_rtn - bmk_daily_rtn).cumprod() - 1
+        benchmark_daily_returns = self.return_df[self.benchmark[0]]
+        relative_rtn = (1 + daily_rtn - benchmark_daily_returns).cumprod() - 1
 
         relative_rtn_diff = relative_rtn.diff()
         downtrend_mask = relative_rtn_diff < 0
         downtrend_mask = pd.DataFrame({'alpha': relative_rtn, 'downward': downtrend_mask})
         downtrend_mask['group'] = (downtrend_mask['downward'] != downtrend_mask['downward'].shift()).cumsum()
-        downtrend_rtn = np.where(
+        downtrend_returns = np.where(
             downtrend_mask['downward'] & downtrend_mask.groupby('group')['downward'].transform('sum').ge(downtrend_window), 
             downtrend_mask['alpha'], 
             np.nan
         )
 
-        return relative_rtn, downtrend_rtn
+        return relative_rtn, downtrend_returns
 
-    def _calc_rolling_beta(self, window:int=240, daily_rtn:pd.DataFrame=None, bmk_daily_rtn:pd.DataFrame=None):
+    def _calc_rolling_beta(self, window:int=240, daily_rtn:pd.DataFrame=None, benchmark_daily_returns:pd.DataFrame=None):
         daily_rtn = daily_rtn or self.daily_return
-        bmk_daily_rtn = bmk_daily_rtn or self.return_df[self.benchmark[0]]
+        benchmark_daily_returns = benchmark_daily_returns or self.return_df[self.benchmark[0]]
 
-        rolling_cov = daily_rtn.rolling(window).cov(bmk_daily_rtn)
-        rolling_var = bmk_daily_rtn.rolling(window).var()
+        rolling_cov = daily_rtn.rolling(window).cov(benchmark_daily_returns)
+        rolling_var = benchmark_daily_returns.rolling(window).var()
         return (rolling_cov / rolling_var).dropna()
 
-    def _calc_ir(self, window:int=240, daily_rtn:pd.DataFrame=None, bmk_daily_rtn:pd.DataFrame=None):
+    def _calc_ir(self, window:int=240, daily_rtn:pd.DataFrame=None, benchmark_daily_returns:pd.DataFrame=None):
         daily_rtn = daily_rtn or self.daily_return
-        bmk_daily_rtn = bmk_daily_rtn or self.return_df[self.benchmark[0]]
+        benchmark_daily_returns = benchmark_daily_returns or self.return_df[self.benchmark[0]]
 
-        excess_return = (1 + daily_rtn - bmk_daily_rtn).rolling(window).apply(np.prod, raw=True) - 1
+        excess_return = (1 + daily_rtn - benchmark_daily_returns).rolling(window).apply(np.prod, raw=True) - 1
         tracking_error = excess_return.rolling(window).std()
         return (excess_return / tracking_error).dropna()
 
@@ -1499,7 +1501,7 @@ class PlotMaster(ABC):
         )
 
         # relative return
-        relative_rtn, downtrend_rtn = self._calc_relative_return(daily_return=daily_return)
+        relative_rtn, downtrend_returns = self._calc_relative_return(daily_return=daily_return)
         bmk_rtn = bmk_equity_df or (1+self.return_df[self.benchmark[0]]).cumprod() - 1
 
         strategy_trace = go.Scatter(
@@ -1513,7 +1515,7 @@ class PlotMaster(ABC):
 
         downtrend_trace = go.Scatter(
             x=relative_rtn.index,
-            y=downtrend_rtn,
+            y=downtrend_returns,
             name='Downtrend (lhs)',
             line=dict(color=self.fig_param['colors']['Bright Red'], width=2),
             mode='lines',
@@ -1556,7 +1558,7 @@ class PlotMaster(ABC):
                 )
 
         # information ratio
-        info_ratio = calc_info_ratio(daily_rtn=self.daily_return, bmk_daily_rtn=self.return_df[self.benchmark[0]])
+        info_ratio = calc_info_ratio(daily_rtn=self.daily_return, benchmark_daily_returns=self.return_df[self.benchmark[0]])
 
         info_ratio_trace = go.Scatter(
             x=info_ratio.index,
@@ -1665,7 +1667,7 @@ class PlotMaster(ABC):
                 x=alpha.index, 
                 y=alpha.values, 
                 name='Alpha (rhs)',
-                line=dict(color=PlotMaster().fig_param['colors']['Light Grey'], width=2),
+                line=dict(color=self.fig_param['colors']['Light Grey'], width=2),
                 showlegend=True,
             ),
             secondary_y=False,
@@ -1690,10 +1692,10 @@ class PlotMaster(ABC):
         # layout
         fig.update_layout(
             legend = dict(x=0.05, y=0.5, xanchor='left', yanchor='top', bgcolor='rgba(0,0,0,0)', tracegroupgap=.25, orientation='h'),
-            width = PlotMaster().fig_param['size']['w'],
-            height = PlotMaster().fig_param['size']['h'],
-            margin = PlotMaster().fig_param['margin'],
-            template = PlotMaster().fig_param['template'],
+            width = self.fig_param['size']['w'],
+            height = self.fig_param['size']['h'],
+            margin = self.fig_param['margin'],
+            template = self.fig_param['template'],
             yaxis = dict(side='right'),
             yaxis2 = dict(side='left'),
         )
@@ -1705,7 +1707,7 @@ class PlotMaster(ABC):
         returns = pd.concat([v[0].daily_return.rename(k) for k, v in self.strategies.items()], axis=1).dropna()
         fig = make_subplots(rows=2, cols=1, vertical_spacing=0.05)
 
-        results = calc_random_portfolios(returns)
+        results = create_random_portfolios(returns)
         max_sharpe = results.loc[results['sharpe'].argmax()]
         min_vol = results.loc[results['std_dev'].argmin()]
         
@@ -1790,6 +1792,7 @@ class PlotMaster(ABC):
         )
 
         return fig
+
 
 class Strategy(PlotMaster):
     """
@@ -1971,7 +1974,7 @@ class Strategy(PlotMaster):
         plot_funcs = {
             'Equity curve': self._plot_equity_curve,
             'Relative return': self._plot_relative_return,
-            'Portfolio style': self._plot_style_analysis,
+            'Style analysis': self._plot_style_analysis,
             'Return heatmap': self._plot_return_heatmap,
             'Liquidity': self._plot_liquidity,
             'MAE/MFE': self._plot_maemfe,
@@ -1985,6 +1988,7 @@ class Strategy(PlotMaster):
         tab_items = list(figs.items())
 
         return pn.Tabs(*tab_items)
+
 
 class MetaStrategy(Strategy):
     """
@@ -2121,6 +2125,206 @@ class MetaStrategy(Strategy):
             name: pn.pane.Plotly(plot_funcs[name]())
             for name in plot_funcs
             if name not in exclude_tabs
+        }
+        tab_items = list(figs.items())
+
+        return pn.Tabs(*tab_items)
+
+
+# factor analysis
+def factor_analysis(factor:pd.DataFrame, asc:bool=True, rebalance:str='QR', group:int=10)-> 'FactorAnalysis':
+    return FactorAnalysis(factor, asc=asc, rebalance=rebalance, group=group)
+
+class FactorAnalysis(PlotMaster):
+    def __init__(self, factor:Union[pd.DataFrame, str], asc:bool=True, rebalance:str='QR', group:int=10):
+        super().__init__()
+        self.factor = get_factor(factor, asc=asc)
+        self.rebalance = rebalance
+        self.group = group
+
+        # data
+        from quantdev.data import Databank
+        db = Databank()
+        self.return_df = db.read_dataset('stock_return', filter_date='t_date')
+        self.quantiles_returns = calc_factor_quantiles_return(self.factor, rebalance=rebalance, group=group, return_df=self.return_df)
+        self.ls_returns = (1 + self.quantiles_returns[max(self.quantiles_returns.keys())]) - (1 + self.quantiles_returns[0])
+
+        # analysis
+        self.betas = calc_portfolio_style(self.ls_returns, total=True)
+        self.report = self._generate_report()
+
+    def _plot_factor_returns(self):
+        returns = self.quantiles_returns
+        return_df = self.return_df
+
+        
+        fig = make_subplots(
+                    rows=2, cols=2,
+                    specs=[
+                        [{"colspan": 2, "secondary_y": True}, None],
+                        [{}, {}],
+                    ],
+                    vertical_spacing=0.05,
+                    horizontal_spacing=0.1,
+                )
+
+        # relative return
+        # base_key = 0
+        # # for key in sorted(results.keys()):
+        # #     if (results[key]).isna().count() / len(pd.DataFrame(results)) >0.5:
+        # #         base_key = key
+        # #         break
+        ls_daily_returns = self.ls_returns
+        benchmark_daily_returns = return_df['0050']
+
+        relative_returns, downtrend_returns = calc_relative_return(ls_daily_returns, benchmark_daily_returns)
+        benchmark_c_returns = (1+benchmark_daily_returns).cumprod()-1
+
+        # relative return
+        strategy_trace = go.Scatter(
+            x=relative_returns.index,
+            y=relative_returns.values,
+            name='Relative Return (lhs)',
+            line=dict(color=self.fig_param['colors']['Dark Blue'], width=2),
+            mode='lines',
+            yaxis='y1',
+        )
+
+        # downtrend
+        downtrend_trace = go.Scatter(
+            x=relative_returns.index,
+            y=downtrend_returns,
+            name='Downtrend (lhs)',
+            line=dict(color=self.fig_param['colors']['Bright Red'], width=2),
+            mode='lines',
+            yaxis='y1',
+        )
+
+        # factor return
+        ls_c_returns  = (1+ls_daily_returns).cumprod()-1
+        factor_return_trace = go.Scatter(
+            x=ls_c_returns.index,
+            y=ls_c_returns.values,
+            name='Factor Return (rhs)',
+            line=dict(color=self.fig_param['colors']['White'], width=2),
+            mode='lines',
+            yaxis='y2',
+        )
+
+
+        benchmark_trace = go.Scatter(
+            x=benchmark_c_returns.index,
+            y=benchmark_c_returns.values,
+            name='Benchmark Return (rhs)',
+            line=dict(color=self.fig_param['colors']['Dark Grey'], width=2),
+            mode='lines',
+            yaxis='y2',
+        )
+
+        fig.add_trace(strategy_trace, row=1, col=1)
+        fig.add_trace(downtrend_trace, row=1, col=1)
+        fig.add_trace(factor_return_trace, row=1, col=1, secondary_y=True)
+        fig.add_trace(benchmark_trace, row=1, col=1, secondary_y=True)
+
+        # c return
+        num_lines = len(returns)
+        color_scale = sample_colorscale('PuBu', [n / num_lines for n in range(num_lines)])
+        for (key, value), color in zip(reversed(list(returns.items())), color_scale):
+            value = (1+value).cumprod()-1
+            annual_rtn = (1 + value.iloc[-1]) ** (240 / len(value)) - 1 if not value.empty else 0
+            fig.add_trace(go.Scatter(
+                x=value.index,
+                y=value.values,
+                name=int(key),
+                line=dict(color=color),
+                showlegend=False,
+            ),
+            row=2, col=1)
+
+            # annual return
+            fig.add_annotation(
+                x=value.index[-1],
+                y=value.values[-1], 
+                xref="x", 
+                yref="y", 
+                text=f'{int(key)}: {annual_rtn: .2%}',  
+                showarrow=False, 
+                xanchor="left", 
+                yanchor="middle", 
+                font=dict(color="white", size=10),
+            row=2, col=1)
+
+        # IC
+        ic = calc_info_coef(self.factor, return_df, 10, 'W').rolling(window=20).mean()
+
+        fig.add_trace(go.Scatter(
+            x=ic.index, 
+            y=ic.values, 
+            mode='lines', 
+            name='IC', 
+            line=dict(color=self.fig_param['colors']['Bright Orange'], width=1),
+            showlegend=False,
+            ),
+            row=2, col=2)
+        fig.add_hline(
+            y=0,
+            line=dict(color="white", width=1),
+            row=2, col=2
+        )
+
+        # rangeslider_visible
+        fig.update_xaxes(rangeslider_visible=True, rangeslider=dict(thickness=0.01), row=1, col=1)
+
+        # position
+        fig.update_xaxes(domain=[0.025, 0.975], row=1, col=1)
+        fig.update_xaxes(domain=[0.025, 0.45], row=2, col=1)
+        fig.update_xaxes(domain=[0.55, 0.975], row=2, col=2)
+
+        fig.update_yaxes(domain=[0.6, .95], row=1, col=1)
+        fig.update_yaxes(domain=[0, 0.4], row=2, col=1)
+        fig.update_yaxes(domain=[0, 0.4], row=2, col=2)
+
+        # adjust axes
+        fig.update_xaxes(tickfont=dict(size=12), row=1, col=1)
+        fig.update_yaxes(tickformat=".0%", row=1, col=1, secondary_y=False)
+        fig.update_yaxes(tickformat=".0%", row=1, col=1, secondary_y=True, showgrid=False) # second y-axis
+        fig.update_yaxes(tickformat=".0%", row=2, col=1)
+
+        # add titles
+        fig.add_annotation(text=self._bold(f'Factor Relative Returns'), x=0, y = 1, yshift=30, xref="x domain", yref="y domain", showarrow=False, row=1, col=1)
+        fig.add_annotation(text=self._bold(f'Factor Return by Quantiles'), x=0, y = 1, yshift=50, xref="x domain", yref="y domain", showarrow=False, row=2, col=1)
+        fig.add_annotation(text=self._bold(f'Information Coefficient(IC)'), x=0, y = 1, yshift=50, xref="x domain", yref="y domain", showarrow=False, row=2, col=2)
+
+        ic_mean = ic.mean()
+        ic_std = ic.std()
+        info_ratio = ic_mean/ic_std
+        positive_ratio = len(ic[ic>0])/len(ic)
+        fig.add_annotation(text=f'Mean: {ic_mean :.2f}, SD: {ic_std :.2f}, IR: {info_ratio :.2f}, Positive Ratio: {positive_ratio:.0%}', x=0, y = 1, yshift=30, xref="x domain", yref="y domain", showarrow=False, row=2, col=2)
+
+        # wrap up
+        fig.update_layout(
+            legend=dict(x=0.05, y=0.94, xanchor='left', yanchor='top', bgcolor='rgba(0,0,0,0)'),    
+            height=self.fig_param['size']['h'], 
+            width=self.fig_param['size']['w'], 
+            margin= self.fig_param['margin'],
+            template=self.fig_param['template'],
+        )
+        return fig
+
+    def _generate_report(self):
+        
+        # main plots
+        pn.extension('plotly')
+        
+        # Define mapping of tab names to plot functions
+        plot_funcs = {
+            'Factor returns': self._plot_factor_returns,
+            'Style analysis': self._plot_style_analysis,
+        }
+
+        figs = {
+            name: pn.pane.Plotly(plot_funcs[name]())
+            for name in plot_funcs
         }
         tab_items = list(figs.items())
 

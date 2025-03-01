@@ -1235,19 +1235,19 @@ class FactorModelHandler(DataBankInfra):
 
     def _update_factor_model(self):
         from quantdev.analysis import calc_factor_longshort_return
-        from quantdev.backtest import get_data
+        from quantdev.backtest import get_data, get_factor
 
         model = pd.DataFrame({
             'MKT':self._calc_market_factor(),
-            'PBR':calc_factor_longshort_return('股價淨值比', asc=False, rebalance='QR'),
-            'MCAP_to_REV':calc_factor_longshort_return((get_data('個股市值(元)')/1000/get_data('營業收入')), asc=False, rebalance='QR'),
-            'SIZE':calc_factor_longshort_return('個股市值(元)', asc=False, rebalance='Q'),
-            'VOL':calc_factor_longshort_return(get_data('成交金額(元)').rolling(60).mean(), asc=False, rebalance='Q'),
-            'MTM3m':calc_factor_longshort_return('mtm_3m', rebalance='Q'),
-            'MTM6m':calc_factor_longshort_return('mtm_6m', rebalance='Q'),
-            'ROE':calc_factor_longshort_return('roe', rebalance='QR'),
-            'OPM':calc_factor_longshort_return('營業利益率', rebalance='QR'),
-            'CMA':calc_factor_longshort_return('資產成長率', rebalance='QR'),
+            'PBR':calc_factor_longshort_return(get_factor('股價淨值比', asc=False), rebalance='QR'),
+            'MCAP_to_REV':calc_factor_longshort_return(get_factor(get_data('個股市值(元)')/1000/get_data('營業收入'), asc=False), rebalance='QR'),
+            'SIZE':calc_factor_longshort_return(get_factor('個股市值(元)', asc=False), rebalance='Q'),
+            'VOL':calc_factor_longshort_return(get_factor(get_data('成交金額(元)').rolling(60).mean(), asc=False), rebalance='Q'),
+            'MTM3m':calc_factor_longshort_return(get_factor('mtm_3m'), rebalance='Q'),
+            'MTM6m':calc_factor_longshort_return(get_factor('mtm_6m'), rebalance='Q'),
+            'ROE':calc_factor_longshort_return(get_factor('roe'), rebalance='QR'),
+            'OPM':calc_factor_longshort_return(get_factor('營業利益率'), rebalance='QR'),
+            'CMA':calc_factor_longshort_return(get_factor('資產成長率'), rebalance='QR'),
         }).dropna(how='all')
 
         self.write_dataset('factor_model', model)

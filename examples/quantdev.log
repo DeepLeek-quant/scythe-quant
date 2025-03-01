@@ -3975,3 +3975,4 @@
 2025-02-26 12:22:15,948 - root - INFO - Exported stock_trading_data as DataFrame from parquet
 2025-02-26 12:22:15,961 - root - INFO - Created Strategy with AAR: 15.33%; MDD: -66.14%; Avol: 21.93%
 2025-02-26 12:22:17,091 - root - INFO - Exported factor_model as DataFrame from parquet
+2025-02-27 15:09:38,883 - root - INFO - Exported mkt_calendar as DataFrame from parquet
