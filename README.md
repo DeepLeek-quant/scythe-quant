@@ -8,7 +8,7 @@ A Python package for quantitative research and trading in Taiwan stock market.
     - [Databank](#Databank)
 - Backtest
     - [backtesting](#backtesting)
-    - [meta_backtesting](#meta_backtesting)
+    - [multi_backtesting](#multi_backtesting)
 - Trade
     - [Position](#Position)
     - [Portfolio](#Portfolio)
@@ -118,9 +118,9 @@ strategy.position_info
 ```
 <img src="figure/strategy/strategy_position_info.png" width="600"/>
 
-## meta_backtesting
+## multi_backtesting
 
-The `meta_backtesting()` function under the `quantdev.backtest` module allows you to combine multiple strategies into a portfolio strategy. It returns a `MetaStrategy` instance with analysis tools including:
+The `multi_backtesting()` function under the `quantdev.backtest` module allows you to combine multiple strategies into a portfolio strategy. It returns a `MultiStrategy` instance with analysis tools including:
 - Performance metrics vs original strategies and benchmark
 - Position information tracking
 - Interactive reporting with multiple views:
@@ -145,7 +145,7 @@ strategies = {
     'mtm': (mtm_strategy, 1),
 }
 
-metastrategy = meta_backtesting(
+multi_strategy = multi_backtesting(
     strategies, 
     'QR', # rebalance the weight every quarterly report release date
 )
@@ -154,27 +154,27 @@ metastrategy = meta_backtesting(
 
 ### summary
 ```python
-metastrategy.summary
+multi_strategy.summary
 ```
 <img src="figure/meta_strategy/meta_strategy_summary.png" height="200"/>
 
 ### report
 ```python
-metastrategy.report
+multi_strategy.report
 ```
 <img src="figure/meta_strategy/meta_strategy_report_ec.png" width="600"/>
 
 
-Particularly, the `MetaStrategy().report` includes efficiency frontier and correlation matrix among all strategies:
+Particularly, the `MultiStrategy().report` includes efficiency frontier and correlation matrix among all strategies:
 
 <img src="figure/meta_strategy/meta_strategy_report_ef.png" width="600"/>
 
 ### position info
 
-The `MetaStrategy().position_info` includes position information of all strategies, also calculated the designated weight of each holding in the portfolio.
+The `MultiStrategy().position_info` includes position information of all strategies, also calculated the designated weight of each holding in the portfolio.
 
 ```python
-metastrategy.position_info
+multi_strategy.position_info
 ```
 <img src="figure/meta_strategy/meta_strategy_position_info.png" width="600"/>
 

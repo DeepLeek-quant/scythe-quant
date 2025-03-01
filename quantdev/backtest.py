@@ -4,9 +4,9 @@ Available Functions:
     - get_data: 從資料庫取得資料並進行預處理
     - get_factor: 將資料轉換為因子值
     - backtesting: 進行回測並返回完整的回測結果
-    - quick_backtesting: 進行快速回測並返回每日報酬率
-    - meta_backtesting: 進行多重策略回測並返回組合策略回測結果
-    - quick_meta_backtesting: 進行快速多重策略回測並返回每日報酬率
+    - simple_backtesting: 進行快速回測並返回每日報酬率
+    - multi_backtesting: 進行多重策略回測並返回組合策略回測結果
+    - simple_multi_backtesting: 進行快速多重策略回測並返回每日報酬率
 
 Examples:
     取得資料並進行回測:
@@ -43,13 +43,13 @@ Examples:
     strategy2 = backtesting(data2, rebalance='M')
 
     # 組合策略回測(等權重)
-    meta = meta_backtesting({
+    meta = multi_backtesting({
         'strategy1': strategy1,
         'strategy2': strategy2
     })
 
     # 組合策略回測(自訂權重)
-    meta = meta_backtesting({
+    meta = multi_backtesting({
         'strategy1': (strategy1, 0.7),
         'strategy2': (strategy2, 0.3)
     })
@@ -466,7 +466,7 @@ def backtesting(
         rebalance
     )
 
-def quick_backtesting(
+def simple_backtesting(
     data:pd.DataFrame, 
     rebalance:Literal['MR', 'QR', 'W', 'M', 'Q', 'Y']='QR', 
     signal_shift:int=0, 
@@ -486,7 +486,7 @@ def quick_backtesting(
 
     Examples:
         ```python
-        daily_return = quick_backtesting(
+        daily_return = simple_backtesting(
             data,
             rebalance='QR', # 季報公布日再平衡
             signal_shift=1,  # 訊號延遲1天
@@ -505,10 +505,10 @@ def quick_backtesting(
         .dropna(axis=0, how='all')\
         .sum(axis=1)
 
-def meta_backtesting(
+def multi_backtesting(
     strategies:dict[str, Union['Strategy', Tuple['Strategy', float]]], 
     rebalance:Literal['MR', 'QR', 'W', 'M', 'Q', 'Y']=None,
-    benchmark:Union[str, list[str]]='0050')-> 'MetaStrategy':
+    benchmark:Union[str, list[str]]='0050')-> 'MultiStrategy':
     
     """多重策略回測並返回組合策略回測結果。
 
@@ -527,7 +527,7 @@ def meta_backtesting(
         - benchmark (Union[str, list[str]], optional): 基準指標，可為單一或多個股票代碼
 
     Returns:
-        MetaStrategy: 組合策略回測結果物件，包含:
+        MultiStrategy: 組合策略回測結果物件，包含:
 
             - summary: 策略績效摘要，包含總報酬率、年化報酬率、最大回撤等重要指標
             - position_info: 持股資訊，包含每日持股數量、換手率、個股權重等資訊
@@ -541,19 +541,19 @@ def meta_backtesting(
         strategy2 = backtesting(data2, rebalance='M')
 
         # 組合策略回測(等權重)
-        meta = meta_backtesting({
+        meta = multi_backtesting({
             'strategy1': strategy1,
             'strategy2': strategy2
         })
 
         # 組合策略回測(自訂權重)
-        meta = meta_backtesting({
+        meta = multi_backtesting({
             'strategy1': (strategy1, 0.7),
             'strategy2': (strategy2, 0.3)
         })
 
         # 組合策略回測(每月再平衡)
-        meta = meta_backtesting({
+        meta = multi_backtesting({
             'strategy1': (strategy1, 0.7),
             'strategy2': (strategy2, 0.3)
         }, rebalance='M')
@@ -615,10 +615,10 @@ def meta_backtesting(
     first_strategy = list(strategies.values())[0][0]
     return_df = first_strategy.return_df.loc[common_index, common_columns]
     
-    return MetaStrategy(strategies, rebalance=rebalance, benchmark=benchmark, return_df=return_df, daily_return=daily_return)
+    return MultiStrategy(strategies, rebalance=rebalance, benchmark=benchmark, return_df=return_df, daily_return=daily_return)
 
-def quick_meta_backtesting(strategies:dict[str, Union['Strategy', Tuple['Strategy', float]]], 
-    rebalance:Literal['MR', 'QR', 'W', 'M', 'Q', 'Y']=None)-> 'MetaStrategy':
+def simple_multi_backtesting(strategies:dict[str, Union['Strategy', Tuple['Strategy', float]]], 
+    rebalance:Literal['MR', 'QR', 'W', 'M', 'Q', 'Y']=None)-> 'MultiStrategy':
     
     if all(isinstance(v, Strategy) for v in strategies.values()):
         strategies = {k: (v, 1/len(strategies)) for k, v in strategies.items()}
@@ -1990,7 +1990,7 @@ class Strategy(PlotMaster):
         return pn.Tabs(*tab_items)
 
 
-class MetaStrategy(Strategy):
+class MultiStrategy(Strategy):
     """
     多重策略組合類別，用於組合多個策略並提供分析功能。
 
@@ -2012,7 +2012,7 @@ class MetaStrategy(Strategy):
         daily_return (Union[pd.Series, pd.DataFrame]): 策略每日報酬率序列
 
     Returns:
-        MetaStrategy: 多重策略組合物件，包含:
+        MultiStrategy: 多重策略組合物件，包含:
 
             - summary: 策略績效摘要，包含總報酬率、年化報酬率、最大回撤等重要指標
             - position_info: 持股資訊，包含每日持股數量、換手率、個股權重等資訊
@@ -2030,19 +2030,19 @@ class MetaStrategy(Strategy):
         strategy2 = backtesting(data2, rebalance='M')
 
         # 組合策略回測(等權重)
-        meta = meta_backtesting({
+        meta = multi_backtesting({
             'strategy1': strategy1,
             'strategy2': strategy2
         })
 
         # 組合策略回測(自訂權重)
-        meta = meta_backtesting({
+        meta = multi_backtesting({
             'strategy1': (strategy1, 0.7),
             'strategy2': (strategy2, 0.3)
         })
 
         # 組合策略回測(每月再平衡)
-        meta = meta_backtesting({
+        meta = multi_backtesting({
             'strategy1': (strategy1, 0.7),
             'strategy2': (strategy2, 0.3)
         }, rebalance='M')
