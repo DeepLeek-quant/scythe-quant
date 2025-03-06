@@ -202,7 +202,7 @@ class DataBankInfra:
                 results.append(key)
         return results
 
-    def list_columns(self, dataset:str):
+    def list_columns(self, dataset:str, keyword:str=None):
         """取得資料集中所有欄位名稱
 
         Args:
@@ -223,6 +223,10 @@ class DataBankInfra:
             ['收盤價', '開盤價', '最高價', '最低價', ...]
             ```
         """
+        
+        if keyword is not None:
+            return [i for i in self.list_columns(dataset) if keyword in i]
+        
         data_path = f'{self._get_path(dataset)}/'
         file_list = [path for path in os.listdir(data_path) if path !='.DS_Store']
         if len(file_list)>1:
@@ -1359,7 +1363,7 @@ class ProcessedDataHandler(DataBankInfra):
         # self.processed_datasets.update(self.factors_datasets)
     
     # fundamental
-    def _update_fin_data_chng(self, columns:list=['營業收入', '稅後淨利', '預收款_流動', '營運產生現金流量', '資產總計','每股盈餘',]):
+    def _update_fin_data_chng(self, columns:list=['營業收入', '稅後淨利', '預收款_流動', '營運產生現金流量', '資產總計','每股盈餘','員工人數']):
         """計算財務資料變化率
 
         計算財務資料的移動平均與變化率，包含季增率(qoq)與年增率(yoy)。
@@ -1411,7 +1415,7 @@ class ProcessedDataHandler(DataBankInfra):
         
         return self.write_dataset(dataset='fin_data_chng', df=df)
     
-    def _update_fin_ratio_diff(self, columns=['營業毛利率', '營業利益率', '稅前淨利率', '稅後淨利率',]):
+    def _update_fin_ratio_diff(self, columns=['營業毛利率', '營業利益率', '稅前淨利率', '稅後淨利率','常續ROE']):
         """計算財務比率的移動平均與差分
 
         計算財務比率的移動平均與差分，包含季差(qoq_diff)與年差(yoy_diff)。
@@ -1444,19 +1448,19 @@ class ProcessedDataHandler(DataBankInfra):
         """
         df = self.read_dataset('fin_data', columns=['date', 'release_date', 'stock_id', *columns, 't_date'])
         
+        # calculate rolling average
         for col in columns:
-            # calculate rolling average
             rolling_avg = {'4q':4, '8q':8, '12q':12}
             for k, v in rolling_avg.items():
                 df[f'{col}_{k}_avg'] = df.groupby(['stock_id'])[col].transform(lambda d: d.rolling(window=v).mean())
             
-            # calculate changes
-            changes = {'qoq_diff':1, 'yoy_diff':4}
-            for col in [col for col in df.columns if any(col.startswith(c) for c in columns)]:
-                for k, v in changes.items():
-                    # Calculate all diffs at once and join to avoid fragmentation
-                    diff_df = df.groupby(['stock_id'])[col].diff(periods=v).round(3)
-                    df = df.assign(**{f'{col}_{k}': diff_df})
+        # calculate changes
+        changes = {'qoq_diff':1, 'yoy_diff':4}
+        for col in [col for col in df.columns if any(col.startswith(c) for c in columns)]:
+            for k, v in changes.items():
+                # Calculate all diffs at once and join to avoid fragmentation
+                diff_df = df.groupby(['stock_id'])[col].diff(periods=v).round(3)
+                df = df.assign(**{f'{col}_{k}': diff_df})
         
         df = df[['date', 'release_date', 'stock_id'] + [col for col in df.columns if any(col.startswith(c) for c in columns)] + ['t_date']]
         

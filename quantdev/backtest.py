@@ -142,6 +142,7 @@ def get_data(item:Union[str, pd.DataFrame, Tuple[str, str]], universe:pd.DataFra
     data = pd.merge_asof(
         _t_date[_t_date['t_date']<=pd.Timestamp.today() + pd.DateOffset(days=5)], 
         raw_data\
+            .query('stock_id.str.match("^[0-9]")')\
             .sort_values(by='t_date')\
             .drop_duplicates(subset=['t_date', 'stock_id'], keep='last')\
             .set_index(['t_date', 'stock_id'])\
@@ -202,7 +203,7 @@ def get_factor(item:Union[str, pd.DataFrame, Tuple[str, str]], asc:bool=True, un
         data = item[universe] if universe is not None else item
         return data.rank(axis=1, pct=True, ascending=asc)
 
-def _get_rebalance_date(rebalance:Literal['MR', 'QR', 'W', 'M', 'Q', 'Y'], end_date:Union[pd.Timestamp, str]=None):
+def _get_rebalance_date(rebalance:Literal['D', 'MR', 'QR', 'W', 'M', 'Q', 'Y'], end_date:Union[pd.Timestamp, str]=None):
     """取得再平衡日期列表
 
     Args:
@@ -235,11 +236,20 @@ def _get_rebalance_date(rebalance:Literal['MR', 'QR', 'W', 'M', 'Q', 'Y'], end_d
         - 結束日期若為 None 則為今日加5天
         - 所有再平衡日期都會對應到實際交易日
     """
+    
     # dates
     start_date = _t_date['t_date'].min()
     end_date = pd.Timestamp.today() + pd.DateOffset(days=5) if end_date is None else pd.to_datetime(end_date)
     
-    if rebalance == 'MR':
+
+    if rebalance == 'D':
+        return _t_date[(_t_date['t_date'] <= end_date)]['t_date'].to_list()
+    elif rebalance.startswith('W'):
+        if len(rebalance.split('-')) == 1:
+            r_date = pd.DataFrame(pd.date_range(start=start_date, end=end_date, freq='W-MON'), columns=['r_date'])
+        else:
+            r_date = pd.DataFrame(pd.date_range(start=start_date, end=end_date, freq=rebalance), columns=['r_date'])
+    elif rebalance.startswith('MR'):
         date_list = [
             pd.to_datetime(f'{year}-{month:02d}-10') + pd.DateOffset(days=1)
             for year in range(start_date.year, end_date.year + 1)
@@ -247,7 +257,7 @@ def _get_rebalance_date(rebalance:Literal['MR', 'QR', 'W', 'M', 'Q', 'Y'], end_d
             if start_date <= pd.to_datetime(f'{year}-{month:02d}-10') + pd.DateOffset(days=1) <= end_date
         ]
         r_date = pd.DataFrame(date_list, columns=['r_date'])
-    elif rebalance == 'QR':
+    elif rebalance.startswith('QR'):
         qr_dates = ['03-31', '05-15', '08-14', '11-14']
         date_list = [
             pd.to_datetime(f'{year}-{md}') + pd.DateOffset(days=1)
@@ -258,8 +268,6 @@ def _get_rebalance_date(rebalance:Literal['MR', 'QR', 'W', 'M', 'Q', 'Y'], end_d
         r_date = pd.DataFrame(date_list, columns=['r_date'])   
     elif rebalance == 'M':
         r_date = pd.DataFrame(pd.date_range(start=start_date, end=end_date, freq='MS'), columns=['r_date'])
-    elif rebalance == 'W':
-        r_date = pd.DataFrame(pd.date_range(start=start_date, end=end_date, freq='W-MON'), columns=['r_date'])
     elif rebalance == 'Q': 
         r_date = pd.DataFrame(pd.date_range(start=start_date, end=end_date, freq='QS'), columns=['r_date'])    
     elif rebalance == 'Y':
@@ -1387,8 +1395,12 @@ class PlotMaster(ABC):
 
         # distributions
         def plot_distributions(item, x):
+            jitter = 1e-10
+            win_data = x*win[item] + jitter
+            lose_data = x*lose[item] + jitter
+            
             distplot=ff.create_distplot(
-                [x*win[item], x*lose[item]], 
+                [win_data, lose_data], 
                 ['win', 'lose'], 
                 colors=['#636EFA', '#EF553B'],
                 bin_size=0.01, 
@@ -1876,7 +1888,7 @@ class Strategy(PlotMaster):
         # display
         display(self.summary)
 
-        logging.info(f"Created Strategy with AAR: {self.summary['Strategy']['Annual return']}; MDD: {self.summary['Strategy']['Max drawdown']}; Avol: {self.summary['Strategy']['Annual volatility']}")
+        logging.info(f"Created Strategy with AAR: {self.summary['Strategy']['annual_return']}; MDD: {self.summary['Strategy']['mdd']}; Avol: {self.summary['Strategy']['annual_vol']}")
 
     def _generate_summary(self) -> pd.DataFrame:
         
@@ -1978,6 +1990,7 @@ class Strategy(PlotMaster):
             'Return heatmap': self._plot_return_heatmap,
             'Liquidity': self._plot_liquidity,
             'MAE/MFE': self._plot_maemfe,
+            # 'Optimal Params': self._plot_optimal_params,
         }
 
         figs = {
@@ -2320,6 +2333,23 @@ class FactorAnalysis(PlotMaster):
         return fig
 
     def _generate_summary(self):
+        self.summary_dfs = self._generate_summary_dfs()
+        
+        html = """
+        <div style="display: flex; gap: 5px;row-gap: 10px;">
+            <div>{}<br>{}</div>
+            <div>{}</div>
+            <div>{}</div>
+        </div>
+        """.format(
+            self.summary_dfs['summary_metrics'].to_html(), 
+            self.summary_dfs['ic'].to_html(), 
+            self.summary_dfs['quantiles'].to_html(), 
+            self.summary_dfs['styles'].to_html(),
+        )
+        return HTML(html)
+    
+    def _generate_summary_dfs(self):
         # Factor Returns
         returns = pd.concat([self.ls_returns.rename('f_return'), self.benchmark_returns], axis=1)\
             .dropna()\
@@ -2361,20 +2391,13 @@ class FactorAnalysis(PlotMaster):
             'positive ratio': lambda x: f'{len(x[x>0])/len(x):.2%}',
         }).to_frame('Information Coefficient')
 
-        html = """
-        <div style="display: flex; gap: 5px;row-gap: 10px;">
-            <div>{}<br>{}</div>
-            <div>{}</div>
-            <div>{}</div>
-        </div>
-        """.format(
-            summary_metrics.to_html(), 
-            ic.to_html(), 
-            quantiles.to_html(), 
-            styles.to_html(),
-        )
-        return HTML(html)
-    
+        return {
+            'summary_metrics': summary_metrics,
+            'quantiles': quantiles,
+            'styles': styles,
+            'ic': ic,
+        }
+
     def _generate_report(self):
         
         # main plots
