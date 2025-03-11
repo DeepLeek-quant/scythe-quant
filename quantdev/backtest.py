@@ -1964,7 +1964,9 @@ class Strategy(PlotMaster):
         buy_date = self.buy_list.index[-1]
         try:
             sell_date = next(d for d in rebalance_dates if d > buy_date)
-        except StopIteration:
+        except StopIteration as e:
+            logging.error(e)
+            print(e)
             sell_date = None
         
         # 獲取持倉資訊
