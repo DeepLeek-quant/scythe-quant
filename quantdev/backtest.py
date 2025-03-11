@@ -203,22 +203,52 @@ def get_factor(item:Union[str, pd.DataFrame, Tuple[str, str]], asc:bool=True, un
         data = item[universe] if universe is not None else item
         return data.rank(axis=1, pct=True, ascending=asc)
 
-def calc_release_pct_rebalancing(type_:Literal['MR', 'QR'], pct:int=80):
+def _calc_release_pct_rebalancing(type_:Literal['MR', 'QR'], pct:int=80):
+    """計算財報發布達到特定比例的交易日期列表
+
+    Args:
+        type_ (Literal['MR', 'QR']): 財報類型
+            - MR: 月營收報表
+            - QR: 季財報
+        pct (int, optional): 發布比例門檻. Defaults to 80.
+            例如: pct=80 表示要等到80%的公司都發布財報後的第一個交易日
+
+    Returns:
+        list: 符合條件(達到指定發布比例後的第一個交易日)的交易日期列表
+        
+    Examples:
+        ```python
+        # 取得80%公司發布月營收後的交易日:
+        dates = _calc_release_pct_rebalancing('MR', pct=80)
+
+        # 取得90%公司發布季報後的交易日:
+        dates = _calc_release_pct_rebalancing('QR', pct=90)
+        ```
+
+    Note:
+        - MR (月營收): 檢查1-30天的發布情況
+        - QR (季報): 檢查1-90天的發布情況
+    """
+
     map = {
         'MR': {'dataset': 'monthly_rev','days': range(1, 31)},
         'QR': {'dataset': 'fin_data','days': range(1, 91)}
     }
     
     data = _db.read_dataset(map[type_]['dataset'], columns=['date', 'stock_id', 'release_date'])
+    # Create a MultiIndex for all possible combinations of dates and days
     index = pd.MultiIndex.from_product([
             data['date'].unique(),
             map[type_]['days'],
     ], names=['date', 'day'])
 
+    # Create DataFrame with calculated release dates
+    # For each date, calculate potential release dates by adding days
     result = (pd.DataFrame(index=index)
         .reset_index()\
         .assign(release_date=lambda df: df['date'] + pd.DateOffset(months=1) - pd.DateOffset(days=1) + pd.to_timedelta(df['day'], unit='D')))
     
+    # Calculate cumulative count of companies that have released reports
     cumulative_counts = data\
         .groupby(['date', 'release_date'])\
         .size()\
@@ -228,6 +258,7 @@ def calc_release_pct_rebalancing(type_:Literal['MR', 'QR'], pct:int=80):
         .rename(columns={0: 'release_count'})
     total_count_last_mth = data.groupby('date')['stock_id'].nunique().shift(1).reset_index().rename(columns={'stock_id': 'total_count'})
 
+    # Combine all data and calculate release percentages
     result = result\
         .merge(cumulative_counts, how='left', on=['date', 'release_date'])\
         .merge(total_count_last_mth, how='left', on=['date'])\
@@ -237,6 +268,7 @@ def calc_release_pct_rebalancing(type_:Literal['MR', 'QR'], pct:int=80):
         )[['date', 'release_date', 'release_pct']]
     result = _db._add_trade_date(result)[['date', 't_date', 'release_pct']]
     
+    # Filter and transform the result to get rebalancing dates
     return result\
         [result['release_pct'] >= pct/100]\
         .groupby('date')\
@@ -300,7 +332,7 @@ def _get_rebalance_date(rebalance:Literal['D', 'MR', 'QR', 'W', 'M', 'Q', 'Y'], 
                 if start_date <= pd.to_datetime(f'{year}-{month:02d}-10') + pd.DateOffset(days=1) <= end_date
             ]
         elif (len(rebalance.split('-')) == 2) and (rebalance.split('-')[1].isdigit()):
-            date_list = calc_release_pct_rebalancing(rebalance.split('-')[0], int(rebalance.split('-')[1]))
+            date_list = _calc_release_pct_rebalancing(rebalance.split('-')[0], int(rebalance.split('-')[1]))
         r_date = pd.DataFrame(date_list, columns=['r_date'])
     elif rebalance.startswith('QR'):
         if len(rebalance.split('-')) == 1:
@@ -312,7 +344,7 @@ def _get_rebalance_date(rebalance:Literal['D', 'MR', 'QR', 'W', 'M', 'Q', 'Y'], 
                 if start_date <= pd.to_datetime(f"{year}-{md}") + pd.DateOffset(days=1) <= end_date
             ]
         elif (len(rebalance.split('-')) == 2) and (rebalance.split('-')[1].isdigit()):
-            date_list = calc_release_pct_rebalancing(rebalance.split('-')[0], int(rebalance.split('-')[1]))
+            date_list = _calc_release_pct_rebalancing(rebalance.split('-')[0], int(rebalance.split('-')[1]))
         r_date = pd.DataFrame(date_list, columns=['r_date'])
     elif rebalance == 'M':
         r_date = pd.DataFrame(pd.date_range(start=start_date, end=end_date, freq='MS'), columns=['r_date'])
