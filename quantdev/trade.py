@@ -1,3 +1,52 @@
+"""
+交易
+
+Available Classes:
+    - Portfolio: 整合多個策略，提供投資組合層級的管理功能
+    - SinoPacAccount: 永豐金證券API的包裝類別，提供帳戶管理和交易功能
+    - PortfolioManager: 投資組合管理執行，提供自動化交易和部位管理功能
+
+Examples:
+    建立部位和投資組合：
+    ```python
+    # 建立單一部位
+    position = Position(('2330', 100000))  # 台積電部位，金額10萬元
+
+    建立投資組合，可以是以下兩種格式之一：
+
+    1. {策略名稱: ([股票代號列表], 投資金額)}
+    2. {策略名稱: [Position物件列表]}
+    
+    # 使用股票列表和金額建立
+    portfolio = Portfolio({
+        'strategy1': [['2330', '2317'], 100000],
+        'strategy2': [['2308', '2454'], 200000]
+    })
+
+    # 使用Position物件列表建立
+    portfolio = Portfolio({
+        'strategy1': [Position(('2330', 50000)), Position(('2317', 50000))],
+        'strategy2': [Position(('2308', 100000)), Position(('2454', 100000))]
+    })
+    ```
+
+    執行交易：
+    ```python
+    # 初始化API
+    api = SinoPacAccount(key=api_key)
+    
+    # 建立投資組合管理器
+    pm = PortfolioManager(api=api, portfolio=portfolio)
+    
+    # 執行投資組合管理
+    pm.run_portfolio_manager(
+        freq=1,  # 每分鐘更新一次
+        ignore_bank_balance=False,  # 檢查銀行餘額
+        ignore_mkt_open=False  # 檢查市場開盤狀態
+    )
+    ```
+"""
+
 from typing import Literal, Dict, List, Tuple, Union
 from concurrent.futures import ThreadPoolExecutor
 from fugle_marketdata import RestClient
@@ -778,7 +827,7 @@ class PortfolioManager(Trader):
         super().__init__(api)
         self.json_path = config.pf_path_config['portfolio_path']
         self.actual_portfolio:Portfolio = None
-        if not portfolio:
+        if (not portfolio) or isinstance(portfolio, str):
             self.target_portfolio:Portfolio = self.from_json()
         elif isinstance(portfolio, Portfolio):
             self.target_portfolio:Portfolio = portfolio
@@ -885,7 +934,7 @@ class PortfolioManager(Trader):
                 ))
         self.actual_portfolio = Portfolio(actual_portfolio)
     
-    def update(self, strategy:Union[Dict[str, List[Position]], Dict[str, List[Tuple[str, int]]]]):
+    def update(self, strategy:Union[Dict[str, List[Position]], Dict[str, Tuple[List[str], int]]]):
         """更新目標投資組合
 
         更新目標投資組合的部位資料，並同步實際持有部位。
@@ -1016,7 +1065,7 @@ class PortfolioManager(Trader):
 
         1. 取得目前銀行餘額 (bank_balance)
         2. 計算交割金額總和 (settlement)：所有待交割金額的總和
-        3. 計算目標投資組合所需金額 (portfolio_money)：
+        3. 計算未成交目標投資組合所需金額 (portfolio_money)：
            - 計算目標投資組合與實際投資組合的差額 (target - actual)
            - 加總所有部位的買入金額
         4. 檢查可用金額是否足夠：
@@ -1032,7 +1081,8 @@ class PortfolioManager(Trader):
             portfolio_money = sum([int(pos.data['buy_money']) for pos_list in (self.target_portfolio - self.actual_portfolio).data.values() for pos in pos_list])
             
             return (bank_balance + settlement - portfolio_money) >= 0
-        except:
+        except Exception as e:
+            print(e)
             return True
     
     # trade
@@ -1143,9 +1193,11 @@ class PortfolioManager(Trader):
                 self.to_json()
                 break
 
-            # cancel all orders
+            # cancel all outstanding orders
             for order in self.list_orders():
                 self.update_status()
+                if order['status']['status'] in ['Filled', 'Cancelled', 'Failed']:
+                    continue
                 self.cancel_order(order)
 
             # excecute portfolio
