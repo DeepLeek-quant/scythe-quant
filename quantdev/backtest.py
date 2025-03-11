@@ -203,6 +203,48 @@ def get_factor(item:Union[str, pd.DataFrame, Tuple[str, str]], asc:bool=True, un
         data = item[universe] if universe is not None else item
         return data.rank(axis=1, pct=True, ascending=asc)
 
+def calc_release_pct_rebalancing(type_:Literal['MR', 'QR'], pct:int=80):
+    map = {
+        'MR': {'dataset': 'monthly_rev','days': range(1, 31)},
+        'QR': {'dataset': 'fin_data','days': range(1, 91)}
+    }
+    
+    data = _db.read_dataset(map[type_]['dataset'], columns=['date', 'stock_id', 'release_date'])
+    index = pd.MultiIndex.from_product([
+            data['date'].unique(),
+            map[type_]['days'],
+    ], names=['date', 'day'])
+
+    result = (pd.DataFrame(index=index)
+        .reset_index()\
+        .assign(release_date=lambda df: df['date'] + pd.DateOffset(months=1) - pd.DateOffset(days=1) + pd.to_timedelta(df['day'], unit='D')))
+    
+    cumulative_counts = data\
+        .groupby(['date', 'release_date'])\
+        .size()\
+        .groupby('date')\
+        .cumsum()\
+        .reset_index()\
+        .rename(columns={0: 'release_count'})
+    total_count_last_mth = data.groupby('date')['stock_id'].nunique().shift(1).reset_index().rename(columns={'stock_id': 'total_count'})
+
+    result = result\
+        .merge(cumulative_counts, how='left', on=['date', 'release_date'])\
+        .merge(total_count_last_mth, how='left', on=['date'])\
+        .assign(
+            release_count=lambda df: df.groupby('date')['release_count'].ffill(),
+            release_pct = lambda df: df['release_count'] / df['total_count']
+        )[['date', 'release_date', 'release_pct']]
+    result = _db._add_trade_date(result)[['date', 't_date', 'release_pct']]
+    
+    return result\
+        [result['release_pct'] >= pct/100]\
+        .groupby('date')\
+        .first()\
+        .reset_index()\
+        ['t_date']\
+        .tolist()
+
 def _get_rebalance_date(rebalance:Literal['D', 'MR', 'QR', 'W', 'M', 'Q', 'Y'], end_date:Union[pd.Timestamp, str]=None):
     """取得再平衡日期列表
 
@@ -250,22 +292,28 @@ def _get_rebalance_date(rebalance:Literal['D', 'MR', 'QR', 'W', 'M', 'Q', 'Y'], 
         else:
             r_date = pd.DataFrame(pd.date_range(start=start_date, end=end_date, freq=rebalance), columns=['r_date'])
     elif rebalance.startswith('MR'):
-        date_list = [
-            pd.to_datetime(f'{year}-{month:02d}-10') + pd.DateOffset(days=1)
-            for year in range(start_date.year, end_date.year + 1)
-            for month in range(1, 13)
-            if start_date <= pd.to_datetime(f'{year}-{month:02d}-10') + pd.DateOffset(days=1) <= end_date
-        ]
+        if len(rebalance.split('-')) == 1:
+            date_list = [
+                pd.to_datetime(f'{year}-{month:02d}-10') + pd.DateOffset(days=1)
+                for year in range(start_date.year, end_date.year + 1)
+                for month in range(1, 13)
+                if start_date <= pd.to_datetime(f'{year}-{month:02d}-10') + pd.DateOffset(days=1) <= end_date
+            ]
+        elif (len(rebalance.split('-')) == 2) and (rebalance.split('-')[1].isdigit()):
+            date_list = calc_release_pct_rebalancing(rebalance.split('-')[0], int(rebalance.split('-')[1]))
         r_date = pd.DataFrame(date_list, columns=['r_date'])
     elif rebalance.startswith('QR'):
-        qr_dates = ['03-31', '05-15', '08-14', '11-14']
-        date_list = [
-            pd.to_datetime(f'{year}-{md}') + pd.DateOffset(days=1)
-            for year in range(start_date.year, end_date.year + 1)
-            for md in qr_dates
-            if start_date <= pd.to_datetime(f"{year}-{md}") + pd.DateOffset(days=1) <= end_date
-        ]
-        r_date = pd.DataFrame(date_list, columns=['r_date'])   
+        if len(rebalance.split('-')) == 1:
+            qr_dates = ['03-31', '05-15', '08-14', '11-14']
+            date_list = [
+                pd.to_datetime(f'{year}-{md}') + pd.DateOffset(days=1)
+                for year in range(start_date.year, end_date.year + 1)
+                for md in qr_dates
+                if start_date <= pd.to_datetime(f"{year}-{md}") + pd.DateOffset(days=1) <= end_date
+            ]
+        elif (len(rebalance.split('-')) == 2) and (rebalance.split('-')[1].isdigit()):
+            date_list = calc_release_pct_rebalancing(rebalance.split('-')[0], int(rebalance.split('-')[1]))
+        r_date = pd.DataFrame(date_list, columns=['r_date'])
     elif rebalance == 'M':
         r_date = pd.DataFrame(pd.date_range(start=start_date, end=end_date, freq='MS'), columns=['r_date'])
     elif rebalance == 'Q': 
@@ -1914,7 +1962,10 @@ class Strategy(PlotMaster):
         # 獲取買入和賣出日期
         rebalance_dates = _get_rebalance_date(self.rebalance, end_date=_t_date['t_date'].max())
         buy_date = self.buy_list.index[-1]
-        sell_date = next(d for d in rebalance_dates if d > buy_date)
+        try:
+            sell_date = next(d for d in rebalance_dates if d > buy_date)
+        except StopIteration:
+            sell_date = None
         
         # 獲取持倉資訊
         position_info = self.buy_list.iloc[-1, :]
