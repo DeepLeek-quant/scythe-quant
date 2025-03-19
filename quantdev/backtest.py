@@ -82,12 +82,13 @@ pd.set_option('future.no_silent_downcasting', True)
 _db = Databank()
 _t_date = _db.read_dataset('mkt_calendar', columns=['date'], filters=[('休市原因中文說明(人工建置)','=','')]).rename(columns={'date':'t_date'})
 
-def get_data(item:Union[str, pd.DataFrame, Tuple[str, str]], universe:pd.DataFrame=None)-> pd.DataFrame:
+def get_data(item:Union[str, pd.DataFrame, Tuple[str, str]], universe:pd.DataFrame=None, ffill:int=240,)-> pd.DataFrame:
     """取得股票資料並轉換為時間序列格式
 
     Args:
         item (Union[str, pd.DataFrame, Tuple[str, str]]): 資料欄位名稱或已有的 DataFrame，或是 (欄位名稱, 資料集名稱) 的 tuple
         universe (pd.DataFrame, optional): 股票池，用於篩選要保留的股票
+        ffill (int, optional): 向前填補的交易日數，預設為240天
 
     Returns:
         pd.DataFrame: 轉換後的時間序列資料，index 為日期，columns 為股票代號
@@ -151,7 +152,7 @@ def get_data(item:Union[str, pd.DataFrame, Tuple[str, str]], universe:pd.DataFra
         on='t_date', 
         direction='backward'
         )\
-        .ffill(limit=240)\
+        .ffill(limit=ffill)\
         .set_index(['t_date'])\
         .dropna(axis=1, how='all')
     return data[universe] if universe is not None else data
