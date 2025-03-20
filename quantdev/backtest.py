@@ -157,7 +157,52 @@ def get_data(item:Union[str, pd.DataFrame, Tuple[str, str]], universe:pd.DataFra
         .dropna(axis=1, how='all')
     return data[universe] if universe is not None else data
 
-def get_factor(item:Union[str, pd.DataFrame, Tuple[str, str]], asc:bool=True, universe:pd.DataFrame=None)-> pd.DataFrame:
+def get_factor(
+    item:Union[str, pd.DataFrame, Tuple[str, str]], 
+    method:Literal['Z']='Z', 
+    remove_outlier:Literal['SD', 'IQR', 'WS', 'MAD', None]='MAD', 
+    params:dict={'SD': 3, 'IQR': 1.5, 'WS': 0.05, 'MAD': 3},
+    universe:pd.DataFrame=None,
+)-> pd.DataFrame:
+    
+    if isinstance(item, str) or isinstance(item, tuple):
+        data = get_data(item)
+    elif isinstance(item, pd.DataFrame):
+        data = item
+    data = data[universe] if universe is not None else data
+
+    # remove outlier
+    if remove_outlier !=None:
+        if remove_outlier=='SD':
+            mean = data.mean(axis=1)
+            sd = data.std(axis=1)
+            sd_threshold = params['SD']
+            lower_bound, upper_bound = mean-sd_threshold*sd, mean+sd_threshold*sd
+            data = data.where((data.ge(lower_bound, axis=0) & data.le(upper_bound, axis=0)) , np.nan)
+        elif remove_outlier=='IQR':
+            q1, q3 = data.quantile(0.25, axis=1), data.quantile(0.75, axis=1)
+            iqr = q3-q1
+            iqr_threshold = params['IQR']
+            lower_bound, upper_bound = q1-iqr_threshold*iqr, q3+iqr_threshold*iqr
+            data = data.where((data.ge(lower_bound, axis=0) & data.le(upper_bound, axis=0)) , np.nan)
+        elif remove_outlier=='WS':
+            ws_limit = params['WS']
+            lower_bound, upper_bound = data.quantile(ws_limit, axis=1), data.quantile((1-ws_limit), axis=1)
+            data = data.clip(lower=lower_bound, upper=upper_bound, axis=0)
+        elif remove_outlier=='MAD':
+            median = data.median(axis=1)
+            mad = data.sub(median, axis=0).abs().median(axis=1)
+            mad_threshold = params['MAD']
+            lower_bound, upper_bound = median - mad_threshold * 1.4826 * mad, median + mad_threshold * 1.4826 * mad
+            data = data.where((data.ge(lower_bound, axis=0)) & (data.le(upper_bound, axis=0)), np.nan)
+    
+    # z-score standardize
+    if method=='Z':
+        data = data.sub(data.mean(axis=1), axis=0).div(data.std(axis=1), axis=0)
+
+    return data
+
+def get_rank(item:Union[str, pd.DataFrame, Tuple[str, str]], asc:bool=True, universe:pd.DataFrame=None)-> pd.DataFrame:
     """將資料轉換為因子值
 
     Args:
@@ -199,10 +244,13 @@ def get_factor(item:Union[str, pd.DataFrame, Tuple[str, str]], asc:bool=True, un
         - 若有指定 universe，只會保留 universe 內的股票資料
     """
     if isinstance(item, (str, tuple)):
-        return get_factor(get_data(item), asc, universe)
+        return get_rank(get_data(item), asc, universe)
     elif isinstance(item, pd.DataFrame):
         data = item[universe] if universe is not None else item
         return data.rank(axis=1, pct=True, ascending=asc)
+
+def combine_factors(factors:list[pd.DataFrame], method:Literal['EW', 'IC', 'IR', 'MAX_ICIR']=None, universe:pd.DataFrame=None)-> pd.DataFrame:
+    pass
 
 def _calc_release_pct_rebalancing(type_:Literal['MR', 'QR'], pct:int=80):
     """計算財報發布達到特定比例的交易日期列表
@@ -363,7 +411,7 @@ def _get_rebalance_date(rebalance:Literal['D', 'MR', 'QR', 'W', 'M', 'Q', 'Y'], 
         direction='forward'
         )['t_date'].to_list()
 
-def _get_portfolio(data:pd.DataFrame, return_df:pd.DataFrame, rebalance:Literal['MR', 'QR', 'W', 'M', 'Q', 'Y']='QR', signal_shift:int=0, hold_period:int=None):
+def _get_portfolio(data:pd.DataFrame, return_df:pd.DataFrame, rebalance:Literal['MR', 'QR', 'W', 'M', 'Q', 'Y']='QR', signal_shift:int=0, hold_period:int=None, weight_limit:float=None):
     """
     將資料轉換為投資組合權重。
 
@@ -373,6 +421,7 @@ def _get_portfolio(data:pd.DataFrame, return_df:pd.DataFrame, rebalance:Literal[
         rebalance (str): 再平衡頻率，可選 'MR'(月營收公布後), 'QR'(財報公布後), 'W'(每週), 'M'(每月), 'Q'(每季), 'Y'(每年)
         signal_shift (int): 訊號延遲天數，用於模擬實際交易延遲
         hold_period (int): 持有期間，若為None則持有至下次再平衡日
+        weight_limit (float): 權重限制，例如0.5代表單個股權重不能超過50%
 
     Returns:
         tuple: 包含以下兩個元素:
@@ -401,6 +450,9 @@ def _get_portfolio(data:pd.DataFrame, return_df:pd.DataFrame, rebalance:Literal[
         .astype(bool)\
         .astype(int)\
         .apply(lambda x: x / x.sum(), axis=1)
+    
+    if weight_limit is not None:
+        portfolio = portfolio.clip(upper=weight_limit)
 
     # shift & hold_period
     portfolio = pd.DataFrame(return_df.index)\
@@ -479,8 +531,8 @@ def _stop_loss_or_profit(buy_list:pd.DataFrame, portfolio_df:pd.DataFrame, retur
 def backtesting(
     data:pd.DataFrame, 
     rebalance:Literal['MR', 'QR', 'W', 'M', 'Q', 'Y']='QR', 
-    signal_shift:int=0, hold_period:int=None, 
-    stop_loss:Union[float, pd.DataFrame]=None, stop_profit:Union[float, pd.DataFrame]=None, stop_at:Literal['intraday', 'next_day']='next_day',
+    signal_shift:int=0, hold_period:int=None, weight_limit:float=None,
+    stop_loss:Union[float, pd.DataFrame]=None, stop_profit:Union[float, pd.DataFrame]=None, stop_at:Literal['intraday', 'next_day']='next_day', 
     start:Union[int, str]=None, end:Union[int, str]=None, 
     benchmark:Union[str, list[str]]='0050')-> 'Strategy':
     """
@@ -491,13 +543,13 @@ def backtesting(
         rebalance (str): 再平衡頻率，可選 'MR'(月營收公布後), 'QR'(財報公布後), 'W'(每週), 'M'(每月), 'Q'(每季), 'Y'(每年)
         signal_shift (int): 訊號延遲天數，用於模擬實際交易延遲
         hold_period (int): 持有期間，若為None則持有至下次再平衡日
+        weight_limit (float): 權重限制，例如0.5代表單個股權重不能超過50%
         stop_loss (float | pd.DataFrame): 停損點，例如-0.1代表跌幅超過10%時停損
         stop_profit (float | pd.DataFrame): 停利點，例如0.2代表漲幅超過20%時停利
         stop_at (str): 停損停利執行時點，可選 'intraday'(當日) 或 'next_day'(次日)
         start (int | str): 回測起始日期
         end (int | str): 回測結束日期
         benchmark (str | list[str]): 基準指標，可為單一或多個股票代碼
-
     Returns:
         Strategy: 回測結果物件，包含:
 
@@ -534,7 +586,7 @@ def backtesting(
     #     return_df = return_df.shift(1)
     
     # get data
-    buy_list, portfolio_df = _get_portfolio(data, return_df, rebalance, signal_shift, hold_period)
+    buy_list, portfolio_df = _get_portfolio(data, return_df, rebalance, signal_shift, hold_period, weight_limit)
     
     # stop loss or profit
     if stop_loss is not None:
@@ -1958,7 +2010,7 @@ class Strategy(PlotMaster):
         # analysis
         self.daily_return = backtest_df.sum(axis=1)
         self.c_return = (1 + self.daily_return).cumprod() - 1
-        self.maemfe = calc_maemfe(self.buy_list, self.portfolio_df, self.return_df)
+        # self.maemfe = calc_maemfe(self.buy_list, self.portfolio_df, self.return_df)
         self.betas = calc_portfolio_style(self.daily_return, total=True)
         
         # results
@@ -2075,7 +2127,7 @@ class Strategy(PlotMaster):
             'Style analysis': self._plot_style_analysis,
             'Return heatmap': self._plot_return_heatmap,
             'Liquidity': self._plot_liquidity,
-            'MAE/MFE': self._plot_maemfe,
+            # 'MAE/MFE': self._plot_maemfe,
             # 'Optimal Params': self._plot_optimal_params,
         }
 
