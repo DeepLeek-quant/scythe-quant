@@ -78,10 +78,6 @@ from .analysis import *
 
 pd.set_option('future.no_silent_downcasting', True)
 
-# databank
-_db = Databank()
-_t_date = _db.read_dataset('mkt_calendar', columns=['date'], filters=[('休市原因中文說明(人工建置)','=','')]).rename(columns={'date':'t_date'})
-
 def get_data(item:Union[str, pd.DataFrame, Tuple[str, str]], universe:pd.DataFrame=None, ffill:int=240,)-> pd.DataFrame:
     """取得股票資料並轉換為時間序列格式
 
@@ -101,7 +97,7 @@ def get_data(item:Union[str, pd.DataFrame, Tuple[str, str]], universe:pd.DataFra
 
         使用已有的 DataFrame:
         ```python
-        df = _db.read_dataset('stock_trading_data', filter_date='t_date', start='2023-01-01', end='2023-01-02', columns=['t_date', 'stock_id', '收盤價'])
+        df = Databank().read_dataset('stock_trading_data', filter_date='t_date', start='2023-01-01', end='2023-01-02', columns=['t_date', 'stock_id', '收盤價'])
         close = get_data(df)
         ```
 
@@ -126,13 +122,13 @@ def get_data(item:Union[str, pd.DataFrame, Tuple[str, str]], universe:pd.DataFra
     """
 
     if isinstance(item, str):
-        raw_data = _db.read_dataset(
-            dataset=_db.find_dataset(item), 
+        raw_data = Databank().read_dataset(
+            dataset=Databank().find_dataset(item), 
             filter_date='t_date', 
             columns=['t_date', 'stock_id', item],
             )
     elif isinstance(item, tuple):
-        raw_data = _db.read_dataset(
+        raw_data = Databank().read_dataset(
             dataset=item[1],
             filter_date='t_date',
             columns=['t_date', 'stock_id', item[0]],
@@ -140,6 +136,7 @@ def get_data(item:Union[str, pd.DataFrame, Tuple[str, str]], universe:pd.DataFra
     elif isinstance(item, pd.DataFrame):
         raw_data = item
 
+    _t_date = Databank().read_dataset('mkt_calendar', columns=['date'], filters=[('休市原因中文說明(人工建置)','=','')]).rename(columns={'date':'t_date'})
     data = pd.merge_asof(
         _t_date[_t_date['t_date']<=pd.Timestamp.today() + pd.DateOffset(days=5)], 
         raw_data\
@@ -155,20 +152,18 @@ def get_data(item:Union[str, pd.DataFrame, Tuple[str, str]], universe:pd.DataFra
         .ffill(limit=ffill)\
         .set_index(['t_date'])\
         .dropna(axis=1, how='all')
+    
     return data[universe] if universe is not None else data
 
 def get_factor(
-    item:Union[str, pd.DataFrame, Tuple[str, str]], 
+    data:pd.DataFrame, 
     method:Literal['Z']='Z', 
     remove_outlier:Literal['SD', 'IQR', 'WS', 'MAD', None]='MAD', 
     params:dict={'SD': 3, 'IQR': 1.5, 'WS': 0.05, 'MAD': 3},
     universe:pd.DataFrame=None,
 )-> pd.DataFrame:
-    
-    if isinstance(item, str) or isinstance(item, tuple):
-        data = get_data(item)
-    elif isinstance(item, pd.DataFrame):
-        data = item
+
+    data = data.loc[:, data.columns.str.match("^[0-9]")]
     data = data[universe] if universe is not None else data
 
     # remove outlier
@@ -202,7 +197,7 @@ def get_factor(
 
     return data
 
-def get_rank(item:Union[str, pd.DataFrame, Tuple[str, str]], asc:bool=True, universe:pd.DataFrame=None)-> pd.DataFrame:
+def get_rank(data:pd.DataFrame, asc:bool=True, universe:pd.DataFrame=None)-> pd.DataFrame:
     """將資料轉換為因子值
 
     Args:
@@ -243,14 +238,9 @@ def get_rank(item:Union[str, pd.DataFrame, Tuple[str, str]], asc:bool=True, univ
         - 輸出的因子值為橫截面標準化後的百分比排名
         - 若有指定 universe，只會保留 universe 內的股票資料
     """
-    if isinstance(item, (str, tuple)):
-        return get_rank(get_data(item), asc, universe)
-    elif isinstance(item, pd.DataFrame):
-        data = item[universe] if universe is not None else item
-        return data.rank(axis=1, pct=True, ascending=asc)
-
-def combine_factors(factors:list[pd.DataFrame], method:Literal['EW', 'IC', 'IR', 'MAX_ICIR']=None, universe:pd.DataFrame=None)-> pd.DataFrame:
-    pass
+    
+    data = data[universe] if universe is not None else data
+    return data.rank(axis=1, pct=True, ascending=asc)
 
 def _calc_release_pct_rebalancing(type_:Literal['MR', 'QR'], pct:int=80):
     """計算財報發布達到特定比例的交易日期列表
@@ -284,7 +274,7 @@ def _calc_release_pct_rebalancing(type_:Literal['MR', 'QR'], pct:int=80):
         'QR': {'dataset': 'fin_data','days': range(1, 91)}
     }
     
-    data = _db.read_dataset(map[type_]['dataset'], columns=['date', 'stock_id', 'release_date'])
+    data = Databank().read_dataset(map[type_]['dataset'], columns=['date', 'stock_id', 'release_date'])
     # Create a MultiIndex for all possible combinations of dates and days
     index = pd.MultiIndex.from_product([
             data['date'].unique(),
@@ -315,7 +305,7 @@ def _calc_release_pct_rebalancing(type_:Literal['MR', 'QR'], pct:int=80):
             release_count=lambda df: df.groupby('date')['release_count'].ffill(),
             release_pct = lambda df: df['release_count'] / df['total_count']
         )[['date', 'release_date', 'release_pct']]
-    result = _db._add_trade_date(result)[['date', 't_date', 'release_pct']]
+    result = Databank()._add_trade_date(result)[['date', 't_date', 'release_pct']]
     
     # Filter and transform the result to get rebalancing dates
     return result\
@@ -361,6 +351,7 @@ def _get_rebalance_date(rebalance:Literal['D', 'MR', 'QR', 'W', 'M', 'Q', 'Y'], 
     """
     
     # dates
+    _t_date = Databank().read_dataset('mkt_calendar', columns=['date'], filters=[('休市原因中文說明(人工建置)','=','')]).rename(columns={'date':'t_date'})
     start_date = _t_date['t_date'].min()
     end_date = pd.Timestamp.today() + pd.DateOffset(days=5) if end_date is None else pd.to_datetime(end_date)
     
@@ -411,13 +402,13 @@ def _get_rebalance_date(rebalance:Literal['D', 'MR', 'QR', 'W', 'M', 'Q', 'Y'], 
         direction='forward'
         )['t_date'].to_list()
 
-def _get_portfolio(data:pd.DataFrame, return_df:pd.DataFrame, rebalance:Literal['MR', 'QR', 'W', 'M', 'Q', 'Y']='QR', signal_shift:int=0, hold_period:int=None, weight_limit:float=None):
+def _get_portfolio(data:pd.DataFrame, exp_returns:pd.DataFrame, rebalance:Literal['MR', 'QR', 'W', 'M', 'Q', 'Y']='QR', signal_shift:int=0, hold_period:int=None, weight_limit:float=None):
     """
     將資料轉換為投資組合權重。
 
     Args:
         data (pd.DataFrame): 選股條件矩陣，index為日期，columns為股票代碼
-        return_df (pd.DataFrame): 股票報酬率矩陣，index為日期，columns為股票代碼
+        exp_returns (pd.DataFrame): 股票報酬率矩陣，index為日期，columns為股票代碼
         rebalance (str): 再平衡頻率，可選 'MR'(月營收公布後), 'QR'(財報公布後), 'W'(每週), 'M'(每月), 'Q'(每季), 'Y'(每年)
         signal_shift (int): 訊號延遲天數，用於模擬實際交易延遲
         hold_period (int): 持有期間，若為None則持有至下次再平衡日
@@ -431,7 +422,7 @@ def _get_portfolio(data:pd.DataFrame, return_df:pd.DataFrame, rebalance:Literal[
     Examples:
         取得每月第一個交易日再平衡、訊號延遲1天、持有20天的投資組合:
         ```python
-        buy_list, portfolio = _get_portfolio(data, return_df, rebalance='M', signal_shift=1, hold_period=20)
+        buy_list, portfolio = _get_portfolio(data, exp_returns, rebalance='M', signal_shift=1, hold_period=20)
         ```
 
     Note:
@@ -455,7 +446,7 @@ def _get_portfolio(data:pd.DataFrame, return_df:pd.DataFrame, rebalance:Literal[
         portfolio = portfolio.clip(upper=weight_limit)
 
     # shift & hold_period
-    portfolio = pd.DataFrame(return_df.index)\
+    portfolio = pd.DataFrame(exp_returns.index)\
         .merge(portfolio, on='t_date', how='left')\
         .set_index('t_date')\
         .shift(signal_shift)\
@@ -463,9 +454,9 @@ def _get_portfolio(data:pd.DataFrame, return_df:pd.DataFrame, rebalance:Literal[
         .dropna(how='all')
     return buy_list, portfolio
 
-def _stop_loss_or_profit(buy_list:pd.DataFrame, portfolio_df:pd.DataFrame, return_df:pd.DataFrame, pct:float, stop_at:Literal['intraday', 'next_day']='intraday'):
+def _stop_loss_or_profit(buy_list:pd.DataFrame, portfolio_df:pd.DataFrame, exp_returns:pd.DataFrame, pct:float, stop_at:Literal['intraday', 'next_day']='intraday'):
     # calculate portfolio returns by multiplying portfolio positions (0/1) with return data
-    portfolio_return = (portfolio_df != 0).astype(int) * return_df[portfolio_df.columns].loc[portfolio_df.index]
+    portfolio_return = (portfolio_df != 0).astype(int) * exp_returns[portfolio_df.columns].loc[portfolio_df.index]
     
     # initialize empty DataFrame to store portfolio after stop loss/profit adjustments
     aftermath_portfolio_df = pd.DataFrame(index=portfolio_return.index, columns=portfolio_return.columns)
@@ -581,25 +572,25 @@ def backtesting(
     """
 
     # return & weight
-    return_df = _db.read_dataset('stock_return', filter_date='t_date', start=start, end=end)
+    exp_returns = Databank().read_dataset('exp_returns', filter_date='t_date', start=start, end=end)
     # if trade_at == 'open':
-    #     return_df = return_df.shift(1)
+    #     exp_returns = exp_returns.shift(1)
     
     # get data
-    buy_list, portfolio_df = _get_portfolio(data, return_df, rebalance, signal_shift, hold_period, weight_limit)
+    buy_list, portfolio_df = _get_portfolio(data, exp_returns, rebalance, signal_shift, hold_period, weight_limit)
     
     # stop loss or profit
     if stop_loss is not None:
-        portfolio_df = _stop_loss_or_profit(buy_list, portfolio_df, return_df, pct=abs(stop_loss)*-1, stop_at=stop_at).infer_objects(copy=False).replace({np.nan: 0})
+        portfolio_df = _stop_loss_or_profit(buy_list, portfolio_df, exp_returns, pct=abs(stop_loss)*-1, stop_at=stop_at).infer_objects(copy=False).replace({np.nan: 0})
     if stop_profit is not None:
-        portfolio_df = _stop_loss_or_profit(buy_list, portfolio_df, return_df, pct=stop_profit, stop_at=stop_at).infer_objects(copy=False).replace({np.nan: 0})
+        portfolio_df = _stop_loss_or_profit(buy_list, portfolio_df, exp_returns, pct=stop_profit, stop_at=stop_at).infer_objects(copy=False).replace({np.nan: 0})
 
     # backtest
-    backtest_df = (return_df * portfolio_df)\
+    backtest_df = (exp_returns * portfolio_df)\
         .dropna(axis=0, how='all')
 
     return Strategy(
-        return_df,
+        exp_returns,
         buy_list,
         portfolio_df,
         backtest_df,
@@ -612,7 +603,7 @@ def simple_backtesting(
     rebalance:Literal['MR', 'QR', 'W', 'M', 'Q', 'Y']='QR', 
     signal_shift:int=0, 
     hold_period:int=None, 
-    return_df:pd.DataFrame=None,
+    exp_returns:pd.DataFrame=None,
     )-> pd.DataFrame:
     """快速回測函數，僅返回投資組合每日報酬率序列。
 
@@ -639,10 +630,10 @@ def simple_backtesting(
         - 投資組合權重為等權重配置
         - 若無持有期間限制，則持有至下次再平衡日
     """
-    if return_df is None:
-        return_df = _db.read_dataset('stock_return', filter_date='t_date')
-    _, portfolio_df = _get_portfolio(data, return_df, rebalance, signal_shift, hold_period)
-    return (return_df * portfolio_df)\
+    if exp_returns is None:
+        exp_returns = Databank().read_dataset('exp_returns', filter_date='t_date')
+    _, portfolio_df = _get_portfolio(data, exp_returns, rebalance, signal_shift, hold_period)
+    return (exp_returns * portfolio_df)\
         .dropna(axis=0, how='all')\
         .sum(axis=1)
 
@@ -744,8 +735,8 @@ def multi_backtesting(
     )).rename_axis('t_date').astype(float)
     
     # return df
-    indices = [v[0].return_df.index for v in strategies.values()]
-    columns = [v[0].return_df.columns for v in strategies.values()]
+    indices = [v[0].exp_returns.index for v in strategies.values()]
+    columns = [v[0].exp_returns.columns for v in strategies.values()]
 
     common_index = indices[0]
     for idx in indices[1:]:
@@ -754,9 +745,9 @@ def multi_backtesting(
     for cols in columns[1:]:
         common_columns = common_columns.intersection(cols)
     first_strategy = list(strategies.values())[0][0]
-    return_df = first_strategy.return_df.loc[common_index, common_columns]
+    exp_returns = first_strategy.exp_returns.loc[common_index, common_columns]
     
-    return MultiStrategy(strategies, rebalance=rebalance, benchmark=benchmark, return_df=return_df, daily_return=daily_return)
+    return MultiStrategy(strategies, rebalance=rebalance, benchmark=benchmark, exp_returns=exp_returns, daily_return=daily_return)
 
 def simple_multi_backtesting(strategies:dict[str, Union['Strategy', Tuple['Strategy', float]]], 
     rebalance:Literal['MR', 'QR', 'W', 'M', 'Q', 'Y']=None)-> 'MultiStrategy':
@@ -849,7 +840,7 @@ class PlotMaster(ABC):
         )
 
         __required_attrs__ = {
-            'return_df': 'pd.DataFrame',
+            'exp_returns': 'pd.DataFrame',
             'buy_list': 'pd.DataFrame',
             'portfolio_df': 'pd.DataFrame', 
             'backtest_df': 'pd.DataFrame',
@@ -950,12 +941,12 @@ class PlotMaster(ABC):
           ]
 
         liquidity_status=pd.merge(
-          _db.read_dataset(
+          Databank().read_dataset(
               'stock_trading_notes', 
               columns=['date', 'stock_id', '是否為注意股票', '是否為處置股票', '是否全額交割', '漲跌停註記'],
               filters=filters
           ),
-          _db.read_dataset(
+          Databank().read_dataset(
               'stock_trading_data',
               columns=['date', 'stock_id', '成交量(千股)', '成交金額(元)'],
               filters=filters,
@@ -972,7 +963,7 @@ class PlotMaster(ABC):
     
     def _calc_relative_return(self, daily_return:pd.DataFrame=None, downtrend_window:int=3):
         daily_rtn = daily_return or self.daily_return
-        benchmark_daily_returns = self.return_df[self.benchmark[0]]
+        benchmark_daily_returns = self.exp_returns[self.benchmark[0]]
         relative_rtn = (1 + daily_rtn - benchmark_daily_returns).cumprod() - 1
 
         relative_rtn_diff = relative_rtn.diff()
@@ -989,7 +980,7 @@ class PlotMaster(ABC):
 
     def _calc_rolling_beta(self, window:int=240, daily_rtn:pd.DataFrame=None, benchmark_daily_returns:pd.DataFrame=None):
         daily_rtn = daily_rtn or self.daily_return
-        benchmark_daily_returns = benchmark_daily_returns or self.return_df[self.benchmark[0]]
+        benchmark_daily_returns = benchmark_daily_returns or self.exp_returns[self.benchmark[0]]
 
         rolling_cov = daily_rtn.rolling(window).cov(benchmark_daily_returns)
         rolling_var = benchmark_daily_returns.rolling(window).var()
@@ -997,7 +988,7 @@ class PlotMaster(ABC):
 
     def _calc_ir(self, window:int=240, daily_rtn:pd.DataFrame=None, benchmark_daily_returns:pd.DataFrame=None):
         daily_rtn = daily_rtn or self.daily_return
-        benchmark_daily_returns = benchmark_daily_returns or self.return_df[self.benchmark[0]]
+        benchmark_daily_returns = benchmark_daily_returns or self.exp_returns[self.benchmark[0]]
 
         excess_return = (1 + daily_rtn - benchmark_daily_returns).rolling(window).apply(np.prod, raw=True) - 1
         tracking_error = excess_return.rolling(window).std()
@@ -1012,9 +1003,9 @@ class PlotMaster(ABC):
         .rename(columns={'level_1':'stock_id', 0:'f_rank'})    
 
         # return rank
-        return_df = self.return_df
-        factor_r =  return_df\
-            .groupby(pd.cut(return_df.index, bins=r_date))\
+        exp_returns = self.exp_returns
+        factor_r =  exp_returns\
+            .groupby(pd.cut(exp_returns.index, bins=r_date))\
             .apply(lambda x: (1 + x).prod() - 1).dropna()\
             .stack()\
             .reset_index()\
@@ -1034,7 +1025,7 @@ class PlotMaster(ABC):
     def _plot_equity_curve(self, c_return:pd.DataFrame=None, bmk_c_return:pd.DataFrame=None, portfolio_df:pd.DataFrame=None):
         
         c_return = c_return or (1 + self.daily_return).cumprod() - 1
-        bmk_c_return = bmk_c_return or (1 + self.return_df[self.benchmark[0]]).cumprod() - 1
+        bmk_c_return = bmk_c_return or (1 + self.exp_returns[self.benchmark[0]]).cumprod() - 1
         portfolio_df = portfolio_df or self.portfolio_df
         
         fig = make_subplots(
@@ -1647,7 +1638,7 @@ class PlotMaster(ABC):
 
         # relative return
         relative_rtn, downtrend_returns = self._calc_relative_return(daily_return=daily_return)
-        bmk_rtn = bmk_equity_df or (1+self.return_df[self.benchmark[0]]).cumprod() - 1
+        bmk_rtn = bmk_equity_df or (1+self.exp_returns[self.benchmark[0]]).cumprod() - 1
 
         strategy_trace = go.Scatter(
             x=relative_rtn.index,
@@ -1703,7 +1694,7 @@ class PlotMaster(ABC):
                 )
 
         # information ratio
-        info_ratio = calc_info_ratio(daily_rtn=self.daily_return, benchmark_daily_returns=self.return_df[self.benchmark[0]])
+        info_ratio = calc_info_ratio(daily_rtn=self.daily_return, benchmark_daily_returns=self.exp_returns[self.benchmark[0]])
 
         info_ratio_trace = go.Scatter(
             x=info_ratio.index,
@@ -1998,9 +1989,9 @@ class Strategy(PlotMaster):
         - report 提供互動式圖表分析工具
     """
     
-    def __init__(self, return_df:pd.DataFrame, buy_list:Union[pd.DataFrame, pd.Series], portfolio_df:Union[pd.DataFrame, pd.Series], backtest_df:Union[pd.DataFrame, pd.Series], benchmark:Union[str, list[str]], rebalance:str):
+    def __init__(self, exp_returns:pd.DataFrame, buy_list:Union[pd.DataFrame, pd.Series], portfolio_df:Union[pd.DataFrame, pd.Series], backtest_df:Union[pd.DataFrame, pd.Series], benchmark:Union[str, list[str]], rebalance:str):
         super().__init__()
-        self.return_df = return_df
+        self.exp_returns = exp_returns
         self.buy_list = buy_list
         self.portfolio_df = portfolio_df
         self.backtest_df = backtest_df
@@ -2010,7 +2001,7 @@ class Strategy(PlotMaster):
         # analysis
         self.daily_return = backtest_df.sum(axis=1)
         self.c_return = (1 + self.daily_return).cumprod() - 1
-        # self.maemfe = calc_maemfe(self.buy_list, self.portfolio_df, self.return_df)
+        self.maemfe = calc_maemfe(self.buy_list, self.portfolio_df, self.exp_returns)
         self.betas = calc_portfolio_style(self.daily_return, total=True)
         
         # results
@@ -2025,11 +2016,11 @@ class Strategy(PlotMaster):
 
     def _generate_summary(self) -> pd.DataFrame:
         
-        summary = calc_metrics(self.daily_return, self.return_df[self.benchmark[0]]).to_frame('Strategy')
+        summary = calc_metrics(self.daily_return, self.exp_returns[self.benchmark[0]]).to_frame('Strategy')
         for bmk in self.benchmark:
             summary = pd.concat([
                 summary, 
-                calc_metrics(self.return_df[bmk], None).to_frame(f'{bmk}.TT')
+                calc_metrics(self.exp_returns[bmk], None).to_frame(f'{bmk}.TT')
             ], axis=1)
         return summary
     
@@ -2045,6 +2036,7 @@ class Strategy(PlotMaster):
         # print('make sure to update databank before get info!')
 
         # 獲取買入和賣出日期
+        _t_date = Databank().read_dataset('mkt_calendar', columns=['date'], filters=[('休市原因中文說明(人工建置)','=','')]).rename(columns={'date':'t_date'})
         rebalance_dates = _get_rebalance_date(self.rebalance, end_date=_t_date['t_date'].max())
         buy_date = self.buy_list.index[-1]
         try:
@@ -2061,24 +2053,26 @@ class Strategy(PlotMaster):
             .rename(columns={'index':'stock_id', position_info.name:'buy_date'})\
             .assign(buy_date=position_info.name)\
             .assign(sell_date=sell_date)
-
+        if position_info.empty:
+            return pd.DataFrame()
+        
         filters=[('stock_id', 'in', position_info['stock_id'].to_list())]
         
         # 獲取股票中文名稱
-        ch_name = _db.read_dataset('stock_basic_info', columns=['stock_id', '證券名稱'], filters=filters).rename(columns={'證券名稱':'name'})
+        ch_name = Databank().read_dataset('stock_basic_info', columns=['stock_id', '證券名稱'], filters=filters).rename(columns={'證券名稱':'name'})
 
         # 獲取財報和月營收公佈日期
-        quarterly_report_release_date = _db.read_dataset('fin_data', columns=['stock_id', 'release_date'], filters=filters)\
+        quarterly_report_release_date = Databank().read_dataset('fin_data', columns=['stock_id', 'release_date'], filters=filters)\
             .loc[lambda x: x.groupby('stock_id')['release_date'].idxmax()]\
             .rename(columns={'release_date':'季報公佈日期'})
-        monthly_rev_release_date = _db.read_dataset('monthly_rev', columns=['stock_id', 'release_date'], filters=filters)\
+        monthly_rev_release_date = Databank().read_dataset('monthly_rev', columns=['stock_id', 'release_date'], filters=filters)\
             .loc[lambda x: x.groupby('stock_id')['release_date'].idxmax()]\
             .rename(columns={'release_date':'月營收公佈日期'})
 
-        filters.append(('date', '=', self.return_df.index.max()))
+        filters.append(('date', '=', self.exp_returns.index.max()))
 
         # 獲取市場類型、產業類別、交易狀態
-        trading_notes = _db.read_dataset('stock_trading_notes', columns=['date', 'stock_id', '是否為注意股票', '是否為處置股票', '是否暫停交易', '是否全額交割', '漲跌停註記', '板塊別(中)', '主產業別(中)'], filters=filters)\
+        trading_notes = Databank().read_dataset('stock_trading_notes', columns=['date', 'stock_id', '是否為注意股票', '是否為處置股票', '是否暫停交易', '是否全額交割', '漲跌停註記', '板塊別(中)', '主產業別(中)'], filters=filters)\
         .assign(
             警示狀態=lambda x: x.apply(
                 lambda row: ', '.join(filter(None, [
@@ -2094,7 +2088,7 @@ class Strategy(PlotMaster):
         [['stock_id', '警示狀態', '漲跌停', '板塊別', '主產業別']]
         
         # 獲取交易量和交易金額
-        trading_vol = _db.read_dataset('stock_trading_data', columns=['stock_id', '成交量(千股)', '成交金額(元)'], filters=filters)\
+        trading_vol = Databank().read_dataset('stock_trading_data', columns=['stock_id', '成交量(千股)', '成交金額(元)'], filters=filters)\
         .rename(columns={
             '成交量(千股)':'前次成交量_K',
             '成交金額(元)':'前次成交額_M',
@@ -2127,7 +2121,7 @@ class Strategy(PlotMaster):
             'Style analysis': self._plot_style_analysis,
             'Return heatmap': self._plot_return_heatmap,
             'Liquidity': self._plot_liquidity,
-            # 'MAE/MFE': self._plot_maemfe,
+            'MAE/MFE': self._plot_maemfe,
             # 'Optimal Params': self._plot_optimal_params,
         }
 
@@ -2159,7 +2153,7 @@ class MultiStrategy(Strategy):
             - M: 每月第一個交易日
             - Q: 每季第一個交易日
             - Y: 每年第一個交易日
-        return_df (Union[pd.Series, pd.DataFrame]): 個股報酬率資料
+        exp_returns (Union[pd.Series, pd.DataFrame]): 個股報酬率資料
         daily_return (Union[pd.Series, pd.DataFrame]): 策略每日報酬率序列
 
     Returns:
@@ -2206,12 +2200,12 @@ class MultiStrategy(Strategy):
         - 支援多個基準指標的比較
     """
     
-    def __init__(self, strategies:dict[str, Tuple[Strategy, Union[float, int]]], benchmark:Union[str, list[str]], rebalance:str, return_df:Union[pd.Series, pd.DataFrame], daily_return:Union[pd.Series, pd.DataFrame]):
+    def __init__(self, strategies:dict[str, Tuple[Strategy, Union[float, int]]], benchmark:Union[str, list[str]], rebalance:str, exp_returns:Union[pd.Series, pd.DataFrame], daily_return:Union[pd.Series, pd.DataFrame]):
         PlotMaster.__init__(self)
         self.strategies = strategies
         self.rebalance = rebalance
         self.benchmark = [benchmark] if isinstance(benchmark, str) else benchmark
-        self.return_df = return_df
+        self.exp_returns = exp_returns
         self.daily_return = daily_return
         self.portfolio_df = sum(v[0].portfolio_df * v[1]/sum(w[1] for w in strategies.values()) for v in strategies.values()).dropna(how='all', axis=0).fillna(0)
 
@@ -2224,7 +2218,7 @@ class MultiStrategy(Strategy):
             for k, v in self.strategies.items()
         ], axis=0)
         self.betas = calc_portfolio_style(self.daily_return, total=True)
-        # self.brinson_model = calc_brinson_model(self.portfolio_df, self.return_df, self.benchmark)
+        # self.brinson_model = calc_brinson_model(self.portfolio_df, self.exp_returns, self.benchmark)
 
         # material
         self.summary = self._generate_meta_summary()
@@ -2233,7 +2227,7 @@ class MultiStrategy(Strategy):
         display(self.summary)
 
     def _generate_meta_summary(self) -> pd.DataFrame:
-        bmk = self.return_df[self.benchmark[0]]
+        bmk = self.exp_returns[self.benchmark[0]]
         summary = calc_metrics(self.daily_return, bmk).to_frame('Strategy')
         
         for k, v in self.strategies.items():
@@ -2245,7 +2239,7 @@ class MultiStrategy(Strategy):
         for bmk in self.benchmark:
             summary = pd.concat([
                 summary, 
-                calc_metrics(self.return_df[bmk], None).to_frame(f'{bmk}.TT')
+                calc_metrics(self.exp_returns[bmk], None).to_frame(f'{bmk}.TT')
             ], axis=1)
         return summary
 
@@ -2289,22 +2283,22 @@ def factor_analysis(factor:pd.DataFrame, asc:bool=True, rebalance:str='QR', grou
 class FactorAnalysis(PlotMaster):
     def __init__(self, factor:Union[pd.DataFrame, str], asc:bool=True, rebalance:str='QR', group:int=10, benchmark:str='0050'):
         super().__init__()
-        self.factor = get_factor(factor, asc=asc)
+        self.factor = get_rank(factor, asc=asc)
         self.rebalance = rebalance
         self.group = group
 
         # data
         from quantdev.data import Databank
         db = Databank()
-        self.return_df = db.read_dataset('stock_return', filter_date='t_date')
-        self.quantiles_returns = calc_factor_quantiles_return(self.factor, rebalance=rebalance, group=group, return_df=self.return_df)
+        self.exp_returns = db.read_dataset('exp_returns', filter_date='t_date')
+        self.quantiles_returns = calc_factor_quantiles_return(self.factor, rebalance=rebalance, group=group, exp_returns=self.exp_returns)
         self.ls_returns = (1 + self.quantiles_returns[max(self.quantiles_returns.keys())]) - (1 + self.quantiles_returns[0])
         self.benchmark = benchmark
-        self.benchmark_returns = self.return_df[benchmark]
+        self.benchmark_returns = self.exp_returns[benchmark]
 
         # analysis
         self.betas = calc_portfolio_style(self.ls_returns, total=True)
-        self.info_coef = calc_info_coef(self.factor, self.return_df, 10, 'W')
+        self.info_coef = calc_info_coef(self.factor, self.exp_returns, rebalance)
         
         # result
         self.summary = self._generate_summary()
@@ -2314,7 +2308,7 @@ class FactorAnalysis(PlotMaster):
 
     def _plot_factor_returns(self):
         returns = self.quantiles_returns
-        return_df = self.return_df
+        exp_returns = self.exp_returns
 
         
         fig = make_subplots(
@@ -2334,7 +2328,7 @@ class FactorAnalysis(PlotMaster):
         # #         base_key = key
         # #         break
         ls_daily_returns = self.ls_returns
-        benchmark_daily_returns = return_df['0050']
+        benchmark_daily_returns = exp_returns['0050']
 
         relative_returns, downtrend_returns = calc_relative_return(ls_daily_returns, benchmark_daily_returns)
         benchmark_c_returns = (1+benchmark_daily_returns).cumprod()-1

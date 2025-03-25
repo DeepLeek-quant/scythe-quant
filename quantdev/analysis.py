@@ -2,6 +2,8 @@ from typing import Union, Literal
 from statsmodels.regression.rolling import RollingOLS
 from statsmodels.regression.linear_model import OLS
 from numerize.numerize import numerize
+
+from scipy.optimize import minimize
 import statsmodels.api as sm
 from scipy import stats
 import pandas as pd
@@ -30,13 +32,13 @@ def calc_metrics(daily_returns:Union[pd.Series, pd.DataFrame], benchmark_daily_r
         for name in metrics.index
     })
 
-def calc_maemfe(buy_list:pd.DataFrame, portfolio_df:pd.DataFrame, return_df:pd.DataFrame):
+def calc_maemfe(buy_list:pd.DataFrame, portfolio_df:pd.DataFrame, exp_returns:pd.DataFrame):
     """計算每筆交易的最大不利變動(MAE)和最大有利變動(MFE)
 
     Args:
         buy_list (pd.DataFrame): 買入訊號矩陣，index為日期，columns為股票代號
         portfolio_df (pd.DataFrame): 持倉矩陣，index為日期，columns為股票代號
-        return_df (pd.DataFrame): 報酬率矩陣，index為日期，columns為股票代號
+        exp_returns (pd.DataFrame): 報酬率矩陣，index為日期，columns為股票代號
 
     Returns:
         pd.DataFrame: 包含以下欄位的DataFrame:
@@ -50,14 +52,14 @@ def calc_maemfe(buy_list:pd.DataFrame, portfolio_df:pd.DataFrame, return_df:pd.D
     Examples:
         計算每筆交易的MAE/MFE:
         ```python
-        maemfe = calc_maemfe(buy_list, portfolio_df, return_df)
+        maemfe = calc_maemfe(buy_list, portfolio_df, exp_returns)
         ```
 
     Note:
         - 交易期間的報酬率會以 'YY/MM/DD stock_id' 的格式作為index
         - MAE只計算負值，正值會被設為0
     """
-    portfolio_return = (portfolio_df != 0).astype(int) * return_df[portfolio_df.columns].loc[portfolio_df.index]
+    portfolio_return = (portfolio_df != 0).astype(int) * exp_returns[portfolio_df.columns].loc[portfolio_df.index]
     period_starts = portfolio_df.index.intersection(buy_list.index)[:-1]
     period_ends = period_starts[1:].map(lambda x: portfolio_df.loc[:x].index[-1])
     trades = pd.DataFrame()
@@ -77,6 +79,10 @@ def calc_maemfe(buy_list:pd.DataFrame, portfolio_df:pd.DataFrame, return_df:pd.D
     mae = c_returns.min(axis=0).where(lambda x: x <= 0, 0)
     mdd = ((1 + c_returns) / (1 + c_returns).cummax(axis=0) - 1).min(axis=0)
 
+    # Handle empty trades case
+    if trades.empty:
+        return pd.DataFrame(columns=['return', 'gmfe', 'bmfe', 'mae', 'mdd'])
+        
     return pd.DataFrame({
         'return': returns,
         'gmfe': gmfe,
@@ -191,33 +197,16 @@ def calc_info_ratio(daily_rtn:pd.DataFrame, benchmark_daily_returns:pd.DataFrame
     tracking_error = excess_return.rolling(window).std()
     return (excess_return / tracking_error).dropna()
 
-def calc_info_coef(factor:pd.DataFrame, return_df:pd.DataFrame, group:int=10, rebalance:Literal['MR', 'QR', 'W', 'M', 'Q', 'Y']=None):
+def calc_info_coef(factor:pd.DataFrame, exp_returns:pd.DataFrame, rebalance:Literal['MR', 'QR', 'W', 'M', 'Q', 'Y']=None):
     # factor rank
     from quantdev.backtest import _get_rebalance_date
-    r_date = _get_rebalance_date(rebalance)
-    r_date = pd.Index(r_date).intersection(return_df.index)
-    f_rank = (pd.qcut(factor[factor.index.isin(r_date)].stack(), q=group, labels=False, duplicates='drop') + 1)\
-    .reset_index()\
-    .rename(columns={'level_1':'stock_id', 0:'f_rank'})    
-
-    # return rank
-    factor_r =  return_df\
-        .groupby(pd.cut(return_df.index, bins=r_date), observed=True)\
-        .apply(lambda x: (1 + x).prod() - 1).dropna()\
-        .stack()\
-        .reset_index()\
-        .rename(columns={'level_0':'t_date', 'level_1':'stock_id', 0: 'return'})\
-        .assign(t_date=lambda df: df['t_date'].apply(lambda x: x.left).astype('datetime64[ns]'))
+    r_date = pd.Index(_get_rebalance_date(rebalance)).intersection(exp_returns.index)
     
-    # ic
-    factor_return_rank = pd.merge(f_rank, factor_r, on=['t_date', 'stock_id'], how='inner')\
-        .dropna()\
-        .groupby(['t_date', 'f_rank'])['return']\
-        .mean()\
-        .reset_index()\
-        .assign(r_rank = lambda df: df.groupby('t_date')['return'].rank())
-    return factor_return_rank.groupby('t_date', group_keys=False)\
-        .apply(lambda group: stats.spearmanr(group['f_rank'], group['r_rank'])[0], include_groups=False)
+    factor = factor[factor.index.isin(r_date)].stack().rename('factor')
+    returns =  resample_returns(exp_returns, rebalance).stack().rename_axis(['t_date', 'stock_id']).rename('return')
+    merged_data = pd.concat([factor, returns], axis=1).dropna()
+    
+    return merged_data.groupby('t_date').apply(lambda x: stats.spearmanr(x['factor'], x['return'])[0])
 
 def calc_relative_return(daily_return:pd.DataFrame, bmk_daily_return:pd.DataFrame, downtrend_window:int=3):
     relative_return = (1 + daily_return - bmk_daily_return).cumprod() - 1
@@ -260,14 +249,14 @@ def calc_factor_longshort_return(factor:pd.DataFrame, rebalance:str='QR', group:
     """
     
     from quantdev.backtest import simple_backtesting
-    return_df = kwargs.get('return_df')
-    if return_df is None:
+    exp_returns = kwargs.get('exp_returns')
+    if exp_returns is None:
         from quantdev.data import Databank
         db = Databank()
-        return_df = db.read_dataset('stock_return', filter_date='t_date')
+        exp_returns = db.read_dataset('exp_returns', filter_date='t_date')
     # factor = get_factor(item=factor, asc=asc)
-    long = simple_backtesting(factor>=(1-1/group), rebalance=rebalance, return_df=return_df)
-    short = simple_backtesting(factor<(1/group), rebalance=rebalance, return_df=return_df)
+    long = simple_backtesting(factor>=(1-1/group), rebalance=rebalance, exp_returns=exp_returns)
+    short = simple_backtesting(factor<(1/group), rebalance=rebalance, exp_returns=exp_returns)
 
     return (long-short).dropna()
 
@@ -296,15 +285,15 @@ def calc_factor_quantiles_return(factor:pd.DataFrame, rebalance:str='QR', group:
     """
     from quantdev.backtest import simple_backtesting
     results = {}
-    return_df = kwargs.get('return_df')
-    if return_df is None:
+    exp_returns = kwargs.get('exp_returns')
+    if exp_returns is None:
         from quantdev.data import Databank
         db = Databank()
-        return_df = db.read_dataset('stock_return', filter_date='t_date')
+        exp_returns = db.read_dataset('exp_returns', filter_date='t_date')
     
     for q_start, q_end in [(i/group, (i+1)/group) for i in range(group)]:
         condition = (q_start <= factor) & (factor < q_end)
-        results[q_start*group] = simple_backtesting(condition, rebalance=rebalance, return_df=return_df)
+        results[q_start*group] = simple_backtesting(condition, rebalance=rebalance, exp_returns=exp_returns)
 
     return results
 
@@ -338,15 +327,15 @@ def calc_factor_quantiles_return_thread(factor:Union[pd.DataFrame, str], asc:boo
     results = {}
     results_lock = threading.Lock()
     factor = get_factor(item=factor, asc=asc)
-    return_df = kwargs.get('return_df')
-    if return_df is None:
+    exp_returns = kwargs.get('exp_returns')
+    if exp_returns is None:
         from quantdev.data import Databank
         db = Databank()
-        return_df = db.read_dataset('stock_return', filter_date='t_date')
+        exp_returns = db.read_dataset('exp_returns', filter_date='t_date')
 
     def calc_quantile(q_start, q_end):
         condition = (q_start <= factor) & (factor < q_end)
-        result = simple_backtesting(condition, rebalance=rebalance, return_df=return_df)
+        result = simple_backtesting(condition, rebalance=rebalance, exp_returns=exp_returns)
         with results_lock:
             results[q_start*group] = result
 
@@ -359,16 +348,18 @@ def calc_factor_quantiles_return_thread(factor:Union[pd.DataFrame, str], asc:boo
 
     return results
 
-def resample_returns(data: pd.DataFrame, t: Literal['YE', 'QE', 'ME', 'W-FRI']):
+def resample_returns(returns: pd.DataFrame, t: Literal['MR', 'QR', 'W', 'M', 'Q', 'Y']):
     """重新取樣報酬率時間序列
 
     Args:
-        data (pd.DataFrame): 報酬率時間序列
-        t (Literal['YE', 'QE', 'ME', 'W-FRI']): 重新取樣頻率
-            - YE: 年底
-            - QE: 季底
-            - ME: 月底
-            - W-FRI: 週五
+        returns (pd.DataFrame): 報酬率時間序列
+        t (Literal['MR', 'QR', 'W', 'M', 'Q', 'Y']): 重新取樣頻率
+            - MR: 每月10日後第一個交易日
+            - QR: 每季財報公布日後第一個交易日(3/31, 5/15, 8/14, 11/14)
+            - W: 每週一
+            - M: 每月第一個交易日
+            - Q: 每季第一個交易日
+            - Y: 每年第一個交易日
 
     Returns:
         pd.DataFrame: 重新取樣後的報酬率時間序列
@@ -382,8 +373,26 @@ def resample_returns(data: pd.DataFrame, t: Literal['YE', 'QE', 'ME', 'W-FRI']):
     Note:
         - 報酬率會以複利方式計算
         - 若某期間內所有值皆為NA，則該期間的報酬率為NA
+        - 優先使用回測模組的調倉日期進行重新取樣
+        - 若無法使用回測模組，則使用pandas的resample功能
     """
-    return data.resample(t).apply(lambda x: (np.nan if x.isna().all() else (x + 1).prod() - 1))
+    
+    try:
+        from quantdev.backtest import _get_rebalance_date
+        dates =  pd.DatetimeIndex(_get_rebalance_date(t)+[returns.index.max()])
+
+        def cum_rtns(group):
+            all_na_cols = group.isna().all()
+            result = (group + 1).prod() - 1    
+            result[all_na_cols] = np.nan
+            return result
+
+        return returns.groupby(dates[dates.searchsorted(returns.index)], group_keys=True)\
+            .apply(cum_rtns)\
+            .shift(-1)\
+            .dropna(how='all')
+    except:
+        return returns.resample(t).apply(lambda x: (np.nan if x.isna().all() else (x + 1).prod() - 1))
 
 # portfolio analysis
 def calc_portfolio_style(portfolio_daily_rtn:Union[pd.DataFrame, pd.Series], window:int=None, total:bool=False):
@@ -429,7 +438,7 @@ def calc_portfolio_style(portfolio_daily_rtn:Union[pd.DataFrame, pd.Series], win
     else:
         return rolling_reg
 
-def calc_brinson_model(portfolio_df:pd.DataFrame, return_df:pd.DataFrame, benchmark:list[str]):
+def calc_brinson_model(portfolio_df:pd.DataFrame, exp_returns:pd.DataFrame, benchmark:list[str]):
     from quantdev.data import Databank
     db = Databank()
 
@@ -452,7 +461,7 @@ def calc_brinson_model(portfolio_df:pd.DataFrame, return_df:pd.DataFrame, benchm
         .reset_index()\
         .rename(columns={0:'weight', 'level_1':'stock_id'})
 
-    rtn = return_df.stack().reset_index().rename(columns={0:'rtn'})
+    rtn = exp_returns.stack().reset_index().rename(columns={0:'rtn'})
 
     # Process benchmark data
     benchmark_data = (benchmark_sector
@@ -484,7 +493,7 @@ def calc_brinson_model(portfolio_df:pd.DataFrame, return_df:pd.DataFrame, benchm
     data = pd.concat([benchmark_data, portfolio_data], axis=1)\
         .fillna(0)\
         .join(
-            pd.DataFrame(return_df[benchmark[0]].rename('benchmark_R')),
+            pd.DataFrame(exp_returns[benchmark[0]].rename('benchmark_R')),
             on='t_date',
             how='left'
         )
@@ -524,3 +533,119 @@ def create_random_portfolios(returns:pd.DataFrame, num_portfolios:int=None):
     
     results = pd.DataFrame(results_list).round({'std_dev': 5, 'return': 5, 'sharpe': 5})
     return results
+
+
+# combine factors
+def calc_reg_returns(factors:Union[dict[str, pd.DataFrame], list[pd.DataFrame]], rebalance:str='MR', method:Literal['OLS', 'GLS']='GLS'):
+    from quantdev.data import Databank
+    returns = resample_returns(Databank().read_dataset('exp_returns'), t=rebalance)\
+        .stack()\
+        .reset_index()\
+        .rename(columns={'level_0':'t_date', 0:'R'})\
+        .set_index(['t_date', 'stock_id'])
+    
+    reg_methods = {'GLS': sm.GLS, 'OLS': sm.OLS}
+    data = pd.concat([returns, factors], axis=1).dropna()
+    return data.groupby('t_date').apply(
+        lambda x: pd.Series(reg_methods[method](x['R'], sm.add_constant(x.drop(columns=['R']))).fit().params)
+    ).drop(columns=['const'])
+
+def calc_max_icir_weights(ic_df:pd.DataFrame, window:int=4, neg_ok:bool=False) -> pd.DataFrame:
+    """
+    計算最大化 IC_IR 的權重，可選擇是否允許負權重
+    
+    Args:
+        ic_window: IC值的時間序列
+        window: 計算權重的滾動窗口大小
+        allow_negative: 是否允許負權重，預設為False
+    """
+    def optimize_window(window_df, allow_negative=False):
+        factor_names = window_df.columns
+        bar_ic = window_df.mean().values  # shape: (N,)
+        sigma = window_df.cov().values    # shape: (N, N)
+        N = len(bar_ic)
+
+        # 定義目標函數（負的 IC_IR，因為 minimize 是求最小）
+        def neg_ic_ir(w):
+            numerator = np.dot(w, bar_ic)
+            denominator = np.sqrt(np.dot(w.T, sigma @ w))
+            return -numerator / denominator if denominator != 0 else 1e6
+
+        # 初始猜測（均勻分配）
+        x0 = np.ones(N) / N
+
+        # 根據allow_negative設定權重限制
+        bounds = [(None, None) if allow_negative else (0, None) for _ in range(N)]
+
+        # 可以加入權重總和為 1 的額外約束（不是必要的）
+        constraints = [{'type': 'eq', 'fun': lambda w: np.sum(w) - 1}]
+
+        result = minimize(neg_ic_ir, x0, bounds=bounds, constraints=constraints)
+
+        if result.success:
+            return pd.Series(result.x, index=factor_names)
+        else:
+            return pd.Series([np.nan] * N, index=factor_names)
+
+    # 對每個時間點計算最優權重
+    weights = pd.DataFrame(index=ic_df.index, columns=ic_df.columns)
+    for i in range(len(ic_df)):
+        if i < window:  # 需要至少window個月的數據
+            continue
+        weights.iloc[i] = optimize_window(ic_df.iloc[i-window:i])
+    
+    return weights
+
+def combine_factors(
+    factors:Union[dict[str, pd.DataFrame], list[pd.DataFrame]], 
+    method:Literal['EW', 'HR', 'HR-decay', 'IC', 'IR', 'MAX_IR']=None, 
+    rebalance:str='MR',
+    params:dict={'mean_window': 12, 'ir_window': 12, 'max_icir_window': 12, 'neg_ok': False},
+    universe:pd.DataFrame=None
+)-> pd.DataFrame:
+
+    def calc_weighted_factors(factors_df:pd.DataFrame, weights:pd.DataFrame)->pd.DataFrame:
+        return factors_df.merge(weights.add_suffix('_w'), left_index=True, right_index=True)\
+            .assign(factor = lambda x: sum([x[col]*x[f'{col}_w'] for col in weights.columns])/sum([x[f'{col}_w'] for col in weights.columns]))\
+            [['factor']]\
+            .unstack()\
+            .droplevel(0, axis=1)
+    
+    # methods
+    from quantdev.backtest import get_factor
+    if method == 'EW':
+        return get_factor(sum(factors) / len(factors))
+    elif method.startswith('HR'):
+        # Calculate factor weights using historical regression
+        from quantdev.backtest import _get_rebalance_date
+        factors_df = pd.concat([f[f.index.isin(_get_rebalance_date(rebalance))].stack() for f in factors], axis=1).dropna()
+        weights = calc_reg_returns(factors_df, rebalance)
+        
+        # Apply rolling mean or exponential weighted mean based on method
+        if len(method.split('-')) == 1:
+            weights = weights.rolling(params['mean_window']).mean().shift(1)
+        elif (len(method.split('-'))==2) and (method.split('-')[1] == 'decay'):
+            weights = weights.rolling(params['mean_window']).apply(lambda x: x.ewm(halflife=params['mean_window']/2, adjust=False).mean().iloc[-1])
+        
+        # Combine factors with weights
+        combined_factor = calc_weighted_factors(factors_df, weights)
+        return get_factor(combined_factor, universe=universe)
+    elif (method.endswith('IC')) or (method.endswith('IR')):
+        from quantdev.backtest import _get_rebalance_date
+        factors_df = pd.concat([f[f.index.isin(_get_rebalance_date(rebalance))].stack() for f in factors], axis=1).dropna()
+        
+        from quantdev.data import Databank
+        exp_returns = Databank().read_dataset('exp_returns')
+        ic_df = pd.concat([calc_info_coef(f, exp_returns, rebalance=rebalance) for f in factors], axis=1).dropna()
+        if method == 'IC':
+            weights = ic_df.rolling(params['mean_window']).mean().shift(1)
+        elif method == 'IR':
+            weights = (ic_df.rolling(params['ir_window']).mean()/ic_df.rolling(params['ir_window']).std()).shift(1)
+        elif method == 'MAX_IR':
+            weights = calc_max_icir_weights(ic_df, window=params['max_icir_window'], neg_ok=params['neg_ok']).shift(1)
+        else:
+            raise ValueError(f"Invalid method: {method}")
+        combined_factor = calc_weighted_factors(factors_df, weights)
+        return get_factor(combined_factor, universe=universe)
+    
+    

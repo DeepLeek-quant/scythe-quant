@@ -16,15 +16,16 @@ from bs4 import BeautifulSoup
 import requests
 import geocoder
 
-# threading
-from concurrent.futures import ThreadPoolExecutor
-from requests.adapters import HTTPAdapter, Retry
+# # threading
+# from concurrent.futures import ThreadPoolExecutor
+# from requests.adapters import HTTPAdapter, Retry
 
 # config
 from .config import config
 
-import warnings
-warnings.filterwarnings('ignore', category=FutureWarning, module='tejapi.get')
+from warnings import filterwarnings, simplefilter
+filterwarnings('ignore', category=FutureWarning, module='tejapi.get')
+simplefilter(action="ignore", category=pd.errors.PerformanceWarning)
 
 
 class DataBankInfra:
@@ -71,73 +72,51 @@ class DataBankInfra:
         - 支援 parquet 格式讀寫
         - 提供基礎的資料讀寫功能
     """
-    
     def __init__(self):
-        self.databank_path = config.data_config.get('databank_path')
-        self.start_date = '2005-01-01'
+        self.databank_path = '/Users/jianrui/Desktop/Research/Quant/databank'
+        self.data_type = 'parquet'
         self.databank_map = {
-            'tej_raw_data':{
-                'fundamental':{
+            'datasets':{
+                'tej_data':{
                     'monthly_rev',
                     'self_disclosed',
                     'fin_data',
                     'dividend_policy',
                     'capital_formation',
-                },
-                'technical':{
-                    'stock_address',
                     'stock_basic_info',
                     'stock_trading_data',
                     'stock_trading_notes',
                     'mkt_calendar',
-                },
-                'chip':{
                     'trading_activity',
                     'stock_custody',
                 },
-            },
-            'processed_data':{
-                'fundamental':{
+                'processed_data':{
                     'fin_data_chng',
                     'fin_ratio_diff',
                     'monthly_rev_chng',
-                    'roe_roa',
-                },
-                'technical':{
+                    'monthly_rev_reach_ath',
+                    'monthly_rev_ath_distance',
                     'stock_momentum',
-                },
-                'chip':{
                     'shareholding_pct',
                     'shareholding_pct_diff',
                     'inst_investor_ratio_diff',
                     'inst_investor_money_chng',
-                },
-                'backtest':{
-                    'stock_return',
                     'factor_model',
                     'stock_sector',
+                    'exp_returns',
                 },
+                'public_data':{
+                    'stock_industry_tag',
+                    'rf_rate',
+                }
             },
-            'public_data':{
-                'stock_industry_tag',
-                'rf_rate',
-            }
+            'data':{},
         }
-        
-        # 'broker':{
-        #         'broker_info',
-        #         'broker_activity',
-        #         'broker_money',
-        #         'stock_address',
-        #         'stock_broker_distance',
-        #         'nearby_broker',
-        #         'stock_nearby_broker_money',
-        #     },
 
         # init
-        self.create_databank()
+        self._create_databank()
 
-    def create_databank(self, current_map=None, current_path=None):
+    def _create_databank(self, current_map=None, current_path=None):
         """建立資料庫目錄結構
 
         根據 databank_map 定義的結構建立對應的資料夾。
@@ -156,52 +135,56 @@ class DataBankInfra:
             os.makedirs(path, exist_ok=True)
 
             if isinstance(value, dict):
-                self.create_databank(value, path)
-            elif isinstance(value, set):
-                for item in value:
-                    os.makedirs(os.path.join(path, item), exist_ok=True)
+                self._create_databank(value, path)
 
-    def _get_path(self, dataset:str):
-        for root, dirs, files in os.walk(self.databank_path):
-            if (dataset in dirs) or (dataset in files):
-                data_path = os.path.join(root, dataset)
-                if not any(os.path.isdir(os.path.join(data_path, item)) for item in os.listdir(data_path)):
-                    return data_path
+    def _get_dataset_path_from_map(self, current_map, current_path, dataset:str):
+        for key, value in current_map.items():
+            path = os.path.join(current_path, key)
+            if isinstance(value, dict):
+                result = self._get_dataset_path_from_map(value, path, dataset)
+                if result:
+                    return result
+            elif isinstance(value, set) and dataset in value:
+                return os.path.join(path, f"{dataset}.{self.data_type}")
         return None
 
-    def list_datasets(self, data=None, results=[]):
-        """取得資料庫中所有資料集名稱
+    def _get_dataset_path(self, dataset:str):
+        # First try to find existing file
+        for root, dirs, files in os.walk(os.path.join(self.databank_path, 'datasets')):
+            for file in files:
+                if (file.endswith('.parquet')) and (dataset == file.replace('.parquet', '')):
+                    return os.path.join(root, file)
+        map_path = self._get_dataset_path_from_map(self.databank_map, self.databank_path, dataset)
+        if map_path:
+            return map_path
+        else:
+            raise ValueError(f'Dataset {dataset} not found in either databank or databank_map')
+        
+    def list_datasets(self):
+        """列出所有可用的資料集
+
+        遍歷資料庫目錄結構，找出所有 .parquet 檔案，並返回資料集名稱與路徑的映射。
 
         Returns:
-            list: 包含所有資料集名稱的列表
+            dict: 資料集名稱與其對應路徑的字典
 
         Examples:
             ```python
-            # 取得所有資料集名稱
             db = DataBank()
-            db.list_datasets()
-            
-            ```
-
-            output:
-            ```
-            ['fin_data', 'dividend_policy', 'stock_trading_data', ...]
+            datasets = db.list_datasets()
             ```
         """
-        data = data or self.databank_map
-
-        for key, value in data.items():
-            if isinstance(value, dict):
-                if value:
-                    self.list_datasets(value, results)
-                else:
-                    results.append(key)
-            elif value:
-                results.extend(value)
-            else:
-                results.append(key)
-        return results
-
+        # datasets = {}
+        datasets = []
+        for root, dirs, files in os.walk(os.path.join(self.databank_path, 'datasets')):
+            for file in files:
+                if file.endswith('.parquet'):
+                    # full_path = os.path.join(root, file)
+                    # dataset_name = os.path.splitext(file)[0]
+                    # datasets[dataset_name] = full_path
+                    datasets.append(file.replace('.parquet', ''))
+        return datasets
+    
     def list_columns(self, dataset:str, keyword:str=None):
         """取得資料集中所有欄位名稱
 
@@ -224,16 +207,13 @@ class DataBankInfra:
             ```
         """
         
-        if keyword is not None:
-            return [i for i in self.list_columns(dataset) if keyword in i]
-        
-        data_path = f'{self._get_path(dataset)}/'
-        file_list = [path for path in os.listdir(data_path) if path !='.DS_Store']
-        if len(file_list)>1:
-            file_list.sort()
-            return pq.ParquetFile(f'{data_path}/{file_list[0]}').schema.names
+        data_path = self._get_dataset_path(dataset)
+        if (keyword is not None) and (os.path.exists(data_path)):
+            return [col for col in pq.ParquetFile(data_path).schema.names if keyword in col]
+        elif not os.path.exists(data_path):
+            return []
         else:
-            return pq.ParquetFile(f'{data_path}/{dataset}.parquet').schema.names
+            return pq.ParquetFile(data_path).schema.names
 
     def find_dataset(self, column:str):
         """根據欄位名稱找出對應的資料集名稱
@@ -253,7 +233,7 @@ class DataBankInfra:
         """
         column_datasets = {}
         for data_name in self.list_datasets():
-            if data_name != 'stock_return':
+            if data_name != 'exp_returns':
                 try:
                     for col in self.list_columns(data_name):
                         if col not in column_datasets:
@@ -261,7 +241,12 @@ class DataBankInfra:
                         column_datasets[col].append(data_name)
                 except FileNotFoundError:
                     continue
-        return column_datasets[column][0]
+        if len(column_datasets[column])>1:
+            raise ValueError(f'Column {column} found in multiple datasets: {column_datasets[column]}')
+        elif len(column_datasets[column])==0:
+            raise ValueError(f'Column {column} not found in any dataset')
+        else:
+            return column_datasets[column][0]
     
     # db read & write
     def read_dataset(self, dataset:str, filter_date:str='date', start:Union[int, str]=None, end:Union[int, str]=None, columns:list=None, filters:list=None) -> pd.DataFrame:
@@ -307,71 +292,24 @@ class DataBankInfra:
             )
             ```
         """
-
-        # for broker activity
-        data_path = f'{self._get_path(dataset)}/'
-        if len([i for i in os.listdir(data_path) if i !='.DS_Store'])>1:
-            return self._read_dataset_max(dataset, start=start, end=end, columns=columns, filters=filters)
-
-        # date range if any
-        filters = [] if not filters else filters
+        # Process date filters
+        filters = filters or []
         if start:
             start_date = dt.datetime(start, 1, 1) if isinstance(start, int) else pd.to_datetime(start)
             filters.append((filter_date, '>=', start_date))
-        
         if end:
             end_date = dt.datetime(end, 12, 31) if isinstance(end, int) else pd.to_datetime(end)
             filters.append((filter_date, '<=', end_date))
 
-        # read pqt 
-        data_path = f'{self._get_path(dataset)}/{dataset}.parquet'
+        # Read data
+        data_path = self._get_dataset_path(dataset)
         if not os.path.exists(data_path):
-            logging.warning(f'{dataset}.parquet not exist')
-            return pd.DataFrame()
+            logging.warning(f'{dataset}.{self.data_type} not exist')
+            raise FileNotFoundError(f'{dataset}.{self.data_type} not exist')
         
-        filters = None if not filters else filters
-        df = pq.read_table(source=data_path, columns=columns, filters=filters).to_pandas()
-        logging.info(f'Exported {dataset} as DataFrame from parquet')
+        df = pq.read_table(source=data_path, columns=columns, filters=filters or None).to_pandas()
+        logging.info(f'Exported {dataset} as DataFrame from {self.data_type}')
         return df
-    
-    def _read_dataset_max(self, dataset:str, start:Union[int, str]=None, end:Union[int, str]=None, columns:list=None, filters:list=None):
-        file_path = f'{self._get_path(dataset)}/'
-        file_list = [i for i in os.listdir(file_path) if i !='.DS_Store']
-        file_list.sort()
-
-        start_date = (
-            dt.datetime(start, 1, 1) if isinstance(start, int) 
-            else pd.to_datetime(start) if isinstance(start, str) 
-            else None
-        )
-        end_date = (
-                dt.datetime(end, 12, 31) if isinstance(end, int) 
-            else pd.to_datetime(end) if isinstance(end, str) 
-            else None
-        )
-
-        dfs = []
-        for file_name in file_list:
-            # Extract the date from the file name
-            date_str = file_name.split('_')[-1].replace('.parquet', '')
-            file_date = dt.datetime.strptime(date_str, '%Y-%m-%d')
-
-            if start_date and (file_date < start_date):
-                continue
-            if end_date and (file_date > end_date):
-                continue
-            
-            data_path = f'{self._get_path(dataset)}/{file_name}'
-            df = pq.read_table(data_path).to_pandas()
-            filters = None if not filters else filters
-            df = pq.read_table(source=data_path, columns=columns, filters=filters).to_pandas()
-            dfs.append(df)
-
-        # Concatenate all filtered DataFrames
-        if dfs:
-            return pd.concat(dfs, ignore_index=True)
-        else:
-            return pd.DataFrame()
 
     def write_dataset(self, dataset:str, df:pd.DataFrame):
         """將 DataFrame 寫入資料庫
@@ -388,14 +326,14 @@ class DataBankInfra:
             ```
         """
 
-        # sort value
+        # Sort value
         sort_columns = [col for col in ['date', 'stock_id'] if col in df.columns]
         if sort_columns:
             df = df.sort_values(by=sort_columns, ascending=True).reset_index(drop=True)
 
-        # to pqt
+        # Write to pqt
         table = pa.Table.from_pandas(df)
-        data_path = f'{self._get_path(dataset)}/{dataset}.parquet'
+        data_path = self._get_dataset_path(dataset)
         pq.write_table(table, data_path)
         logging.info(f'Saved {dataset} as parquet from DataFrame')
 
@@ -436,6 +374,7 @@ class TEJHandler(DataBankInfra):
         self.__tej_token = config.data_config.get('tej_token')
         tejapi.ApiConfig.api_key = self.__tej_token
         tejapi.ApiConfig.ignoretz = True
+        self.start_date = '2005-01-01'
         self.tej_datasets = { 
             'monthly_rev':{'ch':'月營收', 'id':'TWN/APISALE'},
             'self_disclosed':{'ch':'公司自結數', 'id':'TWN/AFESTM1'},
@@ -535,7 +474,8 @@ class TEJHandler(DataBankInfra):
             'lte': end_date,
         } if dataset not in ['mkt_calendar', 'stock_basic_info'] else None
         
-        df = tejapi.get(
+        #fast get
+        df = tejapi.fastget(
             datatable_code = tej_dataset, 
             coid=stock_id,
             mdate=mdate, 
@@ -721,10 +661,16 @@ class TEJHandler(DataBankInfra):
         
         df = df\
             .drop(columns='t_date', errors='ignore')\
-            .assign(next_day=lambda x: x[date_col] + pd.DateOffset(days=1))\
+            .assign(next_day=lambda x: (x[date_col] + pd.DateOffset(days=1)).astype('datetime64[ns]'))\
             .sort_values('next_day')\
             .reset_index(drop=True)
-        df = pd.merge_asof(df, t_date, left_on='next_day', right_on='t_date', direction='forward').drop('next_day', axis=1)
+        df = pd.merge_asof(
+            df, 
+            t_date, 
+            left_on='next_day', 
+            right_on='t_date', 
+            direction='forward'
+        ).drop('next_day', axis=1)
 
         # re-order
         if df.columns[-2:].tolist() == ['insert_time', 't_date']:
@@ -795,13 +741,13 @@ class TEJHandler(DataBankInfra):
 
         return old_data
         
-    def update_tej_dataset(self, dataset:str, end_date:str=None):
+    def update_tej_dataset(self, dataset:str, end_date:str=None, back_period:int=2):
         """更新TEJ資料集
 
         Args:
             dataset (str): 要更新的資料集名稱
             end_date (str, optional): 更新資料的結束日期. Defaults to None.
-
+            back_period (int, optional): 回溯期間. Defaults to 2.
         Examples:
             ```python
             # 更新股票交易資料
@@ -856,9 +802,9 @@ class TEJHandler(DataBankInfra):
                 'stock_custody':'date',
             }
             if (not old_data.empty) & (request_dates.get(dataset) == 'date'):
-                start_date = old_data['date'].max().strftime('%Y-%m-%d')
+                start_date = pd.Series(old_data['date'].unique()).nlargest(back_period).min().strftime('%Y-%m-%d')
             elif (not old_data.empty) & (request_dates.get(dataset) == 'today'):
-                start_date = dt.date.today().strftime('%Y-%m-%d')
+                start_date = (dt.date.today() - dt.timedelta(days=back_period)).strftime('%Y-%m-%d')
             else:
                 start_date = self.start_date
             
@@ -881,429 +827,20 @@ class TEJHandler(DataBankInfra):
                 ], ignore_index=True)
                 
                 # drop_duplicates
-                subset = ['date', 'stock_id'] if {'date', 'stock_id'}.issubset(old_data.columns) else old_data.columns.difference(['insert_time'])
+                drop_dup_subset = {
+                    'dividend_policy': ['stock_id', '盈餘分派_年度'],
+                    'capital_formation': ['stock_id', '除權日'],
+                    'stock_basic_info': ['stock_id'],
+                    'mkt_calendar': ['date']
+                }.get(dataset, ['date', 'stock_id'])
                 old_data = old_data\
-                    .drop_duplicates(subset=subset, keep='last')\
+                    .drop_duplicates(subset=drop_dup_subset, keep='last')\
                     .reset_index(drop=True)
 
             # insert
             self.write_dataset(dataset, old_data)
         
         logging.info(f'Updated {dataset} from tej')
-
-
-class FinMindHandler(DataBankInfra):
-    def __init__(self):
-        super().__init__()
-        self.__finmind_token = config.data_config.get('finmind_token')
-        
-    def get_broker_info_finmind(self):
-        # first check if reach limit
-        if self.finmind_reach_limit():
-            self.finmind_countdown()
-        
-        url = "https://api.finmindtrade.com/api/v4/data"
-        parameter = {
-            "dataset": "TaiwanSecuritiesTraderInfo",
-            "token": self.__finmind_token,
-        }
-        resp = requests.get(url, params=parameter)
-        data = resp.json()
-        data = pd.DataFrame(data["data"])\
-            .rename(columns={
-                'securities_trader_id':'broker_id',
-                'securities_trader':'broker_name',
-                'date':'est_date',
-                            })\
-            .assign(clean_address = lambda df: df['address']\
-                .str.split('、').str[0]\
-                .str.split('及').str[0]\
-                .str.split('營業廳').str[0]\
-                .str.replace('部份', '', regex=False)\
-                .str.replace('部分', '', regex=False)\
-                .str.replace('(', '', regex=False)\
-                .str.replace(')', '', regex=False)\
-                .str.replace('含夾層', '', regex=False)\
-                .str.replace('北市南京東路2段111號3樓', '台北市南京東路2段111號3樓', regex=False)\
-                .str.replace('台北縣中和市', '新北市中和區', regex=False)\
-            )
-        
-        # add latitude, longitude
-        data = self._add_latlng(data, 'clean_address')
-
-        return data
-
-    def insert_broker_info(self):
-        df = self.get_broker_info_finmind()
-        df['insert_time'] = pd.Timestamp.now()
-        self.write_dataset(dataset='broker_info', df=df)
-
-    # broker activity
-    def send_request(
-            self, 
-            url, 
-            parameter,
-            n_retries=4,
-            backoff_factor=0.9,
-            status_codes=[504, 503, 502, 500, 429],
-            timeout=None):
-        session = requests.Session()
-        retries = Retry(connect=n_retries, backoff_factor=backoff_factor, status_forcelist=status_codes)
-        session.mount("https://", HTTPAdapter(max_retries=retries))
-        return session.get(url=url, params=parameter, verify=False, timeout=timeout)
-    
-    def send_error_message(self, msg):
-        headers = {
-            "Authorization": f"Bearer {'XpmwG6HWIMUeYy7AQNglfuwmjBYkY02Y5PMhVj32N0d'}",
-            "Content-Type" : "application/x-www-form-urlencoded"
-            }
-        payload = {'message': msg}
-        try:
-            r = requests.post("https://notify-api.line.me/api/notify", headers = headers, params = payload)
-            return r.status_code
-        except:
-            pass
-
-    def get_broker_activity_finmind(self, date:str, stock_id:str=None, broker_id:str=None):
-        
-        # parameter
-        url = 'https://api.finmindtrade.com/api/v4/taiwan_stock_trading_daily_report'
-        parameter = {
-            'date': date,
-            'token': self.__finmind_token,
-        }
-        if (stock_id is not None) and (broker_id is None):
-            parameter['data_id'] = stock_id
-        elif (stock_id is  None) and (broker_id is not None):
-            parameter['securities_trader_id'] = broker_id
-        else:
-            raise ValueError('Either stock_id or broker_id must be provided.') 
-        id = broker_id if broker_id is not None else stock_id
-
-        # get data
-        # start = time.time()
-        max_retries = 30
-        attempt = 0
-        while attempt < max_retries:
-            try:
-                # first check if reach limit
-                if self.finmind_reach_limit(True):
-                    self.finmind_countdown()
-
-                # get data
-                data = requests.get(url, params=parameter, verify=False)
-                data = data.json()
-                data = pd.DataFrame(data['data'])
-                # data = self.send_request(url=url, parameter=parameter, timeout=(3,7))
-                break
-            except Exception as e:
-                attempt += 1
-                time.sleep(0.9*(2 ** (attempt-1)))
-                text = f"Attempt {attempt}: {e} for {id} at {date}" 
-                print(text)
-                self.send_error_message(text)
-        
-        # end = time.time()
-        # print("run time: ", end-start)
-        
-        #  if 'data' in data else pd.DataFrame()
-
-        # print
-        if (isinstance(data, pd.DataFrame) and data.empty) or (not isinstance(data, pd.DataFrame)):
-            print(f'Failed to fetch {id} broker activity data at {date}')
-            data = pd.DataFrame()
-        else:
-            print(f'Fetched {id} broker activity data at {date}')
-        return data
-
-    def process_broker_activity_finmind(self, df):
-        # rename col/ reform date
-        df = df\
-            .rename(columns={
-                'securities_trader_id':'broker_id',
-                'securities_trader':'broker_name',
-                'price':'avg_price',
-            })\
-            .assign(date = lambda df: pd.to_datetime(df['date'], format="%Y-%m-%d"))\
-            [['date', 'broker_name', 'broker_id', 'stock_id', 'avg_price', 'buy', 'sell']]
-
-        # trade date
-        df = self._add_trade_date(df)
-        return df
-
-    def insert_broker_activity(self):
-        # prepare old data & start_date
-        try:
-            max_date = max(os.listdir(f'{self._get_path(dataset="broker_activity")}/')).split('_')[-1].replace('.parquet', '')
-            start_date = (dt.datetime.strptime(max_date, '%Y-%m-%d') + dt.timedelta(days=1)).strftime('%Y-%m-%d')
-        except:
-            start_date = '2021-06-30'
-        
-        # get loop data
-        broker_ids=self.read_dataset('broker_info', columns=['broker_id'])['broker_id'].tolist()
-        t_date=self.read_dataset('mkt_calendar', columns=['date'], filters=[('休市原因中文說明(人工建置)','=','')])\
-            .rename(columns={'date':'t_date'})\
-            .loc[lambda df:
-                (df['t_date']>=start_date) & \
-                (df['t_date']<=dt.datetime.strftime(dt.datetime.today().date(), '%Y-%m-%d'))
-            ]
-        
-        # loop
-        def get_broker_data(date, broker_id):
-            data = self.get_broker_activity_finmind(date=date.strftime('%Y-%m-%d'), broker_id=broker_id)
-            return data
-
-        for date in t_date['t_date']:
-            self.single_date_data = pd.DataFrame()
-            
-            # Use ThreadPoolExecutor for threading
-            with ThreadPoolExecutor(max_workers=40) as executor:
-                futures = [executor.submit(get_broker_data, date, broker_id) for broker_id in broker_ids]
-                for future in futures:
-                    try:
-                        data = future.result()
-                        if not data.empty:
-                            self.single_date_data = pd.concat([self.single_date_data, data], ignore_index=True).reset_index(drop=True)
-                    except Exception as e:
-                        print(f"{date} Threading error: {e}")
-            
-            # process
-            self.single_date_data = self.process_broker_activity_finmind(self.single_date_data)
-            self.single_date_data['insert_time'] = pd.Timestamp.now()
-
-            # to pqt
-            table = pa.Table.from_pandas(self.single_date_data)
-            date_str = date.strftime('%Y-%m-%d')
-            data_path = f"{self._get_path(dataset='broker_activity')}/broker_activity_{date_str}.parquet"
-            pq.write_table(table, data_path)
-            print(f"Saved broker_activity_{date_str}.parquet")
-            try:
-                self.send_error_message(f"Saved broker_activity_{date_str}.parquet")
-            except:
-                pass
-
-            del self.single_date_data
-
-    def insert_broker_money(self):
-        
-        dates = sorted([f.split('_')[-1].replace('.parquet', '') for f in os.listdir(f'{self._get_path(dataset="broker_activity")}') if f.endswith('.parquet')])
-        
-        def process_broker_money(date):
-            data_path = f"{self._get_path(dataset='broker_money')}/broker_money_{date}.parquet"
-            if os.path.exists(data_path):
-                return
-            broker_activity = self.read_dataset('broker_activity', columns=['date', 'stock_id', 'broker_id', 'avg_price', 'buy', 'sell'], start=date, end=date)\
-                .set_index(['date', 'stock_id', 'broker_id'])
-            broker_money = (broker_activity['avg_price'] * (broker_activity['buy'] - broker_activity['sell']))\
-                .groupby(['date', 'stock_id', 'broker_id'])\
-                .sum()\
-                .reset_index(name='money')
-            broker_money = self._add_trade_date(broker_money)
-
-            table = pa.Table.from_pandas(broker_money)
-            pq.write_table(table, data_path)
-            print(f"Saved broker_money_{date}.parquet")
-
-        with ThreadPoolExecutor(max_workers=20) as executor:
-            futures = [executor.submit(process_broker_money, date) for date in dates]
-            for future in futures:
-                try:
-                    future.result()
-                except Exception as e:
-                    print(f"Threading error: {e}")
-
-    # finmind basic
-    def finmind_reach_limit(self, text:bool=False):
-        resp = requests.get(
-            url="https://api.web.finmindtrade.com/v2/user_info", 
-            params={"token": self.__finmind_token},
-            )
-        req_count, req_limit = resp.json()["user_count"], resp.json()["api_request_limit"]
-        if text:
-            print(f'usage: {req_count}/{req_limit}')
-        return (req_count>=req_limit)
-    
-    def finmind_countdown(self, text='waiting for api limit refresh:', sec=1800):
-        while sec:
-            mins, secs = divmod(sec, 60)
-            time_format = f'{mins:02d}:{secs:02d}'
-            print(text, time_format)
-            time.sleep(1)
-            sec -= 1
-        print("time's up!")
-
-    # nearby brokers
-    def insert_stock_broker_distance(self):
-        def calc_distance(latlng1, latlng2):
-            if any(val is None for val in [latlng1, latlng2]):
-                return 1000
-
-            lat1, lon1 = np.radians(latlng1[0]), np.radians(latlng1[1])
-            lat2, lon2 = np.radians(latlng2[0]), np.radians(latlng2[1])
-            
-            dlat = lat2 - lat1
-            dlon = lon2 - lon1
-            
-            a = np.sin(dlat/2)**2 + np.cos(lat1) * np.cos(lat2) * np.sin(dlon/2)**2
-            c = 2 * np.arcsin(np.sqrt(a))
-                    
-            r = 6371
-            return round(c * r, 3)
-
-        stock_latlng = self.read_dataset('stock_address', columns=['stock_id', 'latlng']).rename(columns={'latlng':'stock_latlng'})
-        broker_latlng = self.read_dataset('broker_info', columns=['broker_id', 'latlng']).rename(columns={'latlng':'broker_latlng'})
-        stock_broker_distance = stock_latlng\
-            .merge(broker_latlng, how='cross')\
-            .set_index(['stock_id', 'broker_id'])\
-            .assign(distance=lambda x: x.apply(lambda row: calc_distance(row['stock_latlng'], row['broker_latlng']), axis=1))\
-            [['distance']]\
-            .reset_index()
-        return self.write_dataset('stock_broker_distance', stock_broker_distance)
-
-    def insert_nearby_broker(self, rank_threshold=30):
-        stock_broker_distance = self.read_dataset('stock_broker_distance')
-        brokers_within_3km = stock_broker_distance.query('distance <= 3')\
-            .groupby('stock_id').size()
-        rank_distance = stock_broker_distance.groupby('stock_id')['distance']\
-            .nsmallest(rank_threshold).reset_index(level=0)\
-            .groupby('stock_id')['distance'].max()
-
-        def nearby_broker(row, method='Cmoney'):
-            num_brokers_3km = brokers_within_3km.get(row['stock_id'], 0)
-            distance = row['distance']
-            if method == 'Cmoney':
-                if num_brokers_3km > 30:
-                    return 1 if distance <= 1 else 0
-                elif num_brokers_3km == 0:
-                    return 1 if distance <= 10 else 0
-                else:
-                    return 1 if distance <= 3 else 0
-            if method == 'rank':
-                return 1 if distance <= rank_distance.get(row['stock_id']) else 0
-
-        nearby_broker_df = stock_broker_distance\
-            .assign(
-                nearby_broker_Cmoney=lambda x: x.apply(nearby_broker, axis=1, method='Cmoney'),
-                nearby_broker_rank=lambda x: x.apply(nearby_broker, axis=1, method='rank'),
-            )\
-            [['stock_id', 'broker_id', 'nearby_broker_Cmoney', 'nearby_broker_rank']]
-
-
-        return self.write_dataset('nearby_broker', nearby_broker_df)
-
-    def insert_stock_nearby_broker_money(self):
-        nearby_broker = self.read_dataset('nearby_broker')
-        try:
-            pass
-        except:
-            pass
-        'work in progress!!'
-
-        def process_broker_money(d):
-            broker_money = self.read_dataset('broker_money', columns=['date', 'stock_id', 'broker_id', 'money'], start=d, end=d)\
-                .merge(nearby_broker, on=['stock_id', 'broker_id'], how='left')\
-                .dropna()
-            data_path = f"{self._get_path(dataset='broker_money')}/broker_money_{date}.parquet"
-            if d not in broker_money['date'].unique():
-                return
-
-            nb_money = broker_money.dropna()\
-                .assign(
-                    nearby_brokers_Cmoney_money=lambda x: x.nearby_brokers_Cmoney * x.money,
-                    nearby_brokers_rank_money=lambda x: x.nearby_brokers_rank * x.money,
-                )\
-                [['date', 'stock_id', 'nearby_brokers_Cmoney_money', 'nearby_brokers_rank_money']]\
-                .groupby(['date', 'stock_id'])\
-                .sum()\
-                .reset_index()
-            
-            return nb_money
-
-        nearby_brokers = self.read_dataset('nearby_brokers')
-        nearby_broker_money = pd.DataFrame()
-
-        dates = sorted([f.split('_')[-1].replace('.parquet', '') for f in os.listdir(f'{self.databank_path}/broker/broker_money') if f.endswith('.parquet')])
-
-        with ThreadPoolExecutor(max_workers=20) as executor:
-            results = list(executor.map(process_broker_money, dates))
-
-        for nb_money in results:
-            nearby_broker_money = pd.concat([nearby_broker_money, nb_money], ignore_index=True)
-
-        return self.write_dataset('stock_nearby_brokers_money', nearby_broker_money)
-
-
-class FactorModelHandler(DataBankInfra):
-    def __init__(self):
-        super().__init__()
-
-    def _update_factor_model(self):
-        from quantdev.analysis import calc_factor_longshort_return
-        from quantdev.backtest import get_data, get_factor
-
-        model = pd.DataFrame({
-            'MKT':self._calc_market_factor(),
-            'PBR':calc_factor_longshort_return(get_factor('股價淨值比', asc=False), rebalance='QR'),
-            'MCAP_to_REV':calc_factor_longshort_return(get_factor(get_data('個股市值(元)')/1000/get_data('營業收入'), asc=False), rebalance='QR'),
-            'SIZE':calc_factor_longshort_return(get_factor('個股市值(元)', asc=False), rebalance='Q'),
-            'VOL':calc_factor_longshort_return(get_factor(get_data('成交金額(元)').rolling(60).mean(), asc=False), rebalance='Q'),
-            'MTM3m':calc_factor_longshort_return(get_factor('mtm_3m'), rebalance='Q'),
-            'MTM6m':calc_factor_longshort_return(get_factor('mtm_6m'), rebalance='Q'),
-            'ROE':calc_factor_longshort_return(get_factor('roe'), rebalance='QR'),
-            'OPM':calc_factor_longshort_return(get_factor('營業利益率'), rebalance='QR'),
-            'CMA':calc_factor_longshort_return(get_factor('資產成長率'), rebalance='QR'),
-        }).dropna(how='all')
-
-        self.write_dataset('factor_model', model)
-        logging.info('Factor model updated')
-
-    def _calc_market_factor(self, mkt_idx:Literal['TR', None]=None):
-        # define market indices mapping
-        mkt_indice = {
-            None: {
-                'TWSE': {'stock_id': 'IX0001', 'ch_name': '加權指數'}, 
-                'TPEX': {'stock_id': 'IX0043', 'ch_name': 'OTC 指數'}
-            },
-            'TR': {
-                'TWSE': {'stock_id': 'IR0001', 'ch_name': '報酬指數'}, 
-                'TPEX': {'stock_id': 'IR0043', 'ch_name': '櫃檯報酬指'}
-            }
-        }
-        idx_ids = [v['stock_id'] for v in mkt_indice[mkt_idx].values()]
-
-        # get market cap data
-        idx_mkt_cap = self.read_dataset(
-            dataset='stock_trading_data',
-            columns=['date', 'stock_id', '個股市值(元)'],
-            filters=[['stock_id', 'in', idx_ids]]
-        ).set_index(['date', 'stock_id']).unstack('stock_id').droplevel(0, axis=1)
-
-        # get return data 
-        idx_return = self.read_dataset(
-            'stock_trading_data',
-            columns=['date', 'stock_id', '報酬率'],
-            filters=[['stock_id', 'in', idx_ids]]
-        ).set_index(['date', 'stock_id']).unstack('stock_id').droplevel(0, axis=1) / 100
-
-        # calculate market return
-        mkt_rtn = (idx_return * idx_mkt_cap).sum(axis=1) / idx_mkt_cap.sum(axis=1)
-
-        # get risk-free rate
-        rf_rate = pd.merge_asof(
-            pd.DataFrame(mkt_rtn.index),
-            self.read_dataset(
-                'rf_rate', 
-                columns=['date', 'bank', '定存利率_一年期_固定'],
-                filters=[['bank', '==', '一銀']]
-            ).rename(columns={'定存利率_一年期_固定': 'rf_rate'})[['date', 'rf_rate']].set_index('date')['rf_rate'],
-            on='date',
-            direction='backward'
-        ).assign(
-            rf_rate=lambda df: (1 + df['rf_rate']) ** (1 / df.groupby(df['date'].dt.year)['date'].transform('count')) - 1
-        ).set_index('date')['rf_rate'].ffill()
-
-        # calculate cumulative excess return
-        return (mkt_rtn - rf_rate).shift(-1).rename_axis('t_date')
 
 
 class ProcessedDataHandler(DataBankInfra):
@@ -1322,7 +859,7 @@ class ProcessedDataHandler(DataBankInfra):
             - shareholding_pct_diff: 股東持股比例變化率
             - inst_investor_ratio_diff: 法人持股比例變化率
             - inst_investor_money: 法人買賣超金額
-            - stock_return: 個股報酬率
+            - exp_returns: 個股報酬率
 
     Returns:
         None
@@ -1350,147 +887,98 @@ class ProcessedDataHandler(DataBankInfra):
         self.processed_datasets = { 
             'fin_data_chng':{'source':'fin_data', 'func':self._update_fin_data_chng},
             'fin_ratio_diff':{'source':'fin_data', 'func':self._update_fin_ratio_diff},
-            'roe_roa':{'source':'fin_data', 'func':self._update_roe_roa},
             'monthly_rev_chng':{'source':'monthly_rev', 'func':self._update_monthly_rev_chng},
+            'monthly_rev_reach_ath':{'source':'monthly_rev', 'func':self._update_monthly_rev_reach_ath},
+            'monthly_rev_ath_distance':{'source':'monthly_rev', 'func':self._update_monthly_rev_ath_distance},
             'stock_momentum':{'source':'stock_trading_data', 'func':self._update_stock_momentum},
             'shareholding_pct':{'source':'stock_custody', 'func':self._update_shareholding_pct},
             'shareholding_pct_diff':{'source':'stock_custody', 'func':self._update_shareholding_pct_diff},
             'inst_investor_ratio_diff':{'source':'trading_activity', 'func':self._update_inst_investor_ratio_diff},
             'inst_investor_money_chng':{'source':'trading_activity', 'func':self._update_inst_investor_money_chng},
-            'stock_return':{'source':'stock_trading_data', 'func':self._update_stock_return},
+            'exp_returns':{'source':'stock_trading_data', 'func':self._update_exp_returns},
             'stock_sector':{'source':'stock_trading_notes', 'func':self._update_stock_sector},
         }
         # self.processed_datasets.update(self.factors_datasets)
     
     # fundamental
-    def _update_fin_data_chng(self, columns:list=['營業收入', '稅後淨利', '預收款_流動', '營運產生現金流量', '資產總計','每股盈餘','員工人數']):
+    def _update_fin_data_chng(self):
         """計算財務資料變化率
 
-        計算財務資料的移動平均與變化率，包含季增率(qoq)與年增率(yoy)。
-
-        Args:
-            columns (list): 要計算變化率的欄位名稱，預設為:
-
-                - 營業收入
-                - 稅後淨利 
-                - 預收款_流動
-                - 營運產生現金流量
-                - 資產總計
-                - 每股盈餘
+        計算財務資料的季增率(qoq)與年增率(yoy)。
 
         Returns:
             None: 將計算結果寫入 fin_data_chng 資料集
 
         Examples:
             ```python
-            # 計算預設欄位的變化率
+            # 更新財務資料變化率
             db = DataBank()
             db._update_fin_data_chng()
-
-            # 計算指定欄位的變化率
-            db._update_fin_data_chng(columns=['營業收入', '稅後淨利'])
             ```
 
         Note:
-            - 移動平均包含4季、8季、12季
+            - 自動計算所有財務欄位的變化率,不包含比率類欄位
             - 變化率包含季增率(qoq)與年增率(yoy)
-            - 所有欄位都會計算移動平均與變化率
         """
+
+        columns = [col for col in self.list_columns('fin_data') if not any(col.endswith(c) for c in [
+                    '率', '常續ROE', '常續ROA', 
+                    '期間別', '序號', '季別', '合併(Y/N)', '幣別', '產業別', 
+                    'date', 'release_date', 'stock_id', 't_date', 'insert_time'
+            ])
+        ]
         df = self.read_dataset('fin_data', columns=['date', 'release_date', 'stock_id', *columns, 't_date'])
         
-        # calculate rolling average
-        for col in columns:
-            # rolling average
-            rolling_avg = {'4q':4, '8q':8, '12q':12}
-            for k, v in rolling_avg.items():
-                df[f'{col}_{k}_avg'] = df.groupby(['stock_id'])[col].transform(lambda d: d.rolling(window=v).mean())
-            
         # calculate changes
-        changes = {'qoq':1, 'yoy':4}
+        grouped = df.groupby('stock_id')
+        changes = {'QOQ':1, 'YOY':4}
         for col in [col for col in df.columns if any(col.startswith(c) for c in columns)]:
             for k, v in changes.items():
-                df[f'{col}_{k}'] = df.groupby(['stock_id'])[col].pct_change(periods=v, fill_method=None)
+                df[f'{col}_{k}'] = grouped[col].pct_change(periods=v, fill_method=None)
 
-        df = df[['date', 'release_date', 'stock_id'] + [col for col in df.columns if any(col.startswith(c) for c in columns)] + ['t_date']]
+        df = df[['date', 'release_date', 'stock_id'] + [col for col in df.columns if any(col.endswith(c) for c in ['QOQ','YOY'])] + ['t_date']]
         
         return self.write_dataset(dataset='fin_data_chng', df=df)
     
-    def _update_fin_ratio_diff(self, columns=['營業毛利率', '營業利益率', '稅前淨利率', '稅後淨利率','常續ROE']):
-        """計算財務比率的移動平均與差分
+    def _update_fin_ratio_diff(self):
+        """計算財務比率的差分
 
-        計算財務比率的移動平均與差分，包含季差(qoq_diff)與年差(yoy_diff)。
-
-        Args:
-            columns (list): 要計算差分的欄位名稱，預設為:
-
-                - 營業毛利率
-                - 營業利益率 
-                - 稅前淨利率
-                - 稅後淨利率
+        計算財務比率的差分，包含季差(qoq_diff)與年差(yoy_diff)。
 
         Returns:
             None: 將計算結果寫入 fin_ratio_diff 資料集
 
         Examples:
             ```python
-            # 計算預設欄位的差分
+            # 更新財務比率差分
             db = DataBank()
             db._update_fin_ratio_diff()
-
-            # 計算指定欄位的差分
-            db._update_fin_ratio_diff(columns=['營業毛利率', '營業利益率'])
             ```
 
         Note:
-            - 移動平均包含4季、8季、12季
+            - 自動計算所有財務比率欄位的差分
             - 差分包含季差(qoq_diff)與年差(yoy_diff)
-            - 所有欄位都會計算移動平均與差分
         """
+        columns = [col for col in self.list_columns('fin_data') if any(col.endswith(c) for c in ['率', '常續ROE', '常續ROA'])]
         df = self.read_dataset('fin_data', columns=['date', 'release_date', 'stock_id', *columns, 't_date'])
         
         # calculate rolling average
-        for col in columns:
-            rolling_avg = {'4q':4, '8q':8, '12q':12}
-            for k, v in rolling_avg.items():
-                df[f'{col}_{k}_avg'] = df.groupby(['stock_id'])[col].transform(lambda d: d.rolling(window=v).mean())
+        # for col in columns:
+        #     rolling_avg = {'4q':4, '8q':8, '12q':12}
+        #     for k, v in rolling_avg.items():
+        #         df[f'{col}_{k}_avg'] = df.groupby(['stock_id'])[col].transform(lambda d: d.rolling(window=v).mean())
             
         # calculate changes
-        changes = {'qoq_diff':1, 'yoy_diff':4}
+        grouped = df.groupby('stock_id')
+        changes = {'QOQ_DIFF':1, 'YOY_DIFF':4}
         for col in [col for col in df.columns if any(col.startswith(c) for c in columns)]:
             for k, v in changes.items():
-                # Calculate all diffs at once and join to avoid fragmentation
-                diff_df = df.groupby(['stock_id'])[col].diff(periods=v).round(3)
-                df = df.assign(**{f'{col}_{k}': diff_df})
+                df[f'{col}_{k}'] = grouped[col].diff(periods=v).round(3)
         
-        df = df[['date', 'release_date', 'stock_id'] + [col for col in df.columns if any(col.startswith(c) for c in columns)] + ['t_date']]
+        df = df[['date', 'release_date', 'stock_id'] + [col for col in df.columns if any(col.endswith(c) for c in ['QOQ_DIFF','YOY_DIFF'])] + ['t_date']]
         
         return self.write_dataset(dataset='fin_ratio_diff', df=df)
 
-    def _update_roe_roa(self):
-        """計算股東權益報酬率(ROE)與總資產報酬率(ROA)
-
-        計算公司的ROE與ROA財務指標。
-
-        Returns:
-            None: 將計算結果寫入 roe_roa 資料集
-
-        Examples:
-            ```python
-            db = DataBank()
-            db._update_roe_roa()
-            ```
-
-        Note:
-            - ROE = 稅後淨利/股東權益總計
-            - ROA = 稅後淨利/資產總計
-        """
-        df = self.read_dataset('fin_data', columns=['date', 'release_date', 'stock_id', '股東權益總計', '資產總計', '稅後淨利', 't_date'])
-        df['roe'] = (df['稅後淨利']/ df['股東權益總計']).round(5)
-        df['roa'] = (df['稅後淨利']/ df['資產總計']).round(5)
-        df = df[['date', 'release_date', 'stock_id', 'roe', 'roa', 't_date']]
-
-        return self.write_dataset('roe_roa', df)
-    
     def _update_monthly_rev_chng(self):
         """計算單月營收的變化率
 
@@ -1519,26 +1007,86 @@ class ProcessedDataHandler(DataBankInfra):
         column = '單月營收(千元)'
 
         # calculate rolling average
-        rolling_avg = {'3m':3, '1y':12, '2y':24, '3y':36,}
+        rolling_avg = {'3M':3, '1Y':12, '2Y':24, '3Y':36,}
         for k, v in rolling_avg.items():
-            df[f'{column}_{k}_avg'] = df.groupby(['stock_id'])[column].transform(lambda d: d.rolling(window=v).mean())
+            df[f'{column}_{k}_AVG'] = df.groupby(['stock_id'])[column].transform(lambda d: d.rolling(window=v).mean())
         
         # calculate changes
-        changes = { 'mom':1, 'qoq':3, 'yoy':12, }
-        for col in [column] + [col for col in df.columns if col.endswith('_avg')]:
+        changes = { 'MOM':1, 'QOQ':3, 'YOY':12, }
+        for col in [column] + [col for col in df.columns if col.endswith('_AVG')]:
             for k, v in changes.items():
                 df[f'{col}_{k}'] = round(df.groupby(['stock_id'])[col].pct_change(periods=v, fill_method=None), 3)
         
         # fillna
-        df['單月營收(千元)_yoy'] = df['單月營收(千元)_yoy'].fillna(df['單月營收成長率％']/100)
-        df['單月營收(千元)_1y_avg_yoy'] = df['單月營收(千元)_1y_avg_yoy'].fillna(df['近12月累計營收成長率％']/100)
-        df['單月營收(千元)_3m_avg_yoy'] = df['單月營收(千元)_3m_avg_yoy'].fillna(df['近3月累計營收成長率％']/100)
-        df['單月營收(千元)_3m_avg_mom'] = df['單月營收(千元)_3m_avg_mom'].fillna(df['近3月累計營收與上月比％']/100)
-
+        fillna_map = {
+            '單月營收(千元)_YOY': '單月營收成長率％',
+            '單月營收(千元)_1Y_AVG_YOY': '近12月累計營收成長率％',
+            '單月營收(千元)_3M_AVG_YOY': '近3月累計營收成長率％',
+            '單月營收(千元)_3M_AVG_MOM': '近3月累計營收與上月比％',
+        }
+        for col, fill_col in fillna_map.items():
+            df[col] = df[col].fillna(df[fill_col]/100)
 
         df = df[['date', 'release_date', 'stock_id'] + [col for col in df.columns for key in changes if col.endswith(key)] + ['t_date']]
             
         return self.write_dataset(dataset='monthly_rev_chng', df=df)
+
+    def _update_monthly_rev_reach_ath(self):
+        """計算單月營收是否達到歷史新高
+
+        計算單月營收是否達到歷史新高。
+
+        Returns:
+        """
+        df = self.read_dataset('monthly_rev', columns=[
+            'date', 'release_date', 'stock_id', 
+            '單月營收(千元)', 
+            't_date'
+            ])
+        column = '單月營收(千元)'
+
+        periods = {'3M':3, '1Y':12, '2Y':24, '3Y':36}
+        for k, v in periods.items():
+            df[f'{column}_is_{k}_ATH'] = (df[column] == df.groupby(['stock_id'])[column].transform(lambda x: x.rolling(window=v).max()))
+
+        # Calculate all-time high separately
+        df[f'{column}_is_ATH'] = (df[column] == df.groupby(['stock_id'])[column].transform(lambda x: x.expanding().max()))
+
+        df = df[['date', 'release_date', 'stock_id'] + [col for col in df.columns if col.endswith('ATH')] + ['t_date']]
+
+        return self.write_dataset(dataset='monthly_rev_reach_ath', df=df)
+    
+    def _update_monthly_rev_ath_distance(self):
+        """計算單月營收達到歷史新高以來的月數
+
+        計算單月營收達到歷史新高以來的月數。
+
+        """
+        df = self.read_dataset('monthly_rev', columns=[
+            'date', 'release_date', 'stock_id', 
+            '單月營收(千元)', 
+            't_date'
+            ])
+        column = '單月營收(千元)'
+
+        # Calculate how many months the current revenue is the highest for
+        df['單月營收_ATH_DISTANCE'] = 0
+        
+        # For each stock, calculate how many months back the current revenue is highest
+        def calc_ath_months(x):
+            curr_val = x.iloc[-1]
+            for i in range(len(x)-1, -1, -1):
+                if x.iloc[i] > curr_val:
+                    return len(x) - i - 1
+            return len(x)
+            
+        df['單月營收_ATH_DISTANCE'] = df.groupby('stock_id')[column].transform(
+            lambda x: x.expanding().apply(calc_ath_months)
+        )
+
+        df = df[['date', 'release_date', 'stock_id', '單月營收_ATH_DISTANCE', 't_date']]
+
+        return self.write_dataset(dataset='monthly_rev_ath_distance', df=df)
 
     # technical
     def _update_stock_momentum(self):
@@ -1565,13 +1113,13 @@ class ProcessedDataHandler(DataBankInfra):
         
         # calculate changes
         mtm_map = {
-            'mtm_1w':5, 'mtm_1m':20, 'mtm_3m':60, 'mtm_6m':120, 'mtm_1y':240, 'mtm_3y':720,
+            'MTM_1W':5, 'MTM_1M':20, 'MTM_3M':60, 'MTM_6M':120, 'MTM_1Y':240, 'MTM_3Y':720,
         }
         
         for k, v in mtm_map.items():
             df[k] = df.groupby(['stock_id'])['c_return'].transform(lambda x: x.pct_change(periods=v, fill_method=None)).round(3)
 
-        df = df[['date', 'stock_id'] + [col for col in df.columns if col.startswith('mtm')] + ['t_date']]
+        df = df[['date', 'stock_id'] + [col for col in df.columns if col.startswith('MTM')] + ['t_date']]
         return self.write_dataset(dataset='stock_momentum', df=df)
 
     # chip
@@ -1632,7 +1180,7 @@ class ProcessedDataHandler(DataBankInfra):
         df = self.read_dataset('shareholding_pct')
         
         # calculate changes
-        changes = { 'wow_diff':1, 'mom_diff':4, 'qoq_diff':13, 'yoy_diff':52,}
+        changes = { 'WOW_DIFF':1, 'MOM_DIFF':4, 'QOQ_DIFF':13, 'YOY_DIFF':52,}
         for col in [col for col in df.columns if col.endswith('張')]:
             for k, v in changes.items():
                 df[f'{col}_{k}'] = round(df.groupby(['stock_id'])[col].diff(periods=v), 3)
@@ -1666,7 +1214,7 @@ class ProcessedDataHandler(DataBankInfra):
         grouped = df.groupby('stock_id')
         
         # Calculate all rolling averages at once
-        rolling_avg = {'1w': 5, '1m': 20, '1q': 60}
+        rolling_avg = {'1W': 5, '1M': 20, '1Q': 60}
         avg_cols = []
         for col in columns:
             for key, window in rolling_avg.items():
@@ -1675,7 +1223,7 @@ class ProcessedDataHandler(DataBankInfra):
                 df[new_col] = grouped[col].transform(lambda x: x.rolling(window=window).mean())
 
         # Calculate all changes at once 
-        changes = {'wow_diff': 5, 'mom_diff': 20, 'qoq_diff': 60}
+        changes = {'WOW_DIFF': 5, 'MOM_DIFF': 20, 'QOQ_DIFF': 60}
         diff_cols = []
         for col in columns + avg_cols:
             for key, periods in changes.items():
@@ -1710,7 +1258,7 @@ class ProcessedDataHandler(DataBankInfra):
         grouped = df.groupby('stock_id')
         
         # Calculate all rolling sums at once
-        rolling_sum = {'1w': 5, '1m': 20, '1q': 60}
+        rolling_sum = {'1W': 5, '1M': 20, '1Q': 60}
         sum_cols = []
         
         # Process all columns and periods in a single loop
@@ -1721,7 +1269,7 @@ class ProcessedDataHandler(DataBankInfra):
                 df[new_col] = grouped[col].transform(lambda x: x.rolling(window=window).sum())
         
         # Calculate all changes at once 
-        changes = {'wow_chng': 5, 'mom_chng': 20, 'qoq_chng': 60}
+        changes = {'WOW': 5, 'MOM': 20, 'QOQ': 60}
         chng_cols = []
         for col in columns + sum_cols:
             for key, periods in changes.items():
@@ -1736,16 +1284,16 @@ class ProcessedDataHandler(DataBankInfra):
         return self.write_dataset(dataset='inst_investor_money_chng', df=df)
 
     # backtest
-    def _update_stock_return(self):
+    def _update_exp_returns(self):
         """計算個股報酬率
 
         Returns:
-            None: 將計算結果寫入 stock_return 資料集
+            None: 將計算結果寫入 exp_returns 資料集
 
         Examples:
             ```python
             db = DataBank()
-            db._update_stock_return()
+            db._update_exp_returns()
             ```
 
         Note:
@@ -1761,7 +1309,7 @@ class ProcessedDataHandler(DataBankInfra):
             .unstack('stock_id')\
             .droplevel(0, axis=1)\
             .dropna(axis=0, how='all')
-        return self.write_dataset(dataset='stock_return', df=df)
+        return self.write_dataset(dataset='exp_returns', df=df)
  
     def _update_stock_sector(self):
         df = self.read_dataset('stock_trading_notes', columns=['date', 'stock_id', '主產業別(中)', '是否為臺灣50成分股', 't_date'])\
@@ -1812,6 +1360,79 @@ class ProcessedDataHandler(DataBankInfra):
         elif (not dataset) & (not tej_dataset):
             for k in self.processed_datasets.keys():
                 self.update_processed_data(dataset=k)
+
+
+class FactorModelHandler(DataBankInfra):
+    def __init__(self):
+        super().__init__()
+
+    def _update_factor_model(self):
+        from quantdev.analysis import calc_factor_longshort_return
+        from quantdev.backtest import get_data, get_rank
+
+        model = pd.DataFrame({
+            'MKT':self._calc_market_factor(),
+            'PBR':calc_factor_longshort_return(get_rank('股價淨值比', asc=False), rebalance='QR'),
+            'MCAP_to_REV':calc_factor_longshort_return(get_rank(get_data('個股市值(元)')/1000/get_data('營業收入'), asc=False), rebalance='QR'),
+            'SIZE':calc_factor_longshort_return(get_rank('個股市值(元)', asc=False), rebalance='Q'),
+            'VOL':calc_factor_longshort_return(get_rank(get_data('成交金額(元)').rolling(60).mean(), asc=False), rebalance='Q'),
+            'MTM3m':calc_factor_longshort_return(get_rank('mtm_3m'), rebalance='Q'),
+            'MTM6m':calc_factor_longshort_return(get_rank('mtm_6m'), rebalance='Q'),
+            'ROE':calc_factor_longshort_return(get_rank('常續ROE'), rebalance='QR'),
+            'OPM':calc_factor_longshort_return(get_rank('營業利益率'), rebalance='QR'),
+            'CMA':calc_factor_longshort_return(get_rank('資產成長率'), rebalance='QR'),
+        }).dropna(how='all')
+
+        self.write_dataset('factor_model', model)
+        logging.info('Factor model updated')
+
+    def _calc_market_factor(self, mkt_idx:Literal['TR', None]=None):
+        # define market indices mapping
+        mkt_indice = {
+            None: {
+                'TWSE': {'stock_id': 'IX0001', 'ch_name': '加權指數'}, 
+                'TPEX': {'stock_id': 'IX0043', 'ch_name': 'OTC 指數'}
+            },
+            'TR': {
+                'TWSE': {'stock_id': 'IR0001', 'ch_name': '報酬指數'}, 
+                'TPEX': {'stock_id': 'IR0043', 'ch_name': '櫃檯報酬指'}
+            }
+        }
+        idx_ids = [v['stock_id'] for v in mkt_indice[mkt_idx].values()]
+
+        # get market cap data
+        idx_mkt_cap = self.read_dataset(
+            dataset='stock_trading_data',
+            columns=['date', 'stock_id', '個股市值(元)'],
+            filters=[['stock_id', 'in', idx_ids]]
+        ).set_index(['date', 'stock_id']).unstack('stock_id').droplevel(0, axis=1)
+
+        # get return data 
+        idx_return = self.read_dataset(
+            'stock_trading_data',
+            columns=['date', 'stock_id', '報酬率'],
+            filters=[['stock_id', 'in', idx_ids]]
+        ).set_index(['date', 'stock_id']).unstack('stock_id').droplevel(0, axis=1) / 100
+
+        # calculate market return
+        mkt_rtn = (idx_return * idx_mkt_cap).sum(axis=1) / idx_mkt_cap.sum(axis=1)
+
+        # get risk-free rate
+        rf_rate = pd.merge_asof(
+            pd.DataFrame(mkt_rtn.index),
+            self.read_dataset(
+                'rf_rate', 
+                columns=['date', 'bank', '定存利率_一年期_固定'],
+                filters=[['bank', '==', '一銀']]
+            ).rename(columns={'定存利率_一年期_固定': 'rf_rate'})[['date', 'rf_rate']].set_index('date')['rf_rate'],
+            on='date',
+            direction='backward'
+        ).assign(
+            rf_rate=lambda df: (1 + df['rf_rate']) ** (1 / df.groupby(df['date'].dt.year)['date'].transform('count')) - 1
+        ).set_index('date')['rf_rate'].ffill()
+
+        # calculate cumulative excess return
+        return (mkt_rtn - rf_rate).shift(-1).rename_axis('t_date')
 
 
 class PublicDataHandler(DataBankInfra):
@@ -1991,7 +1612,100 @@ class PublicDataHandler(DataBankInfra):
         # self._update_stock_address()
 
 
-class Databank(TEJHandler, FinMindHandler, ProcessedDataHandler, PublicDataHandler, FactorModelHandler):
+class DataLoader(DataBankInfra):
+    def __init__(self):
+        super().__init__()
+        self.cashe_dict = {}
+        self.func_dict = {}
+        self.loader_path = os.path.join(self.databank_path, 'data')
+        
+        # items to be stored
+        not_item_col = ['date', 'release_date', 'stock_id', 't_date', 'insert_time']
+        self.data_items = {
+            # tej_data
+            'monthly_rev':None,
+            'fin_data':[col for col in self.list_columns('fin_data') if col not in [*not_item_col, '期間別', '序號', '季別', '合併(Y/N)', '幣別', '產業別',]],
+            'stock_trading_data':[col for col in self.list_columns('stock_trading_data') if col not in [*not_item_col, '市場別', '調整係數(除權)', '調整係數']],
+            'stock_trading_notes':None,
+            'trading_activity':[col for col in self.list_columns('trading_activity') if col not in [*not_item_col, '市場別']],
+            'stock_custody':[col for col in self.list_columns('stock_custody') if col not in [*not_item_col, 'release_date_集保庫存', 'release_date_集保股權', '市場別']],
+            'self_disclosed':[col for col in self.list_columns('self_disclosed') if col not in [*not_item_col, '期間別', '序號', '季別', '合併(Y/N)', '幣別','產業別']],
+            'fin_data_chng':None,
+            'fin_ratio_diff':None,
+            'monthly_rev_chng':None,
+            'monthly_rev_reach_ath':None,
+            'monthly_rev_ath_distance':None,
+            'stock_momentum':None,
+            'shareholding_pct':None,
+            'shareholding_pct_diff':None,
+            'inst_investor_ratio_diff':None,
+            'inst_investor_money_chng':None,
+        }
+        self.data_items.update({k: [col for col in self.list_columns(k) if col not in not_item_col] for k,v in self.data_items.items() if v is None})
+
+    def __getitem__(self, key):
+        if key in self.cashe_dict:
+            return self.cashe_dict[key]
+        elif key in self.func_dict:
+            return self.func_dict[key]
+        else:
+            file_path = os.path.join(self.loader_path, f'{key}.{self.data_type}')
+            
+            if os.path.exists(file_path):
+                try:
+                    return pd.read_parquet(file_path)
+                except:
+                    raise ValueError(f'Cannot read {file_path}')
+            raise ValueError(f'{file_path} not exist')
+
+    def __call__(self, key):
+        return self.__getitem__(key)
+
+    def __setitem__(self, key, data:pd.DataFrame):
+        file_path = os.path.join(self.loader_path, f'{key}.{self.data_type}')
+        if data.dtypes.apply(lambda x: np.issubdtype(x, np.number)).all():
+            data[np.isfinite(data)].to_parquet(file_path)
+        else:
+            data.to_parquet(file_path)
+    
+    def convert_to_dataloader(self, data:Union[pd.DataFrame, str], t_date:pd.DataFrame=None):
+        if isinstance(data, str):
+            dataset = self.find_dataset(data)
+            data = self.read_dataset(dataset, columns=['t_date', 'stock_id', data])
+        
+        t_date = self.read_dataset('mkt_calendar', columns=['date'], filters=[('休市原因中文說明(人工建置)','=','')])\
+            .rename(columns={'date':'t_date'})\
+            .loc[lambda x: x['t_date'] <= pd.to_datetime(dt.datetime.today().date()+dt.timedelta(days=2))] if t_date is None else t_date
+        return data\
+            .drop_duplicates(subset=['t_date','stock_id'], keep='last')\
+            .set_index(['t_date','stock_id'])\
+            .sort_index()\
+            .unstack()\
+            .droplevel(0, axis=1)\
+            .reindex(index = t_date['t_date'],method='ffill')\
+            .ffill(limit=120)
+    
+    def update_dataloader(self, datasets:Union[str, list[str]]=None):
+        t_date = self.read_dataset('mkt_calendar', columns=['date'], filters=[('休市原因中文說明(人工建置)','=','')])\
+            .rename(columns={'date':'t_date'})\
+            .loc[lambda x: x['t_date'] <= pd.to_datetime(dt.datetime.today().date())]
+        
+        if datasets:
+            data_items = [(datasets, self.data_items[datasets]) for datasets in datasets]
+        else:
+            data_items = self.data_items.items()
+            
+        for dataset_name, columns in data_items:
+            data = self.read_dataset(dataset_name)
+            for item in columns:
+                self[item] = self.convert_to_dataloader(data[['t_date', 'stock_id', item]], t_date)
+
+    def list_dataloader(self):
+        parquet_set = set(filter(lambda X:X.endswith(f".{self.data_type}"),os.listdir(self.loader_path)))
+        return sorted(map(lambda X:X[:-(len(self.data_type)+1)],list(parquet_set)))
+
+
+class Databank(TEJHandler, ProcessedDataHandler, PublicDataHandler, FactorModelHandler, DataLoader):
     """quantdev 資料庫
 
     整合 TEJ、FinMind 與公開資料的資料處理功能。
