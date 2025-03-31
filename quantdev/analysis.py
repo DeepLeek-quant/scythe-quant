@@ -252,7 +252,7 @@ def calc_factor_longshort_return(factor:pd.DataFrame, rebalance:str='QR', group:
     exp_returns = kwargs.get('exp_returns')
     if exp_returns is None:
         from quantdev.data import Databank
-        db = Databank()
+        db = Databank(sec_type=None)
         exp_returns = db.read_dataset('exp_returns', filter_date='t_date')
     # factor = get_factor(item=factor, asc=asc)
     long = simple_backtesting(factor>=(1-1/group), rebalance=rebalance, exp_returns=exp_returns)
@@ -288,7 +288,7 @@ def calc_factor_quantiles_return(factor:pd.DataFrame, rebalance:str='QR', group:
     exp_returns = kwargs.get('exp_returns')
     if exp_returns is None:
         from quantdev.data import Databank
-        db = Databank()
+        db = Databank(sec_type=None)
         exp_returns = db.read_dataset('exp_returns', filter_date='t_date')
     
     for q_start, q_end in [(i/group, (i+1)/group) for i in range(group)]:
@@ -330,7 +330,7 @@ def calc_factor_quantiles_return_thread(factor:Union[pd.DataFrame, str], asc:boo
     exp_returns = kwargs.get('exp_returns')
     if exp_returns is None:
         from quantdev.data import Databank
-        db = Databank()
+        db = Databank(sec_type=None)
         exp_returns = db.read_dataset('exp_returns', filter_date='t_date')
 
     def calc_quantile(q_start, q_end):
@@ -421,7 +421,7 @@ def calc_portfolio_style(portfolio_daily_rtn:Union[pd.DataFrame, pd.Series], win
     """
 
     from quantdev.data import Databank
-    db = Databank()
+    db = Databank(sec_type=None)
     model = db.read_dataset('factor_model').drop(['MTM6m', 'CMA'], axis=1)
     data = pd.concat([portfolio_daily_rtn, model], axis=1).dropna()
     
@@ -440,7 +440,7 @@ def calc_portfolio_style(portfolio_daily_rtn:Union[pd.DataFrame, pd.Series], win
 
 def calc_brinson_model(portfolio_df:pd.DataFrame, exp_returns:pd.DataFrame, benchmark:list[str]):
     from quantdev.data import Databank
-    db = Databank()
+    db = Databank(sec_type=None)
 
     portfolio_df = portfolio_df[portfolio_df!=0].stack()
 
@@ -538,7 +538,7 @@ def create_random_portfolios(returns:pd.DataFrame, num_portfolios:int=None):
 # combine factors
 def calc_reg_returns(factors:Union[dict[str, pd.DataFrame], list[pd.DataFrame]], rebalance:str='MR', method:Literal['OLS', 'GLS']='GLS'):
     from quantdev.data import Databank
-    returns = resample_returns(Databank().read_dataset('exp_returns'), t=rebalance)\
+    returns = resample_returns(Databank(sec_type=None).read_dataset('exp_returns'), t=rebalance)\
         .stack()\
         .reset_index()\
         .rename(columns={'level_0':'t_date', 0:'R'})\
@@ -550,7 +550,7 @@ def calc_reg_returns(factors:Union[dict[str, pd.DataFrame], list[pd.DataFrame]],
         lambda x: pd.Series(reg_methods[method](x['R'], sm.add_constant(x.drop(columns=['R']))).fit().params)
     ).drop(columns=['const'])
 
-def calc_max_icir_weights(ic_df:pd.DataFrame, window:int=4, neg_ok:bool=False) -> pd.DataFrame:
+def calc_max_ir_weights(ic_df:pd.DataFrame, window:int=4, neg_weight:bool=False) -> pd.DataFrame:
     """
     計算最大化 IC_IR 的權重，可選擇是否允許負權重
     
@@ -559,7 +559,7 @@ def calc_max_icir_weights(ic_df:pd.DataFrame, window:int=4, neg_ok:bool=False) -
         window: 計算權重的滾動窗口大小
         allow_negative: 是否允許負權重，預設為False
     """
-    def optimize_window(window_df, allow_negative=False):
+    def optimize_window(window_df, neg_weight=False):
         factor_names = window_df.columns
         bar_ic = window_df.mean().values  # shape: (N,)
         sigma = window_df.cov().values    # shape: (N, N)
@@ -569,13 +569,14 @@ def calc_max_icir_weights(ic_df:pd.DataFrame, window:int=4, neg_ok:bool=False) -
         def neg_ic_ir(w):
             numerator = np.dot(w, bar_ic)
             denominator = np.sqrt(np.dot(w.T, sigma @ w))
-            return -numerator / denominator if denominator != 0 else 1e6
+            return -numerator / (denominator if denominator != 0 else 1e6)
+
 
         # 初始猜測（均勻分配）
         x0 = np.ones(N) / N
 
         # 根據allow_negative設定權重限制
-        bounds = [(None, None) if allow_negative else (0, None) for _ in range(N)]
+        bounds = [(None, None) if neg_weight else (0, None) for _ in range(N)]
 
         # 可以加入權重總和為 1 的額外約束（不是必要的）
         constraints = [{'type': 'eq', 'fun': lambda w: np.sum(w) - 1}]
@@ -596,11 +597,52 @@ def calc_max_icir_weights(ic_df:pd.DataFrame, window:int=4, neg_ok:bool=False) -
     
     return weights
 
+def calc_max_ic_weights(ic_df: pd.DataFrame, window: int = 4, neg_weight: bool = False) -> pd.DataFrame:
+    """
+    計算「最大化加權IC」的解析解權重：
+    w = V^(-1) * mean(IC)，再做歸一化
+
+    Args:
+        ic_df: 每月IC值（index為日期，columns為因子名）
+        window: 用來估平均IC和協方差的滾動視窗長度
+        neg_weight: 是否允許負權重（預設為False）
+
+    Returns:
+        weights_df: 每月對每個因子的最佳權重
+    """
+    weights = pd.DataFrame(index=ic_df.index, columns=ic_df.columns, dtype=float)
+
+    for i in range(window, len(ic_df)):
+        window_df = ic_df.iloc[i - window:i]
+
+        bar_ic = window_df.mean().values           # 平均IC
+        V = window_df.cov().values                 # 協方差矩陣
+        factor_names = ic_df.columns
+        try:
+            V_inv = np.linalg.pinv(V)              # 計算 V 的逆（使用 pseudo-inverse 較穩定）
+            raw_w = V_inv @ bar_ic                 # 解析解：V^(-1) * IC
+        except np.linalg.LinAlgError:
+            raw_w = np.ones(len(bar_ic))           # 如果矩陣有問題，就給平均分
+
+        # 負權重不允許時，將負值設為0
+        if not neg_weight:
+            raw_w = np.maximum(raw_w, 0)
+
+        # 歸一化權重（讓總和為1）
+        if raw_w.sum() > 0:
+            norm_w = raw_w / raw_w.sum()
+        else:
+            norm_w = np.ones_like(raw_w) / len(raw_w)  # 萬一全為0，就平均分配
+
+        weights.iloc[i] = pd.Series(norm_w, index=factor_names)
+
+    return weights
+
 def combine_factors(
     factors:Union[dict[str, pd.DataFrame], list[pd.DataFrame]], 
-    method:Literal['EW', 'HR', 'HR-decay', 'IC', 'IR', 'MAX_IR']=None, 
+    method:Literal['EW', 'HR', 'HR-decay', 'IC', 'IR', 'MAX_IC', 'MAX_IR']=None, 
     rebalance:str='MR',
-    params:dict={'mean_window': 12, 'ir_window': 12, 'max_icir_window': 12, 'neg_ok': False},
+    params:dict={'window': 12, 'neg_weight': False},
     universe:pd.DataFrame=None
 )-> pd.DataFrame:
 
@@ -614,7 +656,7 @@ def combine_factors(
     # methods
     from quantdev.backtest import get_factor
     if method == 'EW':
-        return get_factor(sum(factors) / len(factors))
+        return get_factor(sum(factors) / len(factors), universe=universe)
     elif method.startswith('HR'):
         # Calculate factor weights using historical regression
         from quantdev.backtest import _get_rebalance_date
@@ -623,9 +665,9 @@ def combine_factors(
         
         # Apply rolling mean or exponential weighted mean based on method
         if len(method.split('-')) == 1:
-            weights = weights.rolling(params['mean_window']).mean().shift(1)
+            weights = weights.rolling(params['window']).mean().shift(1)
         elif (len(method.split('-'))==2) and (method.split('-')[1] == 'decay'):
-            weights = weights.rolling(params['mean_window']).apply(lambda x: x.ewm(halflife=params['mean_window']/2, adjust=False).mean().iloc[-1])
+            weights = weights.rolling(params['window']).apply(lambda x: x.ewm(halflife=params['window']/2, adjust=False).mean().iloc[-1])
         
         # Combine factors with weights
         combined_factor = calc_weighted_factors(factors_df, weights)
@@ -635,17 +677,17 @@ def combine_factors(
         factors_df = pd.concat([f[f.index.isin(_get_rebalance_date(rebalance))].stack() for f in factors], axis=1).dropna()
         
         from quantdev.data import Databank
-        exp_returns = Databank().read_dataset('exp_returns')
+        exp_returns = Databank(sec_type=None).read_dataset('exp_returns')
         ic_df = pd.concat([calc_info_coef(f, exp_returns, rebalance=rebalance) for f in factors], axis=1).dropna()
         if method == 'IC':
-            weights = ic_df.rolling(params['mean_window']).mean().shift(1)
+            weights = ic_df.rolling(params['window']).mean().shift(1)
         elif method == 'IR':
-            weights = (ic_df.rolling(params['ir_window']).mean()/ic_df.rolling(params['ir_window']).std()).shift(1)
+            weights = (ic_df.rolling(params['window']).mean()/ic_df.rolling(params['window']).std()).shift(1)
+        elif method == 'MAX_IC':
+            weights = calc_max_ic_weights(ic_df, window=params['window'], neg_weight=params['neg_weight']).shift(1)
         elif method == 'MAX_IR':
-            weights = calc_max_icir_weights(ic_df, window=params['max_icir_window'], neg_ok=params['neg_ok']).shift(1)
+            weights = calc_max_ir_weights(ic_df, window=params['window'], neg_weight=params['neg_weight']).shift(1)
         else:
             raise ValueError(f"Invalid method: {method}")
         combined_factor = calc_weighted_factors(factors_df, weights)
         return get_factor(combined_factor, universe=universe)
-    
-    

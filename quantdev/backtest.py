@@ -78,82 +78,6 @@ from .analysis import *
 
 pd.set_option('future.no_silent_downcasting', True)
 
-def get_data(item:Union[str, pd.DataFrame, Tuple[str, str]], universe:pd.DataFrame=None, ffill:int=240,)-> pd.DataFrame:
-    """取得股票資料並轉換為時間序列格式
-
-    Args:
-        item (Union[str, pd.DataFrame, Tuple[str, str]]): 資料欄位名稱或已有的 DataFrame，或是 (欄位名稱, 資料集名稱) 的 tuple
-        universe (pd.DataFrame, optional): 股票池，用於篩選要保留的股票
-        ffill (int, optional): 向前填補的交易日數，預設為240天
-
-    Returns:
-        pd.DataFrame: 轉換後的時間序列資料，index 為日期，columns 為股票代號
-
-    Examples:
-        從資料庫取得收盤價資料:
-        ```python
-        close = get_data('收盤價')
-        ```
-
-        使用已有的 DataFrame:
-        ```python
-        df = Databank().read_dataset('stock_trading_data', filter_date='t_date', start='2023-01-01', end='2023-01-02', columns=['t_date', 'stock_id', '收盤價'])
-        close = get_data(df)
-        ```
-
-        指定資料集:
-        ```python
-        close = get_data(('收盤價', 'stock_trading_data'))
-        ```
-
-        指定股票池:
-        ```python
-        universe = bts.get_data('稅後淨利') >= 0
-        close = get_data('收盤價', universe=universe)
-        ```
-
-    Note:
-        - 若輸入字串，會從資料庫尋找對應欄位資料
-        - 若輸入 DataFrame，需包含 t_date、stock_id 及目標欄位
-        - 若輸入 tuple，第一個元素為欄位名稱，第二個元素為資料集名稱
-        - 輸出資料會自動向前填補最多 240 個交易日的缺失值
-        - 會移除全部為空值的股票
-        - 若有指定 universe，只會保留 universe 內的股票資料
-    """
-
-    if isinstance(item, str):
-        raw_data = Databank().read_dataset(
-            dataset=Databank().find_dataset(item), 
-            filter_date='t_date', 
-            columns=['t_date', 'stock_id', item],
-            )
-    elif isinstance(item, tuple):
-        raw_data = Databank().read_dataset(
-            dataset=item[1],
-            filter_date='t_date',
-            columns=['t_date', 'stock_id', item[0]],
-            )
-    elif isinstance(item, pd.DataFrame):
-        raw_data = item
-
-    _t_date = Databank().read_dataset('mkt_calendar', columns=['date'], filters=[('休市原因中文說明(人工建置)','=','')]).rename(columns={'date':'t_date'})
-    data = pd.merge_asof(
-        _t_date[_t_date['t_date']<=pd.Timestamp.today() + pd.DateOffset(days=5)], 
-        raw_data\
-            .query('stock_id.str.match("^[0-9]")')\
-            .sort_values(by='t_date')\
-            .drop_duplicates(subset=['t_date', 'stock_id'], keep='last')\
-            .set_index(['t_date', 'stock_id'])\
-            .unstack('stock_id')\
-            .droplevel(0, axis=1), 
-        on='t_date', 
-        direction='backward'
-        )\
-        .ffill(limit=ffill)\
-        .set_index(['t_date'])\
-        .dropna(axis=1, how='all')
-    
-    return data[universe] if universe is not None else data
 
 def get_factor(
     data:pd.DataFrame, 
@@ -163,7 +87,6 @@ def get_factor(
     universe:pd.DataFrame=None,
 )-> pd.DataFrame:
 
-    data = data.loc[:, data.columns.str.match("^[0-9]")]
     data = data[universe] if universe is not None else data
 
     # remove outlier
@@ -274,7 +197,7 @@ def _calc_release_pct_rebalancing(type_:Literal['MR', 'QR'], pct:int=80):
         'QR': {'dataset': 'fin_data','days': range(1, 91)}
     }
     
-    data = Databank().read_dataset(map[type_]['dataset'], columns=['date', 'stock_id', 'release_date'])
+    data = Databank(sec_type=None).read_dataset(map[type_]['dataset'], columns=['date', 'stock_id', 'release_date'])
     # Create a MultiIndex for all possible combinations of dates and days
     index = pd.MultiIndex.from_product([
             data['date'].unique(),
@@ -305,7 +228,7 @@ def _calc_release_pct_rebalancing(type_:Literal['MR', 'QR'], pct:int=80):
             release_count=lambda df: df.groupby('date')['release_count'].ffill(),
             release_pct = lambda df: df['release_count'] / df['total_count']
         )[['date', 'release_date', 'release_pct']]
-    result = Databank()._add_trade_date(result)[['date', 't_date', 'release_pct']]
+    result = Databank(sec_type=None)._add_trade_date(result)[['date', 't_date', 'release_pct']]
     
     # Filter and transform the result to get rebalancing dates
     return result\
@@ -351,7 +274,7 @@ def _get_rebalance_date(rebalance:Literal['D', 'MR', 'QR', 'W', 'M', 'Q', 'Y'], 
     """
     
     # dates
-    _t_date = Databank().read_dataset('mkt_calendar', columns=['date'], filters=[('休市原因中文說明(人工建置)','=','')]).rename(columns={'date':'t_date'})
+    _t_date = Databank(sec_type=None).read_dataset('mkt_calendar', columns=['date'], filters=[('休市原因中文說明(人工建置)','=','')]).rename(columns={'date':'t_date'})
     start_date = _t_date['t_date'].min()
     end_date = pd.Timestamp.today() + pd.DateOffset(days=5) if end_date is None else pd.to_datetime(end_date)
     
@@ -434,24 +357,26 @@ def _get_portfolio(data:pd.DataFrame, exp_returns:pd.DataFrame, rebalance:Litera
     # rebalance
     r_date = _get_rebalance_date(rebalance)
     buy_list =  data[data.index.isin(r_date)]
-    
+
     # weight
     portfolio = buy_list\
-        .fillna(False)\
-        .astype(bool)\
         .astype(int)\
         .apply(lambda x: x / x.sum(), axis=1)
-    
+
     if weight_limit is not None:
         portfolio = portfolio.clip(upper=weight_limit)
 
     # shift & hold_period
-    portfolio = pd.DataFrame(exp_returns.index)\
-        .merge(portfolio, on='t_date', how='left')\
-        .set_index('t_date')\
-        .shift(signal_shift)\
-        .ffill(limit=hold_period)\
-        .dropna(how='all')
+    if signal_shift in [0, None]:
+        portfolio = portfolio\
+            .reindex(index = exp_returns.index, method='ffill', limit=hold_period)\
+            .fillna(0)
+    else:
+        portfolio = portfolio\
+            .reindex(index = exp_returns.index)\
+            .shift(signal_shift)\
+            .ffill(limit=hold_period)\
+            .fillna(0)
     return buy_list, portfolio
 
 def _stop_loss_or_profit(buy_list:pd.DataFrame, portfolio_df:pd.DataFrame, exp_returns:pd.DataFrame, pct:float, stop_at:Literal['intraday', 'next_day']='intraday'):
@@ -572,7 +497,7 @@ def backtesting(
     """
 
     # return & weight
-    exp_returns = Databank().read_dataset('exp_returns', filter_date='t_date', start=start, end=end)
+    exp_returns = Databank(sec_type=None).read_dataset('exp_returns', filter_date='t_date', start=start, end=end)
     # if trade_at == 'open':
     #     exp_returns = exp_returns.shift(1)
     
@@ -604,6 +529,8 @@ def simple_backtesting(
     signal_shift:int=0, 
     hold_period:int=None, 
     exp_returns:pd.DataFrame=None,
+    start:Union[int, str]=None, 
+    end:Union[int, str]=None, 
     )-> pd.DataFrame:
     """快速回測函數，僅返回投資組合每日報酬率序列。
 
@@ -630,8 +557,8 @@ def simple_backtesting(
         - 投資組合權重為等權重配置
         - 若無持有期間限制，則持有至下次再平衡日
     """
-    if exp_returns is None:
-        exp_returns = Databank().read_dataset('exp_returns', filter_date='t_date')
+    
+    exp_returns = Databank(sec_type=None).read_dataset('exp_returns', filter_date='t_date', start=start, end=end) if exp_returns is None else exp_returns
     _, portfolio_df = _get_portfolio(data, exp_returns, rebalance, signal_shift, hold_period)
     return (exp_returns * portfolio_df)\
         .dropna(axis=0, how='all')\
@@ -941,12 +868,12 @@ class PlotMaster(ABC):
           ]
 
         liquidity_status=pd.merge(
-          Databank().read_dataset(
+          Databank(sec_type=None).read_dataset(
               'stock_trading_notes', 
               columns=['date', 'stock_id', '是否為注意股票', '是否為處置股票', '是否全額交割', '漲跌停註記'],
               filters=filters
           ),
-          Databank().read_dataset(
+          Databank(sec_type=None).read_dataset(
               'stock_trading_data',
               columns=['date', 'stock_id', '成交量(千股)', '成交金額(元)'],
               filters=filters,
@@ -2036,7 +1963,7 @@ class Strategy(PlotMaster):
         # print('make sure to update databank before get info!')
 
         # 獲取買入和賣出日期
-        _t_date = Databank().read_dataset('mkt_calendar', columns=['date'], filters=[('休市原因中文說明(人工建置)','=','')]).rename(columns={'date':'t_date'})
+        _t_date = Databank(sec_type=None).read_dataset('mkt_calendar', columns=['date'], filters=[('休市原因中文說明(人工建置)','=','')]).rename(columns={'date':'t_date'})
         rebalance_dates = _get_rebalance_date(self.rebalance, end_date=_t_date['t_date'].max())
         buy_date = self.buy_list.index[-1]
         try:
@@ -2059,20 +1986,20 @@ class Strategy(PlotMaster):
         filters=[('stock_id', 'in', position_info['stock_id'].to_list())]
         
         # 獲取股票中文名稱
-        ch_name = Databank().read_dataset('stock_basic_info', columns=['stock_id', '證券名稱'], filters=filters).rename(columns={'證券名稱':'name'})
+        ch_name = Databank(sec_type=None).read_dataset('stock_basic_info', columns=['stock_id', '證券名稱'], filters=filters).rename(columns={'證券名稱':'name'})
 
         # 獲取財報和月營收公佈日期
-        quarterly_report_release_date = Databank().read_dataset('fin_data', columns=['stock_id', 'release_date'], filters=filters)\
+        quarterly_report_release_date = Databank(sec_type=None).read_dataset('fin_data', columns=['stock_id', 'release_date'], filters=filters)\
             .loc[lambda x: x.groupby('stock_id')['release_date'].idxmax()]\
             .rename(columns={'release_date':'季報公佈日期'})
-        monthly_rev_release_date = Databank().read_dataset('monthly_rev', columns=['stock_id', 'release_date'], filters=filters)\
+        monthly_rev_release_date = Databank(sec_type=None).read_dataset('monthly_rev', columns=['stock_id', 'release_date'], filters=filters)\
             .loc[lambda x: x.groupby('stock_id')['release_date'].idxmax()]\
             .rename(columns={'release_date':'月營收公佈日期'})
 
         filters.append(('date', '=', self.exp_returns.index.max()))
 
         # 獲取市場類型、產業類別、交易狀態
-        trading_notes = Databank().read_dataset('stock_trading_notes', columns=['date', 'stock_id', '是否為注意股票', '是否為處置股票', '是否暫停交易', '是否全額交割', '漲跌停註記', '板塊別(中)', '主產業別(中)'], filters=filters)\
+        trading_notes = Databank(sec_type=None).read_dataset('stock_trading_notes', columns=['date', 'stock_id', '是否為注意股票', '是否為處置股票', '是否暫停交易', '是否全額交割', '漲跌停註記', '板塊別(中)', '主產業別(中)'], filters=filters)\
         .assign(
             警示狀態=lambda x: x.apply(
                 lambda row: ', '.join(filter(None, [
@@ -2088,7 +2015,7 @@ class Strategy(PlotMaster):
         [['stock_id', '警示狀態', '漲跌停', '板塊別', '主產業別']]
         
         # 獲取交易量和交易金額
-        trading_vol = Databank().read_dataset('stock_trading_data', columns=['stock_id', '成交量(千股)', '成交金額(元)'], filters=filters)\
+        trading_vol = Databank(sec_type=None).read_dataset('stock_trading_data', columns=['stock_id', '成交量(千股)', '成交金額(元)'], filters=filters)\
         .rename(columns={
             '成交量(千股)':'前次成交量_K',
             '成交金額(元)':'前次成交額_M',
@@ -2289,7 +2216,7 @@ class FactorAnalysis(PlotMaster):
 
         # data
         from quantdev.data import Databank
-        db = Databank()
+        db = Databank(sec_type=None)
         self.exp_returns = db.read_dataset('exp_returns', filter_date='t_date')
         self.quantiles_returns = calc_factor_quantiles_return(self.factor, rebalance=rebalance, group=group, exp_returns=self.exp_returns)
         self.ls_returns = (1 + self.quantiles_returns[max(self.quantiles_returns.keys())]) - (1 + self.quantiles_returns[0])

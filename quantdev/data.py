@@ -26,6 +26,7 @@ from .config import config
 from warnings import filterwarnings, simplefilter
 filterwarnings('ignore', category=FutureWarning, module='tejapi.get')
 simplefilter(action="ignore", category=pd.errors.PerformanceWarning)
+pd.set_option('future.no_silent_downcasting', True)
 
 
 class DataBankInfra:
@@ -93,9 +94,11 @@ class DataBankInfra:
                 'processed_data':{
                     'fin_data_chng',
                     'fin_ratio_diff',
+                    'fin_data_lag',
                     'monthly_rev_chng',
                     'monthly_rev_reach_ath',
                     'monthly_rev_ath_distance',
+                    'monthly_rev_lag',
                     'stock_momentum',
                     'shareholding_pct',
                     'shareholding_pct_diff',
@@ -887,9 +890,11 @@ class ProcessedDataHandler(DataBankInfra):
         self.processed_datasets = { 
             'fin_data_chng':{'source':'fin_data', 'func':self._update_fin_data_chng},
             'fin_ratio_diff':{'source':'fin_data', 'func':self._update_fin_ratio_diff},
+            'fin_data_lag':{'source':'fin_data', 'func':self._update_fin_data_lag},
             'monthly_rev_chng':{'source':'monthly_rev', 'func':self._update_monthly_rev_chng},
             'monthly_rev_reach_ath':{'source':'monthly_rev', 'func':self._update_monthly_rev_reach_ath},
             'monthly_rev_ath_distance':{'source':'monthly_rev', 'func':self._update_monthly_rev_ath_distance},
+            'monthly_rev_lag':{'source':'monthly_rev', 'func':self._update_monthly_rev_lag},
             'stock_momentum':{'source':'stock_trading_data', 'func':self._update_stock_momentum},
             'shareholding_pct':{'source':'stock_custody', 'func':self._update_shareholding_pct},
             'shareholding_pct_diff':{'source':'stock_custody', 'func':self._update_shareholding_pct_diff},
@@ -978,6 +983,23 @@ class ProcessedDataHandler(DataBankInfra):
         df = df[['date', 'release_date', 'stock_id'] + [col for col in df.columns if any(col.endswith(c) for c in ['QOQ_DIFF','YOY_DIFF'])] + ['t_date']]
         
         return self.write_dataset(dataset='fin_ratio_diff', df=df)
+
+    def _update_fin_data_lag(self):
+        
+        columns = [col for col in self.list_columns('fin_data') if not any(col.endswith(c) for c in [
+                    '期間別', '序號', '季別', '合併(Y/N)', '幣別', '產業別', 
+                    'date', 'release_date', 'stock_id', 't_date', 'insert_time'])]
+        periods = range(1, 9)
+        lag_columns = {
+            f'{col}_lag{i}': lambda df, i=i: df.groupby('stock_id')[col].shift(i)
+            for i in periods for col in columns
+        }
+        df = self.read_dataset(
+                dataset='fin_data', 
+                columns=['date', 'stock_id', *columns, 't_date'])\
+            .assign(**lag_columns)
+        df = df[['date', 'stock_id'] + [col for col in df.columns if 'lag' in col] + ['t_date']]
+        return self.write_dataset(dataset='fin_data_lag', df=df)
 
     def _update_monthly_rev_chng(self):
         """計算單月營收的變化率
@@ -1087,6 +1109,25 @@ class ProcessedDataHandler(DataBankInfra):
         df = df[['date', 'release_date', 'stock_id', '單月營收_ATH_DISTANCE', 't_date']]
 
         return self.write_dataset(dataset='monthly_rev_ath_distance', df=df)
+
+    def _update_monthly_rev_lag(self):
+        """計算單月營收的時序資料
+
+        計算單月營收的時序資料，包含月增率(mom)、季增率(qoq)、年增率(yoy)。
+
+        """
+        periods = range(1, 25)
+        lag_columns = {
+            f'單月營收(千元)_lag{i}': lambda df, i=i: df.groupby('stock_id')['單月營收(千元)'].shift(i)
+            for i in periods
+        }
+        df = self.read_dataset(
+                dataset='monthly_rev', 
+                columns=['date', 'stock_id', '單月營收(千元)', 't_date'])\
+            .assign(**lag_columns)
+        df = df[['date', 'stock_id'] + [col for col in df.columns if 'lag' in col] + ['t_date']]
+        return self.write_dataset(dataset='monthly_rev_lag', df=df)
+        
 
     # technical
     def _update_stock_momentum(self):
@@ -1368,19 +1409,18 @@ class FactorModelHandler(DataBankInfra):
 
     def _update_factor_model(self):
         from quantdev.analysis import calc_factor_longshort_return
-        from quantdev.backtest import get_data, get_rank
-
+        from quantdev.backtest import get_rank
         model = pd.DataFrame({
             'MKT':self._calc_market_factor(),
-            'PBR':calc_factor_longshort_return(get_rank('股價淨值比', asc=False), rebalance='QR'),
-            'MCAP_to_REV':calc_factor_longshort_return(get_rank(get_data('個股市值(元)')/1000/get_data('營業收入'), asc=False), rebalance='QR'),
-            'SIZE':calc_factor_longshort_return(get_rank('個股市值(元)', asc=False), rebalance='Q'),
-            'VOL':calc_factor_longshort_return(get_rank(get_data('成交金額(元)').rolling(60).mean(), asc=False), rebalance='Q'),
-            'MTM3m':calc_factor_longshort_return(get_rank('mtm_3m'), rebalance='Q'),
-            'MTM6m':calc_factor_longshort_return(get_rank('mtm_6m'), rebalance='Q'),
-            'ROE':calc_factor_longshort_return(get_rank('常續ROE'), rebalance='QR'),
-            'OPM':calc_factor_longshort_return(get_rank('營業利益率'), rebalance='QR'),
-            'CMA':calc_factor_longshort_return(get_rank('資產成長率'), rebalance='QR'),
+            'PBR':calc_factor_longshort_return(get_rank(self['股價淨值比'], asc=False), rebalance='QR'),
+            'MCAP_to_REV':calc_factor_longshort_return(get_rank(self['個股市值(元)']/1000/self['營業收入'], asc=False), rebalance='QR'),
+            'SIZE':calc_factor_longshort_return(get_rank(self['個股市值(元)'], asc=False), rebalance='Q'),
+            'VOL':calc_factor_longshort_return(get_rank(self['成交金額(元)'].rolling(60).mean(), asc=False), rebalance='Q'),
+            'MTM3m':calc_factor_longshort_return(get_rank(self['mtm_3m'], ), rebalance='Q'),
+            'MTM6m':calc_factor_longshort_return(get_rank(self['mtm_6m'], ), rebalance='Q'),
+            'ROE':calc_factor_longshort_return(get_rank(self['常續ROE']), rebalance='QR'),
+            'OPM':calc_factor_longshort_return(get_rank(self['營業利益率']), rebalance='QR'),
+            'CMA':calc_factor_longshort_return(get_rank(self['資產成長率']), rebalance='QR'),
         }).dropna(how='all')
 
         self.write_dataset('factor_model', model)
@@ -1613,35 +1653,46 @@ class PublicDataHandler(DataBankInfra):
 
 
 class DataLoader(DataBankInfra):
-    def __init__(self):
+    def __init__(self, sec_type:Union[str, list[str]]=['普通股']):
         super().__init__()
         self.cashe_dict = {}
         self.func_dict = {}
         self.loader_path = os.path.join(self.databank_path, 'data')
         
+        # security type
+        # ['封閉型基金', 'ETF', '普通股', '特別股', '台灣存託憑證', '指數', 'REIT', '國外ETF', '普通股-海外']
+        if self.sec_type:
+            self.sec_type = None
+            sec_type_data = self['證券種類(中)']
+            # sec_type_data = pd.read_parquet(os.path.join(self.loader_path, f'證券種類(中).{self.data_type}'))
+            sec_type = sec_type_data.isin([self.sec_type] if isinstance(sec_type, str) else sec_type)
+            self.sec_type = sec_type.loc[:, sec_type.sum()>0]
+
         # items to be stored
         not_item_col = ['date', 'release_date', 'stock_id', 't_date', 'insert_time']
-        self.data_items = {
+        self.dataset_items = {
             # tej_data
             'monthly_rev':None,
             'fin_data':[col for col in self.list_columns('fin_data') if col not in [*not_item_col, '期間別', '序號', '季別', '合併(Y/N)', '幣別', '產業別',]],
-            'stock_trading_data':[col for col in self.list_columns('stock_trading_data') if col not in [*not_item_col, '市場別', '調整係數(除權)', '調整係數']],
+            'stock_trading_data':[col for col in self.list_columns('stock_trading_data') if col not in [*not_item_col, '市場別', '調整係數(除權)']],
             'stock_trading_notes':None,
             'trading_activity':[col for col in self.list_columns('trading_activity') if col not in [*not_item_col, '市場別']],
             'stock_custody':[col for col in self.list_columns('stock_custody') if col not in [*not_item_col, 'release_date_集保庫存', 'release_date_集保股權', '市場別']],
             'self_disclosed':[col for col in self.list_columns('self_disclosed') if col not in [*not_item_col, '期間別', '序號', '季別', '合併(Y/N)', '幣別','產業別']],
             'fin_data_chng':None,
             'fin_ratio_diff':None,
+            'fin_data_lag':None,
             'monthly_rev_chng':None,
             'monthly_rev_reach_ath':None,
             'monthly_rev_ath_distance':None,
+            'monthly_rev_lag':None,
             'stock_momentum':None,
             'shareholding_pct':None,
             'shareholding_pct_diff':None,
             'inst_investor_ratio_diff':None,
             'inst_investor_money_chng':None,
         }
-        self.data_items.update({k: [col for col in self.list_columns(k) if col not in not_item_col] for k,v in self.data_items.items() if v is None})
+        self.dataset_items.update({k: [col for col in self.list_columns(k) if col not in not_item_col] for k,v in self.dataset_items.items() if v is None})
 
     def __getitem__(self, key):
         if key in self.cashe_dict:
@@ -1653,8 +1704,12 @@ class DataLoader(DataBankInfra):
             
             if os.path.exists(file_path):
                 try:
-                    return pd.read_parquet(file_path)
-                except:
+                    if self.sec_type is not None:
+                        return pd.read_parquet(file_path).reindex_like(self.sec_type)
+                    else:
+                        return pd.read_parquet(file_path)
+                except Exception as e:
+                    print(e)
                     raise ValueError(f'Cannot read {file_path}')
             raise ValueError(f'{file_path} not exist')
 
@@ -1668,7 +1723,7 @@ class DataLoader(DataBankInfra):
         else:
             data.to_parquet(file_path)
     
-    def convert_to_dataloader(self, data:Union[pd.DataFrame, str], t_date:pd.DataFrame=None):
+    def convert_to_dataloader(self, data:Union[pd.DataFrame, str], t_date:pd.DataFrame=None, has_price:pd.DataFrame=None):
         if isinstance(data, str):
             dataset = self.find_dataset(data)
             data = self.read_dataset(dataset, columns=['t_date', 'stock_id', data])
@@ -1676,29 +1731,47 @@ class DataLoader(DataBankInfra):
         t_date = self.read_dataset('mkt_calendar', columns=['date'], filters=[('休市原因中文說明(人工建置)','=','')])\
             .rename(columns={'date':'t_date'})\
             .loc[lambda x: x['t_date'] <= pd.to_datetime(dt.datetime.today().date()+dt.timedelta(days=2))] if t_date is None else t_date
-        return data\
-            .drop_duplicates(subset=['t_date','stock_id'], keep='last')\
+
+        has_price = self.read_dataset('stock_trading_data', columns=['date', 'stock_id', '收盤價'])\
+            .rename(columns={'date':'t_date'})\
+            .set_index(['t_date', 'stock_id'])\
+            .unstack('stock_id')\
+            .droplevel(0, axis=1)\
+            .dropna(axis=0, how='all')\
+            .notna() if has_price is None else has_price
+
+        data = data.drop_duplicates(subset=['t_date','stock_id'], keep='last')\
             .set_index(['t_date','stock_id'])\
             .sort_index()\
             .unstack()\
             .droplevel(0, axis=1)\
             .reindex(index = t_date['t_date'],method='ffill')\
-            .ffill(limit=120)
+            .ffill()\
+            [has_price]
+        data.iloc[data.notna().any(axis=1).values.nonzero()[0][-1]:] = data.iloc[data.notna().any(axis=1).values.nonzero()[0][-1]:].ffill()
+
+        return data
     
-    def update_dataloader(self, datasets:Union[str, list[str]]=None):
+    def _update_dataloader(self, datasets:Union[str, list[str]]=None):
         t_date = self.read_dataset('mkt_calendar', columns=['date'], filters=[('休市原因中文說明(人工建置)','=','')])\
             .rename(columns={'date':'t_date'})\
             .loc[lambda x: x['t_date'] <= pd.to_datetime(dt.datetime.today().date())]
-        
+        has_price = self.read_dataset('stock_trading_data', columns=['date', 'stock_id', '收盤價'])\
+            .rename(columns={'date':'t_date'})\
+            .set_index(['t_date', 'stock_id'])\
+            .unstack('stock_id')\
+            .droplevel(0, axis=1)\
+            .notna()
+
         if datasets:
-            data_items = [(datasets, self.data_items[datasets]) for datasets in datasets]
+            data_items = [(datasets, self.dataset_items[datasets]) for datasets in datasets]
         else:
-            data_items = self.data_items.items()
+            data_items = self.dataset_items.items()
             
         for dataset_name, columns in data_items:
             data = self.read_dataset(dataset_name)
             for item in columns:
-                self[item] = self.convert_to_dataloader(data[['t_date', 'stock_id', item]], t_date)
+                self[item] = self.convert_to_dataloader(data[['t_date', 'stock_id', item]], t_date, has_price)
 
     def list_dataloader(self):
         parquet_set = set(filter(lambda X:X.endswith(f".{self.data_type}"),os.listdir(self.loader_path)))
@@ -1750,29 +1823,45 @@ class Databank(TEJHandler, ProcessedDataHandler, PublicDataHandler, FactorModelH
         - 資料庫更新會自動處理資料相依性
     """
     
-    def __init__(self):
+    def __init__(self, sec_type:Union[str, list[str]]=['普通股']):
+        self.sec_type = sec_type
         super().__init__()
+
     
     # basic
-    def update_databank(self, exclude:list[str]=['stock_industry_tag'], include:list=[], update_processed=True):
+    def update_databank(self, include:list=[], exclude:list[str]=['stock_industry_tag', 'rf_rate'], update_processed=True, update_dataloader=True):
         logging.info('Starting databank update')
         
+        if include:
+            if isinstance(include, str):
+                datasets = [include]
+            else:
+                datasets = include
+        else:
+            datasets = [d for d in self.tej_datasets.keys() if d not in exclude]
+
         # tej
-        for dataset in self.tej_datasets.keys():
-            if ((not exclude) and (not include)) or (dataset not in exclude) or (dataset in include):    
-                self.update_tej_dataset(dataset)
+        for dataset in datasets:
+            self.update_tej_dataset(dataset)
                         
-                # processed
-                if update_processed:
-                    self.update_processed_data(tej_dataset=dataset)
+            # processed
+            if update_processed:
+                self.update_processed_data(tej_dataset=dataset)
+            # dataloader
+            if update_dataloader:
+                # update dataloader for both processed and tej datasets
+                self._update_dataloader(
+                    datasets=[k for k, v in Databank(sec_type=None).processed_datasets.items() if (k in include or v['source'] in include)]
+                )
 
         # public
         for dataset in self.public_datasets.keys():
             if ((not exclude) and (not include)) or (dataset not in exclude) or (dataset in include):
                 self.update_public_data(dataset=dataset)
-
-        # factor model
-        if ('factor_model' in include) or ('factor_model' not in exclude):
-            self._update_factor_model()
         
+        # factor model
+        if (('factor_model' in include) & (include != [])) or\
+           (('factor_model' not in exclude) & (include==[])):
+            self._update_factor_model()
+
         logging.info('Completed databank update')
