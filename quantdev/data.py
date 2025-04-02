@@ -23,13 +23,12 @@ import geocoder
 # config
 from .config import config
 
-from warnings import filterwarnings, simplefilter
-filterwarnings('ignore', category=FutureWarning, module='tejapi.get')
+from warnings import simplefilter #, filterwarnings
+# filterwarnings('ignore', category=FutureWarning, module='tejapi.get')
 simplefilter(action="ignore", category=pd.errors.PerformanceWarning)
 pd.set_option('future.no_silent_downcasting', True)
 
-
-class DataBankInfra:
+class DatabankInfra:
     """資料庫基礎建設
 
     Args:
@@ -51,7 +50,7 @@ class DataBankInfra:
     Examples:
         ```python
         # 初始化資料庫基礎建設
-        db = DataBankInfra()
+        db = DatabankInfra()
 
         # 讀取資料集
         df = db.read_dataset('monthly_rev')
@@ -74,7 +73,7 @@ class DataBankInfra:
         - 提供基礎的資料讀寫功能
     """
     def __init__(self):
-        self.databank_path = '/Users/jianrui/Desktop/Research/Quant/databank'
+        self.databank_path = config.data_config.get('databank_path')
         self.data_type = 'parquet'
         self.databank_map = {
             'datasets':{
@@ -341,7 +340,7 @@ class DataBankInfra:
         logging.info(f'Saved {dataset} as parquet from DataFrame')
 
 
-class TEJHandler(DataBankInfra):
+class TEJHandler(DatabankInfra):
     """TEJ API 資料處理器
 
     處理 TEJ API 資料的下載、更新與儲存。
@@ -771,21 +770,11 @@ class TEJHandler(DataBankInfra):
         if dataset not in self.tej_datasets.keys():
             raise ValueError(f'{dataset} is not in tej_datasets')
 
-        # mkt calendar
-        if dataset == 'mkt_calendar':
-            # first check last date
-            if self.read_dataset('mkt_calendar', columns=['date'])['date'].max().year <= dt.datetime.today().year:
-                data = self.get_tej_data('mkt_calendar')
-                data['insert_time'] = pd.Timestamp.now()
-                self.write_dataset(dataset, data)
-        
-        # stock basic info
-        elif dataset == 'stock_basic_info':
-            # first check last insert_time
-            if self.read_dataset('stock_basic_info', columns=['insert_time'])['insert_time'].min() <= (pd.Timestamp.now() - pd.Timedelta(weeks=1)):
-                data = self.get_tej_data('stock_basic_info')
-                data['insert_time'] = pd.Timestamp.now()
-                self.write_dataset(dataset, data)
+        # mkt calendar & stock basic info
+        if dataset in ['mkt_calendar', 'stock_basic_info']:
+            data = self.get_tej_data(dataset)
+            data['insert_time'] = pd.Timestamp.now()
+            self.write_dataset(dataset, data)
         
         # others
         else:
@@ -846,7 +835,7 @@ class TEJHandler(DataBankInfra):
         logging.info(f'Updated {dataset} from tej')
 
 
-class ProcessedDataHandler(DataBankInfra):
+class ProcessedDataHandler(DatabankInfra):
     """處理資料的類別
 
     此類別負責處理原始資料,計算各種財務、技術、籌碼等指標。
@@ -1403,7 +1392,7 @@ class ProcessedDataHandler(DataBankInfra):
                 self.update_processed_data(dataset=k)
 
 
-class FactorModelHandler(DataBankInfra):
+class FactorModelHandler(DatabankInfra):
     def __init__(self):
         super().__init__()
 
@@ -1475,7 +1464,7 @@ class FactorModelHandler(DataBankInfra):
         return (mkt_rtn - rf_rate).shift(-1).rename_axis('t_date')
 
 
-class PublicDataHandler(DataBankInfra):
+class PublicDataHandler(DatabankInfra):
     """公開資料處理類別
 
     處理從公開網站爬取的資料，如公司產業標籤、公司地址等。
@@ -1652,20 +1641,19 @@ class PublicDataHandler(DataBankInfra):
         # self._update_stock_address()
 
 
-class DataLoader(DataBankInfra):
-    def __init__(self, sec_type:Union[str, list[str]]=['普通股']):
+class DataHandler(DatabankInfra):
+    def __init__(self, sec_type:Union[str, list[str]]=None):
         super().__init__()
         self.cashe_dict = {}
         self.func_dict = {}
-        self.loader_path = os.path.join(self.databank_path, 'data')
+        self.datahandler_path = os.path.join(self.databank_path, 'data')
         
         # security type
         # ['封閉型基金', 'ETF', '普通股', '特別股', '台灣存託憑證', '指數', 'REIT', '國外ETF', '普通股-海外']
-        if self.sec_type:
+        if sec_type:
             self.sec_type = None
             sec_type_data = self['證券種類(中)']
-            # sec_type_data = pd.read_parquet(os.path.join(self.loader_path, f'證券種類(中).{self.data_type}'))
-            sec_type = sec_type_data.isin([self.sec_type] if isinstance(sec_type, str) else sec_type)
+            sec_type = sec_type_data.isin([sec_type] if isinstance(sec_type, str) else sec_type)
             self.sec_type = sec_type.loc[:, sec_type.sum()>0]
 
         # items to be stored
@@ -1700,7 +1688,7 @@ class DataLoader(DataBankInfra):
         elif key in self.func_dict:
             return self.func_dict[key]
         else:
-            file_path = os.path.join(self.loader_path, f'{key}.{self.data_type}')
+            file_path = os.path.join(self.datahandler_path, f'{key}.{self.data_type}')
             
             if os.path.exists(file_path):
                 try:
@@ -1717,13 +1705,13 @@ class DataLoader(DataBankInfra):
         return self.__getitem__(key)
 
     def __setitem__(self, key, data:pd.DataFrame):
-        file_path = os.path.join(self.loader_path, f'{key}.{self.data_type}')
+        file_path = os.path.join(self.datahandler_path, f'{key}.{self.data_type}')
         if data.dtypes.apply(lambda x: np.issubdtype(x, np.number)).all():
             data[np.isfinite(data)].to_parquet(file_path)
         else:
             data.to_parquet(file_path)
     
-    def convert_to_dataloader(self, data:Union[pd.DataFrame, str], t_date:pd.DataFrame=None, has_price:pd.DataFrame=None):
+    def _convert_to_Data(self, data:Union[pd.DataFrame, str], t_date:pd.DataFrame=None, has_price:pd.DataFrame=None):
         if isinstance(data, str):
             dataset = self.find_dataset(data)
             data = self.read_dataset(dataset, columns=['t_date', 'stock_id', data])
@@ -1752,7 +1740,7 @@ class DataLoader(DataBankInfra):
 
         return data
     
-    def _update_dataloader(self, datasets:Union[str, list[str]]=None):
+    def update_Data(self, datasets:Union[str, list[str]]=None):
         t_date = self.read_dataset('mkt_calendar', columns=['date'], filters=[('休市原因中文說明(人工建置)','=','')])\
             .rename(columns={'date':'t_date'})\
             .loc[lambda x: x['t_date'] <= pd.to_datetime(dt.datetime.today().date())]
@@ -1763,6 +1751,7 @@ class DataLoader(DataBankInfra):
             .droplevel(0, axis=1)\
             .notna()
 
+        datasets = [datasets] if isinstance(datasets, str) else datasets
         if datasets:
             data_items = [(datasets, self.dataset_items[datasets]) for datasets in datasets]
         else:
@@ -1771,14 +1760,14 @@ class DataLoader(DataBankInfra):
         for dataset_name, columns in data_items:
             data = self.read_dataset(dataset_name)
             for item in columns:
-                self[item] = self.convert_to_dataloader(data[['t_date', 'stock_id', item]], t_date, has_price)
+                self[item] = self._convert_to_Data(data[['t_date', 'stock_id', item]], t_date, has_price)
 
-    def list_dataloader(self):
-        parquet_set = set(filter(lambda X:X.endswith(f".{self.data_type}"),os.listdir(self.loader_path)))
+    def list_Data(self):
+        parquet_set = set(filter(lambda X:X.endswith(f".{self.data_type}"),os.listdir(self.datahandler_path)))
         return sorted(map(lambda X:X[:-(len(self.data_type)+1)],list(parquet_set)))
 
 
-class Databank(TEJHandler, ProcessedDataHandler, PublicDataHandler, FactorModelHandler, DataLoader):
+class Databank(TEJHandler, DataHandler, ProcessedDataHandler, PublicDataHandler, FactorModelHandler):
     """quantdev 資料庫
 
     整合 TEJ、FinMind 與公開資料的資料處理功能。
@@ -1823,20 +1812,15 @@ class Databank(TEJHandler, ProcessedDataHandler, PublicDataHandler, FactorModelH
         - 資料庫更新會自動處理資料相依性
     """
     
-    def __init__(self, sec_type:Union[str, list[str]]=['普通股']):
-        self.sec_type = sec_type
+    def __init__(self):
         super().__init__()
-
     
     # basic
     def update_databank(self, include:list=[], exclude:list[str]=['stock_industry_tag', 'rf_rate'], update_processed=True, update_dataloader=True):
         logging.info('Starting databank update')
         
         if include:
-            if isinstance(include, str):
-                datasets = [include]
-            else:
-                datasets = include
+            datasets = [include] if isinstance(include, str) else include
         else:
             datasets = [d for d in self.tej_datasets.keys() if d not in exclude]
 
@@ -1850,8 +1834,8 @@ class Databank(TEJHandler, ProcessedDataHandler, PublicDataHandler, FactorModelH
             # dataloader
             if update_dataloader:
                 # update dataloader for both processed and tej datasets
-                self._update_dataloader(
-                    datasets=[k for k, v in Databank(sec_type=None).processed_datasets.items() if (k in include or v['source'] in include)]
+                self.update_Data(
+                    datasets=[k for k, v in self.processed_datasets.items() if ((k in include) or (v['source'] in include))]
                 )
 
         # public
@@ -1865,3 +1849,8 @@ class Databank(TEJHandler, ProcessedDataHandler, PublicDataHandler, FactorModelH
             self._update_factor_model()
 
         logging.info('Completed databank update')
+
+
+class Data(DataHandler):
+    def __init__(self, sec_type:Union[str, list[str]]=['普通股']):
+        super().__init__(sec_type=sec_type)
