@@ -10,27 +10,55 @@ import pandas as pd
 import numpy as np
 
 # utils
-def calc_metrics(daily_returns:Union[pd.Series, pd.DataFrame], benchmark_daily_returns:Union[pd.Series, pd.DataFrame]=None) -> dict:
-    metrics = daily_returns\
-    .agg({
-        'total_return': lambda x: ((1 + x).cumprod() - 1).iloc[-1],
-        'annual_return': lambda x: (1 + ((1 + x).cumprod() - 1).iloc[-1]) ** (240 / len(x)) - 1,
-        'mdd': lambda x: ((1 + (1 + x).cumprod() - 1) / (1 + (1 + x).cumprod() - 1).cummax() - 1).min(),
-        'annual_vol': lambda x: x.std() * np.sqrt(240)
-    })
-    metrics['calmar_ratio'] = metrics['annual_return'] / abs(metrics['mdd'])
-    metrics['sharpe_ratio'] = metrics['annual_return'] / metrics['annual_vol']
+def calc_metrics(daily_returns:Union[pd.DataFrame, pd.Series]):
+    if isinstance(daily_returns,pd.Series):
+        daily_returns = pd.DataFrame({'Strategy':daily_returns})
+        
+    def mdd(cum_rtns):
+        return ((cum_rtns) / (cum_rtns).cummax() - 1).min()
+    def cagr(rtns):
+        return (1 + ((1 + rtns).cumprod() - 1).iloc[-1]) ** (240 / len(rtns)) - 1
+    def calmar(rtns):
+        return cagr(rtns) / abs(mdd((1 + rtns).cumprod()))
+    
+    value = {
+        'CAGR(%)': cagr(daily_returns)*100,
+        'Sharpe': daily_returns.mean()/daily_returns.std()*240**0.5,
+        'Calmar': calmar(daily_returns),
+        'MDD(%)': mdd((1 + daily_returns).cumprod())*100,
+        'Simple MDD(%)': mdd((1+daily_returns.cumsum()))*100,
+        'Win Rate(%)': daily_returns.apply(lambda x:((x.dropna()>0).sum() / x.dropna().shape[0])*100),
+        'Weekly Win(%)': daily_returns.apply(lambda x:((x.dropna().add(1).resample('W').prod().sub(1)>0).sum() / x.dropna().add(1).resample('W').prod().sub(1).dropna().shape[0])*100),
+        'Monthly Win(%)': daily_returns.apply(lambda x:((x.dropna().add(1).resample('ME').prod().sub(1)>0).sum() / x.dropna().add(1).resample('ME').prod().sub(1).shape[0])*100),
+        'Yearly Win(%)': daily_returns.apply(lambda x:((x.dropna().add(1).resample('YE').prod().sub(1)>0).sum() / x.dropna().add(1).resample('YE').prod().sub(1).shape[0])*100),
+        'Win/Loss Ratio': daily_returns.apply(lambda x:(x[x > 0].mean() / abs(x[x < 0].mean()))),
+        'Expected Return(bps)': ((1 + daily_returns).prod() ** (1 / len(daily_returns)) - 1)*10000,
+        'Sample Size': daily_returns.apply(lambda x:x.dropna().count()),
+    }
+    
+    return pd.concat(value, axis=1).round(2).T
 
-    if benchmark_daily_returns is not None:
-        metrics['beta'] = daily_returns.cov(benchmark_daily_returns) / benchmark_daily_returns.var() # beta
-    else:
-        metrics['beta'] = '-'
+# def calc_metrics(daily_returns:Union[pd.Series, pd.DataFrame], benchmark_daily_returns:Union[pd.Series, pd.DataFrame]=None) -> dict:
+#     metrics = daily_returns\
+#     .agg({
+#         'total_return': lambda x: ((1 + x).cumprod() - 1).iloc[-1],
+#         'annual_return': lambda x: (1 + ((1 + x).cumprod() - 1).iloc[-1]) ** (240 / len(x)) - 1,
+#         'mdd': lambda x: ((1 + (1 + x).cumprod() - 1) / (1 + (1 + x).cumprod() - 1).cummax() - 1).min(),
+#         'annual_vol': lambda x: x.std() * np.sqrt(240)
+#     })
+#     metrics['calmar_ratio'] = metrics['annual_return'] / abs(metrics['mdd'])
+#     metrics['sharpe_ratio'] = metrics['annual_return'] / metrics['annual_vol']
 
-    return pd.Series({
-        name: f'{metrics[name]:.2%}' if name in ['total_return', 'annual_return', 'mdd', 'annual_vol'] 
-        else f'{metrics[name]:.2}'
-        for name in metrics.index
-    })
+#     if benchmark_daily_returns is not None:
+#         metrics['beta'] = daily_returns.cov(benchmark_daily_returns) / benchmark_daily_returns.var() # beta
+#     else:
+#         metrics['beta'] = '-'
+
+#     return pd.Series({
+#         name: f'{metrics[name]:.2%}' if name in ['total_return', 'annual_return', 'mdd', 'annual_vol'] 
+#         else f'{metrics[name]:.2}'
+#         for name in metrics.index
+#     })
 
 def calc_maemfe(buy_list:pd.DataFrame, portfolio_df:pd.DataFrame, exp_returns:pd.DataFrame):
     """計算每筆交易的最大不利變動(MAE)和最大有利變動(MFE)
@@ -252,7 +280,7 @@ def calc_factor_longshort_return(factor:pd.DataFrame, rebalance:str='QR', group:
     exp_returns = kwargs.get('exp_returns')
     if exp_returns is None:
         from quantdev.data import Databank
-        db = Databank(sec_type=None)
+        db = Databank()
         exp_returns = db.read_dataset('exp_returns', filter_date='t_date')
     # factor = get_factor(item=factor, asc=asc)
     long = simple_backtesting(factor>=(1-1/group), rebalance=rebalance, exp_returns=exp_returns)
@@ -288,7 +316,7 @@ def calc_factor_quantiles_return(factor:pd.DataFrame, rebalance:str='QR', group:
     exp_returns = kwargs.get('exp_returns')
     if exp_returns is None:
         from quantdev.data import Databank
-        db = Databank(sec_type=None)
+        db = Databank()
         exp_returns = db.read_dataset('exp_returns', filter_date='t_date')
     
     for q_start, q_end in [(i/group, (i+1)/group) for i in range(group)]:
@@ -330,7 +358,7 @@ def calc_factor_quantiles_return_thread(factor:Union[pd.DataFrame, str], asc:boo
     exp_returns = kwargs.get('exp_returns')
     if exp_returns is None:
         from quantdev.data import Databank
-        db = Databank(sec_type=None)
+        db = Databank()
         exp_returns = db.read_dataset('exp_returns', filter_date='t_date')
 
     def calc_quantile(q_start, q_end):
@@ -421,7 +449,7 @@ def calc_portfolio_style(portfolio_daily_rtn:Union[pd.DataFrame, pd.Series], win
     """
 
     from quantdev.data import Databank
-    db = Databank(sec_type=None)
+    db = Databank()
     model = db.read_dataset('factor_model').drop(['MTM6m', 'CMA'], axis=1)
     data = pd.concat([portfolio_daily_rtn, model], axis=1).dropna()
     
@@ -440,7 +468,7 @@ def calc_portfolio_style(portfolio_daily_rtn:Union[pd.DataFrame, pd.Series], win
 
 def calc_brinson_model(portfolio_df:pd.DataFrame, exp_returns:pd.DataFrame, benchmark:list[str]):
     from quantdev.data import Databank
-    db = Databank(sec_type=None)
+    db = Databank()
 
     portfolio_df = portfolio_df[portfolio_df!=0].stack()
 
@@ -493,7 +521,7 @@ def calc_brinson_model(portfolio_df:pd.DataFrame, exp_returns:pd.DataFrame, benc
     data = pd.concat([benchmark_data, portfolio_data], axis=1)\
         .fillna(0)\
         .join(
-            pd.DataFrame(exp_returns[benchmark[0]].rename('benchmark_R')),
+            pd.DataFrame(exp_returns[benchmark].rename('benchmark_R')),
             on='t_date',
             how='left'
         )
@@ -538,7 +566,7 @@ def create_random_portfolios(returns:pd.DataFrame, num_portfolios:int=None):
 # combine factors
 def calc_reg_returns(factors:Union[dict[str, pd.DataFrame], list[pd.DataFrame]], rebalance:str='MR', method:Literal['OLS', 'GLS']='GLS'):
     from quantdev.data import Databank
-    returns = resample_returns(Databank(sec_type=None).read_dataset('exp_returns'), t=rebalance)\
+    returns = resample_returns(Databank().read_dataset('exp_returns'), t=rebalance)\
         .stack()\
         .reset_index()\
         .rename(columns={'level_0':'t_date', 0:'R'})\
@@ -677,7 +705,7 @@ def combine_factors(
         factors_df = pd.concat([f[f.index.isin(_get_rebalance_date(rebalance))].stack() for f in factors], axis=1).dropna()
         
         from quantdev.data import Databank
-        exp_returns = Databank(sec_type=None).read_dataset('exp_returns')
+        exp_returns = Databank().read_dataset('exp_returns')
         ic_df = pd.concat([calc_info_coef(f, exp_returns, rebalance=rebalance) for f in factors], axis=1).dropna()
         if method == 'IC':
             weights = ic_df.rolling(params['window']).mean().shift(1)

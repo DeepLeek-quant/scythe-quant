@@ -1,4 +1,5 @@
 from typing import Union, Literal
+from bs4 import BeautifulSoup
 import pyarrow.parquet as pq
 import pyarrow as pa
 import datetime as dt
@@ -9,13 +10,6 @@ import tejapi
 import time
 import os
 
-# stock industry tag
-from bs4 import BeautifulSoup
-
-# finmind
-import requests
-import geocoder
-
 # # threading
 # from concurrent.futures import ThreadPoolExecutor
 # from requests.adapters import HTTPAdapter, Retry
@@ -23,8 +17,7 @@ import geocoder
 # config
 from .config import config
 
-from warnings import simplefilter #, filterwarnings
-# filterwarnings('ignore', category=FutureWarning, module='tejapi.get')
+from warnings import simplefilter
 simplefilter(action="ignore", category=pd.errors.PerformanceWarning)
 pd.set_option('future.no_silent_downcasting', True)
 
@@ -106,6 +99,7 @@ class DatabankInfra:
                     'factor_model',
                     'stock_sector',
                     'exp_returns',
+                    'daytrade_exp_returns',
                 },
                 'public_data':{
                     'stock_industry_tag',
@@ -890,6 +884,7 @@ class ProcessedDataHandler(DatabankInfra):
             'inst_investor_ratio_diff':{'source':'trading_activity', 'func':self._update_inst_investor_ratio_diff},
             'inst_investor_money_chng':{'source':'trading_activity', 'func':self._update_inst_investor_money_chng},
             'exp_returns':{'source':'stock_trading_data', 'func':self._update_exp_returns},
+            'daytrade_exp_returns':{'source':'stock_trading_data', 'func':self._update_daytrade_exp_returns},
             'stock_sector':{'source':'stock_trading_notes', 'func':self._update_stock_sector},
         }
         # self.processed_datasets.update(self.factors_datasets)
@@ -1340,7 +1335,19 @@ class ProcessedDataHandler(DatabankInfra):
             .droplevel(0, axis=1)\
             .dropna(axis=0, how='all')
         return self.write_dataset(dataset='exp_returns', df=df)
- 
+    
+    def _update_daytrade_exp_returns(self):
+        df = self.read_dataset('stock_trading_data', columns=['date', 'stock_id', '開盤價', '收盤價'])\
+            .assign(rtn=lambda df: df['收盤價']/df['開盤價']-1)\
+            [['date', 'stock_id', 'rtn']]\
+            .rename(columns={'date':'t_date'})\
+            .set_index(['t_date', 'stock_id'])\
+            .unstack('stock_id')\
+            .droplevel(0, axis=1)\
+            .replace([np.inf, -np.inf], np.nan)\
+            .dropna(axis=0, how='all')
+        return self.write_dataset(dataset='daytrade_exp_returns', df=df)
+
     def _update_stock_sector(self):
         df = self.read_dataset('stock_trading_notes', columns=['date', 'stock_id', '主產業別(中)', '是否為臺灣50成分股', 't_date'])\
             .assign(sector=lambda df: df['主產業別(中)'].str.split(' ').str[-1].str[0:2].fillna('').replace({'其他': '其它', '証券':'證券'}))\
