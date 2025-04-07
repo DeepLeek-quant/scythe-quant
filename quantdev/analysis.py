@@ -38,28 +38,6 @@ def calc_metrics(daily_returns:Union[pd.DataFrame, pd.Series]):
     
     return pd.concat(value, axis=1).round(2).T
 
-# def calc_metrics(daily_returns:Union[pd.Series, pd.DataFrame], benchmark_daily_returns:Union[pd.Series, pd.DataFrame]=None) -> dict:
-#     metrics = daily_returns\
-#     .agg({
-#         'total_return': lambda x: ((1 + x).cumprod() - 1).iloc[-1],
-#         'annual_return': lambda x: (1 + ((1 + x).cumprod() - 1).iloc[-1]) ** (240 / len(x)) - 1,
-#         'mdd': lambda x: ((1 + (1 + x).cumprod() - 1) / (1 + (1 + x).cumprod() - 1).cummax() - 1).min(),
-#         'annual_vol': lambda x: x.std() * np.sqrt(240)
-#     })
-#     metrics['calmar_ratio'] = metrics['annual_return'] / abs(metrics['mdd'])
-#     metrics['sharpe_ratio'] = metrics['annual_return'] / metrics['annual_vol']
-
-#     if benchmark_daily_returns is not None:
-#         metrics['beta'] = daily_returns.cov(benchmark_daily_returns) / benchmark_daily_returns.var() # beta
-#     else:
-#         metrics['beta'] = '-'
-
-#     return pd.Series({
-#         name: f'{metrics[name]:.2%}' if name in ['total_return', 'annual_return', 'mdd', 'annual_vol'] 
-#         else f'{metrics[name]:.2}'
-#         for name in metrics.index
-#     })
-
 def calc_maemfe(buy_list:pd.DataFrame, portfolio_df:pd.DataFrame, exp_returns:pd.DataFrame):
     """計算每筆交易的最大不利變動(MAE)和最大有利變動(MFE)
 

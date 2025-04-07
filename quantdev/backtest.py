@@ -72,7 +72,7 @@ import plotly.graph_objects as go
 import panel as pn
 
 from .data import Databank
-from .analysis import calc_metrics
+from .analysis import calc_metrics, calc_maemfe, calc_portfolio_style, calc_info_ratio
 
 pd.set_option('future.no_silent_downcasting', True)
 
@@ -875,6 +875,7 @@ class PlotMaster():
     def _liquidity_analysis(self, portfolio_df:pd.DataFrame):
         
         # get buy sell dates for each trade
+        portfolio_df = portfolio_df or self.portfolio_df
         last_portfolio = portfolio_df.shift(1).fillna(0).infer_objects(copy=False)
         buys = (last_portfolio == 0) & (portfolio_df != 0)
         sells = (last_portfolio != 0) & (portfolio_df == 0)
@@ -1977,7 +1978,7 @@ class Strategy(PlotMaster):
         
         df = pd.concat({
             'Strategy':self.daily_return,
-            'Benchmark':self.exp_returns[self.benchmark],
+            f'Benchmark: {self.benchmark}':self.exp_returns[self.benchmark],
         },axis=1)
 
         return calc_metrics(df)
