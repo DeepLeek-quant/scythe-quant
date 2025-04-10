@@ -4,7 +4,7 @@ Available Functions:
     - get_data: 從資料庫取得資料並進行預處理
     - get_factor: 將資料轉換為因子值
     - backtesting: 進行回測並返回完整的回測結果
-    - simple_backtesting: 進行快速回測並返回每日報酬率
+    - fast_backtesting: 進行快速回測並返回每日報酬率
     - multi_backtesting: 進行多重策略回測並返回組合策略回測結果
     - simple_multi_backtesting: 進行快速多重策略回測並返回每日報酬率
 
@@ -72,7 +72,7 @@ import plotly.graph_objects as go
 import panel as pn
 
 from .data import Databank
-from .analysis import calc_metrics, calc_maemfe, calc_portfolio_style, calc_info_ratio
+from .analysis import *
 
 pd.set_option('future.no_silent_downcasting', True)
 
@@ -327,7 +327,9 @@ def get_portfolio(
     data:pd.DataFrame, exp_returns:pd.DataFrame, 
     rebalance:Literal['MR', 'QR', 'Y', 'Q', 'M', 'W', 'DT']='MR', 
     weights:pd.DataFrame=None, 
-    signal_shift:int=0, hold_period:int=None, weight_limit:float=None
+    signal_shift:int=0, 
+    hold_period:int=None, 
+    weight_limit:float=None,
 )-> Tuple[pd.DataFrame, pd.DataFrame]:
     """
     將資料轉換為投資組合權重。
@@ -514,7 +516,7 @@ def backtesting(
     #     exp_returns = exp_returns.shift(1)
     
     # get data
-    buy_list, portfolio_df = get_portfolio(data, exp_returns, rebalance, signal_shift, hold_period, weight_limit)
+    buy_list, portfolio_df = get_portfolio(data=data, exp_returns=exp_returns, rebalance=rebalance, signal_shift=signal_shift, hold_period=hold_period, weight_limit=weight_limit)
     
     # stop loss or profit
     if stop_loss is not None:
@@ -1095,7 +1097,7 @@ class PlotMaster():
 
     def _plot_return_heatmap(self, daily_return:pd.DataFrame=None):
         # prepare data
-        daily_return = daily_return or self.daily_return
+        daily_return = self.daily_return if daily_return is None else daily_return
         monthly_return = ((1 + daily_return).resample('ME').prod() - 1)\
             .reset_index()\
             .assign(
@@ -2236,18 +2238,18 @@ class MultiStrategy(Strategy):
 
 
 # factor analysis
-def factor_analysis(factor:pd.DataFrame, asc:bool=True, rebalance:str='QR', group:int=10, benchmark:str='0050')-> 'FactorAnalysis':
-    return FactorAnalysis(factor, asc=asc, rebalance=rebalance, group=group, benchmark=benchmark)
+def factor_analysis(factor:pd.DataFrame, asc:bool=True, rebalance:str='QR', group:int=10, benchmark:str='0050', start:str=None, end:str=None)-> 'FactorAnalysis':
+    return FactorAnalysis(factor, asc=asc, rebalance=rebalance, group=group, benchmark=benchmark, start=start, end=end)
 
 class FactorAnalysis(PlotMaster):
-    def __init__(self, factor:Union[pd.DataFrame, str], asc:bool=True, rebalance:str='QR', group:int=10, benchmark:str='0050'):
+    def __init__(self, factor:Union[pd.DataFrame, str], asc:bool=True, rebalance:str='QR', group:int=10, benchmark:str='0050', start:str=None, end:str=None):
         super().__init__()
         self.factor = get_rank(factor, asc=asc)
         self.rebalance = rebalance
         self.group = group
 
         # data
-        self.exp_returns = Databank().read_dataset('exp_returns', filter_date='t_date')
+        self.exp_returns = Databank().read_dataset('exp_returns', filter_date='t_date', start=start, end=end)
         self.quantiles_returns = calc_factor_quantiles_return(self.factor, rebalance=rebalance, group=group, exp_returns=self.exp_returns)
         self.ls_returns = (1 + self.quantiles_returns[max(self.quantiles_returns.keys())]) - (1 + self.quantiles_returns[0])
         self.benchmark = benchmark
@@ -2440,15 +2442,18 @@ class FactorAnalysis(PlotMaster):
     
     def _generate_summary_dfs(self):
         # Factor Returns
-        returns = pd.concat([self.ls_returns.rename('f_return'), self.benchmark_returns], axis=1)\
-            .dropna()\
-            .assign(rel_return = lambda df: df['f_return']-df[self.benchmark])\
-            [['f_return', 'rel_return', self.benchmark]]\
-            .rename(columns={self.benchmark: f'{self.benchmark}.TT'})
+        summary_metrics = calc_metrics(
+            pd.concat([pd.DataFrame(self.quantiles_returns), pd.DataFrame(self.ls_returns).rename(columns={0: 'ls'})], axis=1)
+        )
+        # returns = pd.concat([self.ls_returns.rename('f_return'), self.benchmark_returns], axis=1)\
+        #     .dropna()\
+        #     .assign(rel_return = lambda df: df['f_return']-df[self.benchmark])\
+        #     [['f_return', 'rel_return', self.benchmark]]\
+        #     .rename(columns={self.benchmark: f'{self.benchmark}.TT'})
 
-        summary_metrics = pd.concat([calc_metrics(returns[col]).to_frame(('Performance', col)) for col in returns.columns], axis=1)\
-            .drop(['beta'], axis=0)
-        summary_metrics.columns = pd.MultiIndex.from_tuples(summary_metrics.columns)
+        # summary_metrics = pd.concat([calc_metrics(returns[col]).to_frame(('Performance', col)) for col in returns.columns], axis=1)\
+        #     .drop(['beta'], axis=0)
+        # summary_metrics.columns = pd.MultiIndex.from_tuples(summary_metrics.columns)
 
         # Quantiles Returns
         quantiles = pd.DataFrame(self.quantiles_returns, columns=range(len(self.quantiles_returns))).dropna()\

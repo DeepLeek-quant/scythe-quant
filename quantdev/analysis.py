@@ -254,15 +254,15 @@ def calc_factor_longshort_return(factor:pd.DataFrame, rebalance:str='QR', group:
         - 報酬率為多頭減去空頭的報酬率
     """
     
-    from quantdev.backtest import simple_backtesting
+    from quantdev.backtest import fast_backtesting
     exp_returns = kwargs.get('exp_returns')
     if exp_returns is None:
         from quantdev.data import Databank
         db = Databank()
         exp_returns = db.read_dataset('exp_returns', filter_date='t_date')
     # factor = get_factor(item=factor, asc=asc)
-    long = simple_backtesting(factor>=(1-1/group), rebalance=rebalance, exp_returns=exp_returns)
-    short = simple_backtesting(factor<(1/group), rebalance=rebalance, exp_returns=exp_returns)
+    long = fast_backtesting(factor>=(1-1/group), rebalance=rebalance, exp_returns=exp_returns)
+    short = fast_backtesting(factor<(1/group), rebalance=rebalance, exp_returns=exp_returns)
 
     return (long-short).dropna()
 
@@ -289,7 +289,7 @@ def calc_factor_quantiles_return(factor:pd.DataFrame, rebalance:str='QR', group:
         - 每組報酬率為等權重持有該組內所有股票
         - 字典的key為分位數起始點*group (例如: 0代表第一組, 1代表第二組...)
     """
-    from quantdev.backtest import simple_backtesting
+    from quantdev.backtest import fast_backtesting
     results = {}
     exp_returns = kwargs.get('exp_returns')
     if exp_returns is None:
@@ -299,7 +299,7 @@ def calc_factor_quantiles_return(factor:pd.DataFrame, rebalance:str='QR', group:
     
     for q_start, q_end in [(i/group, (i+1)/group) for i in range(group)]:
         condition = (q_start <= factor) & (factor < q_end)
-        results[q_start*group] = simple_backtesting(condition, rebalance=rebalance, exp_returns=exp_returns)
+        results[q_start*group] = fast_backtesting(condition, rebalance=rebalance, exp_returns=exp_returns)
 
     return results
 
@@ -326,7 +326,7 @@ def calc_factor_quantiles_return_thread(factor:Union[pd.DataFrame, str], asc:boo
         - 每組報酬率為等權重持有該組內所有股票
         - 字典的key為分位數起始點*group (例如: 0代表第一組, 1代表第二組...)
     """
-    from quantdev.backtest import get_factor, simple_backtesting
+    from quantdev.backtest import get_factor, fast_backtesting
     import concurrent.futures
     import threading
     
@@ -341,7 +341,7 @@ def calc_factor_quantiles_return_thread(factor:Union[pd.DataFrame, str], asc:boo
 
     def calc_quantile(q_start, q_end):
         condition = (q_start <= factor) & (factor < q_end)
-        result = simple_backtesting(condition, rebalance=rebalance, exp_returns=exp_returns)
+        result = fast_backtesting(condition, rebalance=rebalance, exp_returns=exp_returns)
         with results_lock:
             results[q_start*group] = result
 
@@ -645,7 +645,7 @@ def calc_max_ic_weights(ic_df: pd.DataFrame, window: int = 4, neg_weight: bool =
     return weights
 
 def combine_factors(
-    factors:Union[dict[str, pd.DataFrame], list[pd.DataFrame]], 
+    factors:list[pd.DataFrame], 
     method:Literal['EW', 'HR', 'HR-decay', 'IC', 'IR', 'MAX_IC', 'MAX_IR']=None, 
     rebalance:str='MR',
     params:dict={'window': 12, 'neg_weight': False},
