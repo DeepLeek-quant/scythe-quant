@@ -272,8 +272,8 @@ def _get_rebalance_date(rebalance:Literal['D', 'MR', 'QR', 'W', 'M', 'Q', 'Y'], 
     """
     
     # dates
-    _t_date = Databank().read_dataset('mkt_calendar', columns=['date'], filters=[('休市原因中文說明(人工建置)','=','')]).rename(columns={'date':'t_date'})
-    start_date = _t_date['t_date'].min()
+    t_date = Databank().read_dataset('mkt_calendar', columns=['date'], filters=[('休市原因中文說明(人工建置)','=','')]).rename(columns={'date':'t_date'})
+    start_date = t_date['t_date'].min()
     end_date = pd.Timestamp.today() + pd.DateOffset(days=5) if end_date is None else pd.to_datetime(end_date)
     
 
@@ -316,8 +316,11 @@ def _get_rebalance_date(rebalance:Literal['D', 'MR', 'QR', 'W', 'M', 'Q', 'Y'], 
     else:
         raise ValueError("Invalid frequency. Allowed values are 'QR', 'W', 'M', 'Q', 'Y'.")
 
+    
+    r_date['r_date'] = r_date['r_date'].astype('datetime64[ms]')
+    
     return pd.merge_asof(
-        r_date, _t_date, 
+        r_date, t_date, 
         left_on='r_date', 
         right_on='t_date', 
         direction='forward'
@@ -387,7 +390,7 @@ def get_portfolio(
             .fillna(0)
     else:
         portfolio = portfolio\
-            .reindex(index = exp_returns.index)\
+            .reindex(index = data.index)\
             .shift(signal_shift)\
             .ffill(limit=hold_period)\
             .fillna(0)
@@ -2189,18 +2192,18 @@ class MultiStrategy(Strategy):
 
     def _generate_meta_summary(self) -> pd.DataFrame:
         bmk = self.exp_returns[self.benchmark]
-        summary = calc_metrics(self.daily_return, bmk)
+        summary = calc_metrics(self.daily_return)
         
         for k, v in self.strategies.items():
             summary = pd.concat([
                 summary,
-                calc_metrics(v[0].daily_return.loc[self.daily_return.index])
+                calc_metrics(v[0].daily_return.loc[self.daily_return.index]).rename(columns={'Strategy':k})
             ], axis=1)
 
         for bmk in self.benchmark:
             summary = pd.concat([
                 summary, 
-                calc_metrics(self.exp_returns[bmk]).to_frame(f'{bmk}.TT')
+                calc_metrics(self.exp_returns[bmk]).rename(columns={'Strategy':f'Benchmark: {bmk}'})
             ], axis=1)
         return summary
 

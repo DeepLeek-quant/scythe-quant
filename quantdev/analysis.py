@@ -95,7 +95,8 @@ def calc_maemfe(buy_list:pd.DataFrame, portfolio_df:pd.DataFrame, exp_returns:pd
         'bmfe': bmfe,
         'mae': mae,
         'mdd': mdd
-    }, index=trades.columns)
+    }, index=trades.columns)\
+    .rename_axis('index', axis=0)
 
 def calc_liquidity_metrics(portfolio_df:pd.DataFrame=None, money_threshold:int=500000, volume_threshold:int=50):
     # get buy sell dates for each trade
