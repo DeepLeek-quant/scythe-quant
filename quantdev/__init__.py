@@ -1,7 +1,9 @@
 from pathlib import Path
 import logging
 
-__version__ = '1.3.1'
+from .utils import *
+
+__version__ = '2.0.0'
 
 # Set up logging
 logging.basicConfig(
