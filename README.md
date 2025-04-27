@@ -52,9 +52,9 @@ columns = db.list_columns('stock_trading_data')
 dataset = db.find_dataset('收盤價')  # Returns 'stock_trading_data'
 
 # Update data
-db.update_databank(include=['monthly_rev'])  # Update specific dataset
-db.update_databank(exclude=['stock_basic_info'])  # Update all except specified
-db.update_processed_data()  # Update processed data
+db.update_datasets(include=['monthly_rev'])  # Update specific dataset
+db.update_datasets(exclude=['stock_basic_info'])  # Update all except specified
+db.update_processed_datasets()  # Update processed data
 ```
 
 # Backtest

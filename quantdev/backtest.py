@@ -58,112 +58,20 @@ Examples:
 
 from typing import Literal, Union, Tuple
 from IPython.display import display, HTML
-from scipy import stats
+import datetime as dt
 import pandas as pd
 import numpy as np
-import calendar
+import panel as pn
 import logging
 
-from plotly.colors import sample_colorscale
-from plotly.subplots import make_subplots
-from numerize.numerize import numerize
-import plotly.figure_factory as ff
-import plotly.graph_objects as go
-import panel as pn
-
-from .data import Databank
-from .analysis import *
+from .data import DatasetsHandler
+from .plot import *
+from .analysis import calc_metrics, calc_style, calc_maemfe, calc_liquidity, calc_relative_return, calc_ic, calc_ir
 
 pd.set_option('future.no_silent_downcasting', True)
 
-
-def get_factor(
-    data:pd.DataFrame, 
-    method:Literal['Z']='Z', 
-    remove_outlier:Literal['SD', 'IQR', 'WS', 'MAD', None]='MAD', 
-    params:dict={'SD': 3, 'IQR': 1.5, 'WS': 0.05, 'MAD': 3},
-    universe:pd.DataFrame=None,
-)-> pd.DataFrame:
-
-    data = data[universe] if universe is not None else data
-
-    # remove outlier
-    if remove_outlier !=None:
-        if remove_outlier=='SD':
-            mean = data.mean(axis=1)
-            sd = data.std(axis=1)
-            sd_threshold = params['SD']
-            lower_bound, upper_bound = mean-sd_threshold*sd, mean+sd_threshold*sd
-            data = data.where((data.ge(lower_bound, axis=0) & data.le(upper_bound, axis=0)) , np.nan)
-        elif remove_outlier=='IQR':
-            q1, q3 = data.quantile(0.25, axis=1), data.quantile(0.75, axis=1)
-            iqr = q3-q1
-            iqr_threshold = params['IQR']
-            lower_bound, upper_bound = q1-iqr_threshold*iqr, q3+iqr_threshold*iqr
-            data = data.where((data.ge(lower_bound, axis=0) & data.le(upper_bound, axis=0)) , np.nan)
-        elif remove_outlier=='WS':
-            ws_limit = params['WS']
-            lower_bound, upper_bound = data.quantile(ws_limit, axis=1), data.quantile((1-ws_limit), axis=1)
-            data = data.clip(lower=lower_bound, upper=upper_bound, axis=0)
-        elif remove_outlier=='MAD':
-            median = data.median(axis=1)
-            mad = data.sub(median, axis=0).abs().median(axis=1)
-            mad_threshold = params['MAD']
-            lower_bound, upper_bound = median - mad_threshold * 1.4826 * mad, median + mad_threshold * 1.4826 * mad
-            data = data.where((data.ge(lower_bound, axis=0)) & (data.le(upper_bound, axis=0)), np.nan)
-    
-    # z-score standardize
-    if method=='Z':
-        data = data.sub(data.mean(axis=1), axis=0).div(data.std(axis=1), axis=0)
-
-    return data
-
-def get_rank(data:pd.DataFrame, asc:bool=True, universe:pd.DataFrame=None)-> pd.DataFrame:
-    """將資料轉換為因子值
-
-    Args:
-        item (Union[str, pd.DataFrame, Tuple[str, str]]): 資料欄位名稱或已有的 DataFrame，或是 (欄位名稱, 資料集名稱) 的 tuple
-        asc (bool): 是否為正向因子，True 代表數值越大分數越高，False 代表數值越小分數越高
-        universe (pd.DataFrame, optional): 股票池，用於篩選要保留的股票
-
-    Returns:
-        pd.DataFrame: 轉換後的因子值，數值介於 0~1 之間，index 為日期，columns 為股票代號
-
-    Examples:
-        從資料庫取得 ROE 因子值:
-        ```python
-        roe_factor = get_factor('roe', asc=True)
-        ```
-
-        使用已有的 DataFrame:
-        ```python
-        df = get_data('roe')
-        roe_factor = get_factor(df, asc=True)
-        ```
-
-        指定資料集:
-        ```python
-        roe_factor = get_factor(('roe', 'fin_data'), asc=True)
-        ```
-
-        指定股票池:
-        ```python
-        universe = bts.get_data('稅後淨利') >= 0
-        roe_factor = get_factor('roe', asc=True, universe=universe)
-        ```
-
-    Note:
-        - 若輸入字串，會先呼叫 get_data 取得資料
-        - 若輸入 DataFrame，需包含 t_date、stock_id 及目標欄位
-        - 若輸入 tuple，第一個元素為欄位名稱，第二個元素為資料集名稱
-        - 輸出的因子值為橫截面標準化後的百分比排名
-        - 若有指定 universe，只會保留 universe 內的股票資料
-    """
-    
-    data = data[universe] if universe is not None else data
-    return data.rank(axis=1, pct=True, ascending=asc)
-
-def _calc_release_pct_rebalancing(type_:Literal['MR', 'QR'], pct:int=80):
+# backtest
+def get_release_pct_rebalance(type_:Literal['MR', 'QR'], pct:int=80):
     """計算財報發布達到特定比例的交易日期列表
 
     Args:
@@ -179,10 +87,10 @@ def _calc_release_pct_rebalancing(type_:Literal['MR', 'QR'], pct:int=80):
     Examples:
         ```python
         # 取得80%公司發布月營收後的交易日:
-        dates = _calc_release_pct_rebalancing('MR', pct=80)
+        dates = get_release_pct_rebalance('MR', pct=80)
 
         # 取得90%公司發布季報後的交易日:
-        dates = _calc_release_pct_rebalancing('QR', pct=90)
+        dates = get_release_pct_rebalance('QR', pct=90)
         ```
 
     Note:
@@ -195,7 +103,7 @@ def _calc_release_pct_rebalancing(type_:Literal['MR', 'QR'], pct:int=80):
         'QR': {'dataset': 'fin_data','days': range(1, 91)}
     }
     
-    data = Databank().read_dataset(map[type_]['dataset'], columns=['date', 'stock_id', 'release_date'])
+    data = DatasetsHandler().read_dataset(map[type_]['dataset'], columns=['date', 'stock_id', 'release_date'])
     # Create a MultiIndex for all possible combinations of dates and days
     index = pd.MultiIndex.from_product([
             data['date'].unique(),
@@ -226,7 +134,7 @@ def _calc_release_pct_rebalancing(type_:Literal['MR', 'QR'], pct:int=80):
             release_count=lambda df: df.groupby('date')['release_count'].ffill(),
             release_pct = lambda df: df['release_count'] / df['total_count']
         )[['date', 'release_date', 'release_pct']]
-    result = Databank()._add_trade_date(result)[['date', 't_date', 'release_pct']]
+    result = DatasetsHandler().add_t_date(result)[['date', 't_date', 'release_pct']]
     
     # Filter and transform the result to get rebalancing dates
     return result\
@@ -237,7 +145,7 @@ def _calc_release_pct_rebalancing(type_:Literal['MR', 'QR'], pct:int=80):
         ['t_date']\
         .tolist()
 
-def _get_rebalance_date(rebalance:Literal['D', 'MR', 'QR', 'W', 'M', 'Q', 'Y'], end_date:Union[pd.Timestamp, str]=None):
+def get_rebalance_date(rebalance:Literal['D', 'MR', 'QR', 'W', 'M', 'Q', 'Y'], start:Union[str, int]=None, end:Union[str, int]=None):
     """取得再平衡日期列表
 
     Args:
@@ -272,13 +180,14 @@ def _get_rebalance_date(rebalance:Literal['D', 'MR', 'QR', 'W', 'M', 'Q', 'Y'], 
     """
     
     # dates
-    t_date = Databank().read_dataset('mkt_calendar', columns=['date'], filters=[('休市原因中文說明(人工建置)','=','')]).rename(columns={'date':'t_date'})
+    end = (dt.datetime.today() + dt.timedelta(days=1)).strftime('%Y-%m-%d') if end is None else end
+    t_date = DatasetsHandler().read_dataset('mkt_calendar', columns=['date'], filters=[('休市原因中文說明(人工建置)','=','')], start=start, end=end).rename(columns={'date':'t_date'})
     start_date = t_date['t_date'].min()
-    end_date = pd.Timestamp.today() + pd.DateOffset(days=5) if end_date is None else pd.to_datetime(end_date)
+    end_date = t_date['t_date'].max()
     
 
     if rebalance == 'D':
-        return _t_date[(_t_date['t_date'] <= end_date)]['t_date'].to_list()
+        return t_date[(t_date['t_date'] <= end_date)]['t_date'].to_list()
     elif rebalance.startswith('W'):
         if len(rebalance.split('-')) == 1:
             r_date = pd.DataFrame(pd.date_range(start=start_date, end=end_date, freq='W-MON'), columns=['r_date'])
@@ -293,7 +202,7 @@ def _get_rebalance_date(rebalance:Literal['D', 'MR', 'QR', 'W', 'M', 'Q', 'Y'], 
                 if start_date <= pd.to_datetime(f'{year}-{month:02d}-10') + pd.DateOffset(days=1) <= end_date
             ]
         elif (len(rebalance.split('-')) == 2) and (rebalance.split('-')[1].isdigit()):
-            date_list = _calc_release_pct_rebalancing(rebalance.split('-')[0], int(rebalance.split('-')[1]))
+            date_list = get_release_pct_rebalance(rebalance.split('-')[0], int(rebalance.split('-')[1]))
         r_date = pd.DataFrame(date_list, columns=['r_date'])
     elif rebalance.startswith('QR'):
         if len(rebalance.split('-')) == 1:
@@ -305,7 +214,7 @@ def _get_rebalance_date(rebalance:Literal['D', 'MR', 'QR', 'W', 'M', 'Q', 'Y'], 
                 if start_date <= pd.to_datetime(f"{year}-{md}") + pd.DateOffset(days=1) <= end_date
             ]
         elif (len(rebalance.split('-')) == 2) and (rebalance.split('-')[1].isdigit()):
-            date_list = _calc_release_pct_rebalancing(rebalance.split('-')[0], int(rebalance.split('-')[1]))
+            date_list = get_release_pct_rebalance(rebalance.split('-')[0], int(rebalance.split('-')[1]))
         r_date = pd.DataFrame(date_list, columns=['r_date'])
     elif rebalance == 'M':
         r_date = pd.DataFrame(pd.date_range(start=start_date, end=end_date, freq='MS'), columns=['r_date'])
@@ -327,8 +236,7 @@ def _get_rebalance_date(rebalance:Literal['D', 'MR', 'QR', 'W', 'M', 'Q', 'Y'], 
         )['t_date'].to_list()
 
 def get_portfolio(
-    data:pd.DataFrame, exp_returns:pd.DataFrame, 
-    rebalance:Literal['MR', 'QR', 'Y', 'Q', 'M', 'W', 'DT']='MR', 
+    data:pd.DataFrame, exp_returns:pd.DataFrame, rebalance_dates:list=None, 
     weights:pd.DataFrame=None, 
     signal_shift:int=0, 
     hold_period:int=None, 
@@ -363,7 +271,7 @@ def get_portfolio(
         - 訊號延遲用於模擬實際交易所需的作業時間
     """
     
-    if rebalance == 'DT':
+    if rebalance_dates is None:
         portfolio = data.astype(int)
         if weights:
             portfolio = portfolio * weights
@@ -371,14 +279,14 @@ def get_portfolio(
         return portfolio, portfolio
     
     # rebalance
-    r_date = _get_rebalance_date(rebalance)
-    buy_list =  data[data.index.isin(r_date)]
+    buy_list =  data[data.index.isin(rebalance_dates)]
 
+    # filter 漲跌停
+    # buy_list = buy_list[buy_list.apply(lambda x: x.isin([0, 1]).all())]
+    
     # weight
-    portfolio = buy_list.astype(int)
-    if weights:
-        portfolio = (portfolio * weights)
-    portfolio = portfolio.apply(lambda x: x / x.sum(), axis=1)
+    portfolio = (buy_list.astype(int) if weights is None else (buy_list * weights))\
+        .apply(lambda x: x / x.sum(), axis=1)
 
     if weight_limit is not None:
         portfolio = portfolio.clip(upper=weight_limit)
@@ -396,7 +304,7 @@ def get_portfolio(
             .fillna(0)
     return buy_list, portfolio
 
-def _stop_loss_or_profit(buy_list:pd.DataFrame, portfolio_df:pd.DataFrame, exp_returns:pd.DataFrame, pct:float, stop_at:Literal['intraday', 'next_day']='intraday'):
+def stop_loss_or_profit(buy_list:pd.DataFrame, portfolio_df:pd.DataFrame, exp_returns:pd.DataFrame, pct:float, stop_at:Literal['intraday', 'next_day']='intraday'):
     # calculate portfolio returns by multiplying portfolio positions (0/1) with return data
     portfolio_return = (portfolio_df != 0).astype(int) * exp_returns[portfolio_df.columns].loc[portfolio_df.index]
     
@@ -463,94 +371,17 @@ def _stop_loss_or_profit(buy_list:pd.DataFrame, portfolio_df:pd.DataFrame, exp_r
 
 def backtesting(
     data:pd.DataFrame, 
-    rebalance:Literal['MR', 'QR', 'W', 'M', 'Q', 'Y']='QR', 
-    signal_shift:int=0, hold_period:int=None, weight_limit:float=None,
-    stop_loss:Union[float, pd.DataFrame]=None, stop_profit:Union[float, pd.DataFrame]=None, stop_at:Literal['intraday', 'next_day']='next_day', 
-    start:Union[int, str]=None, end:Union[int, str]=None, 
-    benchmark:Union[str]='0050')-> 'Strategy':
-    """
-    進行回測並返回回測結果。
-
-    Args:
-        data (pd.DataFrame): 選股條件矩陣，index為日期，columns為股票代碼
-        rebalance (str): 再平衡頻率，可選 'MR'(月營收公布後), 'QR'(財報公布後), 'W'(每週), 'M'(每月), 'Q'(每季), 'Y'(每年)
-        signal_shift (int): 訊號延遲天數，用於模擬實際交易延遲
-        hold_period (int): 持有期間，若為None則持有至下次再平衡日
-        weight_limit (float): 權重限制，例如0.5代表單個股權重不能超過50%
-        stop_loss (float | pd.DataFrame): 停損點，例如-0.1代表跌幅超過10%時停損
-        stop_profit (float | pd.DataFrame): 停利點，例如0.2代表漲幅超過20%時停利
-        stop_at (str): 停損停利執行時點，可選 'intraday'(當日) 或 'next_day'(次日)
-        start (int | str): 回測起始日期
-        end (int | str): 回測結束日期
-        benchmark (str | list[str]): 基準指標，可為單一或多個股票代碼
-    Returns:
-        Strategy: 回測結果物件，包含:
-
-            - summary: 策略績效摘要，包含總報酬率、年化報酬率、最大回撤等重要指標
-            - position_info: 持股資訊，包含每日持股數量、換手率、個股權重等資訊
-            - report: 完整的回測報告，包含:
-                - Equity curve, Relative return, Portfolio style, MAE/MFE... etc.
-
-    Examples:
-        ```python
-        result = backtesting(
-            data, 
-            rebalance='Q', # 每季再平衡
-            signal_shift=1, # 訊號延遲1天
-            hold_period=20, # 持有20天
-            stop_loss=-0.1, # 停損10%
-            stop_profit=0.2, # 停利20%
-            stop_at='next_day', # 停損/停利於觸及條件後次日執行
-            start='2023-01-01', # 回測起始日期
-            end='2023-12-31', # 回測結束日期
-            benchmark='0050' # 基準指標
-        )
-        ```
-
-    Note:
-        - 投資組合權重為等權重配置
-        - 若無持有期間限制，則持有至下次再平衡日
-        - 停損停利點若未設定則不啟用
-    """
-
-    # return & weight
-    exp_returns = Databank().read_dataset('exp_returns', filter_date='t_date', start=start, end=end)
-    # if trade_at == 'open':
-    #     exp_returns = exp_returns.shift(1)
-    
-    # get data
-    buy_list, portfolio_df = get_portfolio(data=data, exp_returns=exp_returns, rebalance=rebalance, signal_shift=signal_shift, hold_period=hold_period, weight_limit=weight_limit)
-    
-    # stop loss or profit
-    if stop_loss is not None:
-        portfolio_df = _stop_loss_or_profit(buy_list, portfolio_df, exp_returns, pct=abs(stop_loss)*-1, stop_at=stop_at).infer_objects(copy=False).replace({np.nan: 0})
-    if stop_profit is not None:
-        portfolio_df = _stop_loss_or_profit(buy_list, portfolio_df, exp_returns, pct=stop_profit, stop_at=stop_at).infer_objects(copy=False).replace({np.nan: 0})
-
-    # backtest
-    backtest_df = (exp_returns * portfolio_df)\
-        .dropna(axis=0, how='all')
-
-    return Strategy(
-        exp_returns,
-        buy_list,
-        portfolio_df,
-        backtest_df,
-        benchmark,
-        rebalance
-    )
-
-def fast_backtesting(
-    data:pd.DataFrame, 
-    rebalance:Literal['MR', 'QR', 'W', 'M', 'Q', 'Y', 'DT']='QR', 
+    rebalance:Literal['MR', 'QR', 'W', 'M', 'Q', 'Y', 'daytrade']='QR', 
     longshort:Union[Literal[1], Literal[-1]]=1, 
     weights:pd.DataFrame=None, signal_shift:int=0, hold_period:int=None, weight_limit:float=None,
+    fee:float=0.001425, fee_discount:float=0.25, tax:float=0.003, slippage:float=0.001,
     stop_loss:Union[float, pd.DataFrame]=None, stop_profit:Union[float, pd.DataFrame]=None, stop_at:Literal['intraday', 'next_day']='next_day', 
-    fee:float=0.001425, fee_discount:float=0.25, tax:float=0.003, 
-    start:Union[int, str]=None, end:Union[int, str]=None,
+    start:Union[int, str]=None, end:Union[int, str]=None, 
+    benchmark_id:str='TRTEJ', report:bool=False,
     exp_returns:pd.DataFrame=None,
-    )-> pd.DataFrame:
-    """快速回測函數，僅返回投資組合每日報酬率序列。
+    **kwargs,
+)-> Union[pd.DataFrame, 'Report']:
+    """回測函數，返回投資組合每日報酬率序列。
 
     Attributes:
         data: 選股條件矩陣，index為日期，columns為股票代碼，True代表交易訊號
@@ -583,36 +414,61 @@ def fast_backtesting(
     Note:
         - 投資組合權重預設為等權重配置，除非提供自定義權重
         - 若無持有期間限制，則持有至下次再平衡日
-        - 若是當沖則包含交易成本(手續費和交易稅)
     """
-    
-    if rebalance == 'DT':
-        exp_returns = Databank().read_dataset('daytrade_exp_returns', filter_date='t_date', start=start, end=end) if exp_returns is None else exp_returns
-        exp_returns = (exp_returns * longshort) - ((fee*fee_discount)*2 + tax/2)
+    rebalance_dates = get_rebalance_date(rebalance, start=start, end=end) if rebalance != 'daytrade' else None
+    if rebalance == 'daytrade':
+        exp_returns = DatasetsHandler().read_dataset('exp_returns_daytrade', filter_date='t_date', start=start, end=end) if exp_returns is None else exp_returns
+        exp_returns *= longshort 
+        exp_returns -= ((fee*fee_discount)*2 + tax/2 + slippage*2)
     else:
-        exp_returns = Databank().read_dataset('exp_returns', filter_date='t_date', start=start, end=end) if exp_returns is None else exp_returns
-    buy_list, portfolio_df = get_portfolio(data=data, exp_returns=exp_returns, rebalance=rebalance, weights=weights, signal_shift=signal_shift, hold_period=hold_period, weight_limit=weight_limit)
+        exp_returns = DatasetsHandler().read_dataset('exp_returns', filter_date='t_date', start=start, end=end) if exp_returns is None else exp_returns
+        exp_returns *= longshort
+        if (fee_discount*fee+tax) != 0:
+            idx = exp_returns.index.get_indexer(rebalance_dates)
+            col = exp_returns.columns.get_indexer(data.columns)
+            exp_returns.iloc[idx, col] -= (fee*fee_discount + slippage) # buy
+            exp_returns.iloc[(idx-1)[1:], col] -= (fee*fee_discount + tax + slippage) # sell
+
+    buy_list, portfolio_df = get_portfolio(
+        data=data, 
+        exp_returns=exp_returns, 
+        rebalance_dates=rebalance_dates, 
+        weights=weights, 
+        weight_limit=weight_limit,
+        signal_shift=signal_shift, 
+        hold_period=hold_period, 
+    )
 
     # stop loss or profit
     if stop_loss is not None:
-        portfolio_df = _stop_loss_or_profit(buy_list, portfolio_df, exp_returns, pct=abs(stop_loss)*-1, stop_at=stop_at).infer_objects(copy=False).replace({np.nan: 0})
+        portfolio_df = stop_loss_or_profit(buy_list, portfolio_df, exp_returns, pct=abs(stop_loss)*-1, stop_at=stop_at).infer_objects(copy=False).replace({np.nan: 0})
     if stop_profit is not None:
-        portfolio_df = _stop_loss_or_profit(buy_list, portfolio_df, exp_returns, pct=stop_profit, stop_at=stop_at).infer_objects(copy=False).replace({np.nan: 0})
+        portfolio_df = stop_loss_or_profit(buy_list, portfolio_df, exp_returns, pct=stop_profit, stop_at=stop_at).infer_objects(copy=False).replace({np.nan: 0})
 
-    return (exp_returns * portfolio_df).sum(axis=1)
+
+    if report:
+        return Report(
+            portfolio_df=portfolio_df, 
+            buy_list=buy_list,
+            exp_returns=exp_returns,
+            benchmark_id=benchmark_id,
+            rebalance=rebalance,
+        )
+    else:
+        return (exp_returns * portfolio_df).sum(axis=1)
 
 def multi_backtesting(
-    strategies:dict[str, Union['Strategy', Tuple['Strategy', float]]], 
+    reports:dict[str, Union['Report', Tuple['Report', float]]], 
     rebalance:Literal['MR', 'QR', 'W', 'M', 'Q', 'Y']=None,
-    benchmark:Union[str, list[str]]='0050')-> 'MultiStrategy':
+    benchmark_id:str='TRTEJ')-> 'MultiReport':
     
     """多重策略回測並返回組合策略回測結果。
 
     Args:
         
-        - strategies (dict[str, Union['Strategy', Tuple['Strategy', float]]]): 策略字典，格式為:  
+        - strategies (dict[str, Union['Report', Tuple['Report', float]]]): 策略字典，格式為:  
             - key: 策略名稱
-            - value: Strategy物件，或是(Strategy物件, 權重)的tuple
+            - value: Report物件，或是(Report物件, 權重)的tuple
         - rebalance (Literal['MR', 'QR', 'W', 'M', 'Q', 'Y'], optional): 再平衡頻率，可選:  
             - MR: 每月10日後第一個交易日
             - QR: 每季財報公布日後第一個交易日(3/31, 5/15, 8/14, 11/14)
@@ -623,7 +479,7 @@ def multi_backtesting(
         - benchmark (Union[str, list[str]], optional): 基準指標，可為單一或多個股票代碼
 
     Returns:
-        MultiStrategy: 組合策略回測結果物件，包含:
+        MultiReport: 組合策略回測結果物件，包含:
 
             - summary: 策略績效摘要，包含總報酬率、年化報酬率、最大回撤等重要指標
             - position_info: 持股資訊，包含每日持股數量、換手率、個股權重等資訊
@@ -662,14 +518,14 @@ def multi_backtesting(
         - 回測區間為所有策略重疊的時間區間
     """
 
-    if all(isinstance(v, Strategy) for v in strategies.values()):
-        strategies = {k: (v, 1/len(strategies)) for k, v in strategies.items()}
+    if all(isinstance(v, Report) for v in reports.values()):
+        reports = {k: (v, 1/len(reports)) for k, v in reports.items()}
     
-    strategies_rtn = pd.concat([v[0].daily_return.rename(k) for k, v in strategies.items()], axis=1).dropna()
-    rebalance_weights = pd.DataFrame({k:v[1]/sum(v[1] for v in strategies.values()) for k, v in strategies.items()}, index=[strategies_rtn.index[0]])
+    strategies_rtn = pd.concat([v[0].daily_return.rename(k) for k, v in reports.items()], axis=1).dropna()
+    rebalance_weights = pd.DataFrame({k:v[1]/sum(v[1] for v in reports.values()) for k, v in reports.items()}, index=[strategies_rtn.index[0]])
 
     if rebalance is not None:
-        rebalance_dates = [d for d in _get_rebalance_date(rebalance) if d in strategies_rtn.index]
+        rebalance_dates = [d for d in get_rebalance_date(rebalance) if d in strategies_rtn.index]
         period_starts = pd.Series(rebalance_dates)
         period_ends = pd.Series(rebalance_dates + [strategies_rtn.index[-1]]).shift(-1).dropna()
         equity = pd.DataFrame(columns=strategies_rtn.columns, index=strategies_rtn.index)
@@ -698,1818 +554,243 @@ def multi_backtesting(
         pd.Series([equity.sum(axis=1).iloc[0]-1], index=[equity.sum(axis=1).index[0]])
     )).rename_axis('t_date').astype(float)
     
-    # return df
-    indices = [v[0].exp_returns.index for v in strategies.values()]
-    columns = [v[0].exp_returns.columns for v in strategies.values()]
-
-    common_index = indices[0]
-    for idx in indices[1:]:
-        common_index = common_index.intersection(idx)
-    common_columns = columns[0]
-    for cols in columns[1:]:
-        common_columns = common_columns.intersection(cols)
-    first_strategy = list(strategies.values())[0][0]
-    exp_returns = first_strategy.exp_returns.loc[common_index, common_columns]
+    # exp_returns
+    exp_returns = DatasetsHandler().read_dataset('exp_returns')
     
-    return MultiStrategy(strategies, rebalance=rebalance, benchmark=benchmark, exp_returns=exp_returns, daily_return=daily_return)
+    return MultiReport(reports=reports, rebalance=rebalance, benchmark_id=benchmark_id, exp_returns=exp_returns, daily_return=daily_return)
 
-def simple_multi_backtesting(strategies:dict[str, Union['Strategy', Tuple['Strategy', float]]], 
-    rebalance:Literal['MR', 'QR', 'W', 'M', 'Q', 'Y']=None)-> 'MultiStrategy':
-    
-    if all(isinstance(v, Strategy) for v in strategies.values()):
-        strategies = {k: (v, 1/len(strategies)) for k, v in strategies.items()}
-    
-    strategies_rtn = pd.concat([v[0].daily_return.rename(k) for k, v in strategies.items()], axis=1).dropna()
-    rebalance_weights = pd.DataFrame({k:v[1]/sum(v[1] for v in strategies.values()) for k, v in strategies.items()}, index=[strategies_rtn.index[0]])
-
-    if rebalance is not None:
-        rebalance_dates = [d for d in _get_rebalance_date(rebalance) if d in strategies_rtn.index]
-        period_starts = pd.Series(rebalance_dates)
-        period_ends = pd.Series(rebalance_dates + [strategies_rtn.index[-1]]).shift(-1).dropna()
-        equity = pd.DataFrame(columns=strategies_rtn.columns, index=strategies_rtn.index)
-
-        if period_starts[0] != strategies_rtn.index[0]:
-            period_starts = pd.Series([strategies_rtn.index[0]] + list(period_starts))
-            period_ends = pd.Series([period_starts[1]] + list(period_ends))
-
-        for start_date, end_date in zip(period_starts, period_ends):
-            start_idx = strategies_rtn.index.get_indexer([start_date])[0]
-            end_idx = strategies_rtn.index.get_indexer([end_date])[0]
-            if start_idx == 0: # first day
-                equity.iloc[start_idx:end_idx, :] = (1+strategies_rtn.iloc[start_idx:end_idx, :]).cumprod() * rebalance_weights.values
-            elif end_idx == strategies_rtn.index.size-1: # last day
-                prev_equity = equity.iloc[start_idx-1].sum()
-                end_idx += 1
-                equity.iloc[start_idx:end_idx, :] = (1+strategies_rtn.iloc[start_idx:end_idx, :]).cumprod() * rebalance_weights.values * prev_equity    
-            else:
-                prev_equity = equity.iloc[start_idx-1].sum()
-                equity.iloc[start_idx:end_idx, :] = (1+strategies_rtn.iloc[start_idx:end_idx, :]).cumprod() * rebalance_weights.values * prev_equity
-    else:
-        equity = (1+strategies_rtn).cumprod()* rebalance_weights.values
-
-    # daily return
-    daily_return = (equity.sum(axis=1).pct_change().combine_first(
-        pd.Series([equity.sum(axis=1).iloc[0]-1], index=[equity.sum(axis=1).index[0]])
-    )).rename_axis('t_date').astype(float)
-    
-    return daily_return
-
-
-class PlotMaster():
-    """
-    繪圖基礎類別，提供繪圖相關的共用功能。
-
-    Attributes:
-        fig_param (dict): 繪圖參數設定，包含:
-            - size (dict): 圖表大小設定
-            - margin (dict): 圖表邊界設定 
-            - template (str): 圖表樣式模板
-            - colors (dict): 顏色設定
-            - font (dict): 字型設定
-            - pos_colorscale (list): 正值色階設定
-            - neg_colorscale (list): 負值色階設定
-
-    Returns:
-        PlotMaster: 繪圖基礎物件，提供:
-            - _bold(): 文字加粗功能
-            - show_colors(): 顯示顏色設定功能
-
-    Examples:
-        ```python
-        # 建立繪圖物件
-        plot = PlotMaster()
-        
-        # 顯示顏色設定
-        plot.show_colors()
-        ```
-
-    Note:
-        - 需繼承此類別以使用繪圖功能
-        - 子類別需實作 __required_attrs__ 中定義的屬性
-    """
-    
-    def __init__(self):
-        self.fig_param = dict(
-            size=dict(w=800, h=600),
-            margin=dict(t=50, b=50, l=50, r=50),
-            template='plotly_dark',
-            colors={
-                'Bright Green':'#00FF00', 'Bright Red':'#FF0000', 'Bright Yellow':'#FFCC00', 
-                'Bright Cyan':'#00FFFF', 'Bright Orange':'#FF9900', 'Bright Magenta':'#FF00FF',
-                'Light Grey':'#AAAAAA', 'Light Blue':'#636EFA', 'Light Red':'#EF553B',
-                'Dark Blue':'#0000FF', 'Dark Grey':'#7F7F7F', 'White':'#FFFFFF', 
-            },
-            font=dict(family='Arial'),
-            pos_colorscale = [[0,'#414553'],[0.5,'#6E0001'],[1,'#FF0001']],
-            neg_colorscale = [[0,'#02EF02'],[0.5,'#017301'],[1,'#405351']],
-        )
-
-        __required_attrs__ = {
-            'exp_returns': 'pd.DataFrame',
-            'buy_list': 'pd.DataFrame',
-            'portfolio_df': 'pd.DataFrame', 
-            'backtest_df': 'pd.DataFrame',
-            'benchmark': 'list',
-            'rebalance': 'str',
-            'daily_return': 'pd.Series or pd.DataFrame',
-            'maemfe': 'pd.DataFrame',
-            'betas': 'pd.DataFrame',
-            
-            # if meta strategy
-            'strategies': 'dict',
-        }
-
-    def _bold(self, text):
-        return f'<b>{text}</b>'
-
-    def show_colors(self):
-        fig = go.Figure()
-        
-        # Calculate positions
-        colors = self.fig_param['colors']
-        y_start = 0.8
-        spacing = 0.1
-        x_base = 0.15
-        
-        for i, (name, color) in enumerate(colors.items()):
-            y_pos = y_start - i*spacing
-            
-            # Lines
-            fig.add_trace(go.Scatter(
-                x=[x_base, x_base+0.1], y=[y_pos]*2,
-                mode='lines', line=dict(color=color, width=4),
-                name=f"{name} ({color})", showlegend=True
-            ))
-            # Dots
-            fig.add_trace(go.Scatter(
-                x=[x_base+0.2], y=[y_pos],
-                mode='markers', marker=dict(color=color, size=12),
-                showlegend=False
-            ))
-            # Boxes
-            fig.add_shape(
-                type="rect", fillcolor=color, line_color=color,
-                x0=x_base+0.3, x1=x_base+0.4,
-                y0=y_pos-0.02, y1=y_pos+0.02
-            )
-            # Text
-            fig.add_trace(go.Scatter(
-                x=[x_base+0.5], y=[y_pos],
-                mode='text', text=f"{name} ({color})",
-                textposition='middle right',
-                textfont=dict(size=12, color='white'),
-                showlegend=False
-            ))
-
-        # Update layout
-        fig.update_layout(
-            showlegend=False,
-            yaxis=dict(showticklabels=False, showgrid=False, zeroline=False, showline=False,
-                    range=[y_start-len(colors)*spacing-0.1, y_start+0.1]),
-            xaxis=dict(showticklabels=False, showgrid=False, zeroline=False, showline=False,
-                    range=[0, 1]),
-            height=self.fig_param['size']['h'],
-            width=self.fig_param['size']['w'], 
-            margin=self.fig_param['margin'],
-            template=self.fig_param['template'],
-            plot_bgcolor='rgba(0,0,0,0)'
-        )
-        return fig
-
-    # analysis
-    def _liquidity_analysis(self, portfolio_df:pd.DataFrame):
-        
-        # get buy sell dates for each trade
-        portfolio_df = portfolio_df or self.portfolio_df
-        last_portfolio = portfolio_df.shift(1).fillna(0).infer_objects(copy=False)
-        buys = (last_portfolio == 0) & (portfolio_df != 0)
-        sells = (last_portfolio != 0) & (portfolio_df == 0)
-
-        buy_sells = pd.concat([
-            buys.stack().loc[lambda x: x].reset_index(name='action').assign(action='b'),
-            sells.stack().loc[lambda x: x].reset_index(name='action').assign(action='s')
-            ])\
-            .rename(columns={'t_date':'buy_date', 'level_1': 'stock_id'})\
-            .sort_values(by=['stock_id', 'buy_date'])\
-            .assign(sell_date=lambda x: x.groupby('stock_id')['buy_date'].shift(-1))
-
-        buy_sells = buy_sells[buy_sells['action'] == 'b']\
-            .dropna()\
-            .sort_values(by=['stock_id', 'buy_date'])\
-            .reset_index(drop=True)\
-            [['stock_id', 'buy_date', 'sell_date']]
-
-        # load data
-        filters=[
-            ('stock_id', 'in', list(buy_sells['stock_id'].unique())),
-            ('date', 'in', list(set(list(buy_sells['buy_date'].unique().strftime('%Y-%m-%d')) + list(buy_sells.sell_date.unique().strftime('%Y-%m-%d'))))),
-          ]
-
-        liquidity_status=pd.merge(
-          Databank().read_dataset(
-              'stock_trading_notes', 
-              columns=['date', 'stock_id', '是否為注意股票', '是否為處置股票', '是否全額交割', '漲跌停註記'],
-              filters=filters
-          ),
-          Databank().read_dataset(
-              'stock_trading_data',
-              columns=['date', 'stock_id', '成交量(千股)', '成交金額(元)'],
-              filters=filters,
-          ),
-          on=['date', 'stock_id'],
-          how='inner',
-          )
-
-        # merge
-        return pd.concat([
-            pd.merge(buy_sells, liquidity_status, left_on=['stock_id', 'buy_date'], right_on=['stock_id', 'date'], how='left'), 
-            pd.merge(buy_sells, liquidity_status, left_on=['stock_id', 'sell_date'], right_on=['stock_id', 'date'], how='left'),
-          ])
-    
-    def _calc_relative_return(self, daily_return:pd.DataFrame=None, downtrend_window:int=3):
-        daily_rtn = daily_return or self.daily_return
-        benchmark_daily_returns = self.exp_returns[self.benchmark]
-        relative_rtn = (1 + daily_rtn - benchmark_daily_returns).cumprod() - 1
-
-        relative_rtn_diff = relative_rtn.diff()
-        downtrend_mask = relative_rtn_diff < 0
-        downtrend_mask = pd.DataFrame({'alpha': relative_rtn, 'downward': downtrend_mask})
-        downtrend_mask['group'] = (downtrend_mask['downward'] != downtrend_mask['downward'].shift()).cumsum()
-        downtrend_returns = np.where(
-            downtrend_mask['downward'] & downtrend_mask.groupby('group')['downward'].transform('sum').ge(downtrend_window), 
-            downtrend_mask['alpha'], 
-            np.nan
-        )
-
-        return relative_rtn, downtrend_returns
-
-    def _calc_rolling_beta(self, window:int=240, daily_rtn:pd.DataFrame=None, benchmark_daily_returns:pd.DataFrame=None):
-        daily_rtn = daily_rtn or self.daily_return
-        benchmark_daily_returns = benchmark_daily_returns or self.exp_returns[self.benchmark]
-
-        rolling_cov = daily_rtn.rolling(window).cov(benchmark_daily_returns)
-        rolling_var = benchmark_daily_returns.rolling(window).var()
-        return (rolling_cov / rolling_var).dropna()
-
-    def _calc_ir(self, window:int=240, daily_rtn:pd.DataFrame=None, benchmark_daily_returns:pd.DataFrame=None):
-        daily_rtn = daily_rtn or self.daily_return
-        benchmark_daily_returns = benchmark_daily_returns or self.exp_returns[self.benchmark]
-
-        excess_return = (1 + daily_rtn - benchmark_daily_returns).rolling(window).apply(np.prod, raw=True) - 1
-        tracking_error = excess_return.rolling(window).std()
-        return (excess_return / tracking_error).dropna()
-
-    def _calc_ic(self,factor:pd.DataFrame, group:int=10, rebalance:Literal['MR', 'QR', 'W', 'M', 'Q', 'Y']=None):
-        # factor rank
-        rebalance = rebalance or self.rebalance
-        r_date = _get_rebalance_date(rebalance)
-        f_rank = (pd.qcut(factor[factor.index.isin(r_date)].stack(), q=group, labels=False, duplicates='drop') + 1)\
-        .reset_index()\
-        .rename(columns={'level_1':'stock_id', 0:'f_rank'})    
-
-        # return rank
-        exp_returns = self.exp_returns
-        factor_r =  exp_returns\
-            .groupby(pd.cut(exp_returns.index, bins=r_date))\
-            .apply(lambda x: (1 + x).prod() - 1).dropna()\
-            .stack()\
-            .reset_index()\
-            .rename(columns={'level_0':'t_date', 'level_1':'stock_id', 0: 'return'})\
-            .assign(t_date=lambda df: df['t_date'].apply(lambda x: x.left).astype('datetime64[ns]'))
-        
-        # ic
-        factor_return_rank = pd.merge(f_rank, factor_r, on=['t_date', 'stock_id'], how='inner').dropna()\
-            .groupby(['t_date', 'f_rank'])['return']\
-            .mean()\
-            .reset_index()\
-            .assign(r_rank = lambda df: df.groupby('t_date')['return'].rank())
-        return factor_return_rank.groupby('t_date', group_keys=False).apply(
-            lambda group: stats.spearmanr(group['f_rank'], group['r_rank'])[0], include_groups=False)
-
-    # plot
-    def _plot_equity_curve(self, c_return:pd.DataFrame=None, bmk_c_return:pd.DataFrame=None, portfolio_df:pd.DataFrame=None):
-        
-        c_return = c_return or (1 + self.daily_return).cumprod() - 1
-        bmk_c_return = bmk_c_return or (1 + self.exp_returns[self.benchmark]).cumprod() - 1
-        portfolio_df = portfolio_df or self.portfolio_df
-        
-        fig = make_subplots(
-            rows=3, cols=1, vertical_spacing=0.05, 
-            shared_xaxes=True,
-            )
-        
-        # meta strategy section
-        if hasattr(self, 'strategies') and self.strategies:
-            strategies_rtn = pd.concat([v[0].daily_return.rename(k) for k, v in self.strategies.items()], axis=1).dropna()
-            strategies_c_rtn = (1 + strategies_rtn).cumprod() - 1
-            strategies_drawdown = (strategies_c_rtn+1 - (strategies_c_rtn+1).cummax()) / (strategies_c_rtn+1).cummax()
-
-
-            n_strategies = len(strategies_c_rtn.columns)
-            colors = sample_colorscale('Teal', [0.6 + (n * 0.4/(n_strategies-1)) for n in range(n_strategies)])
-            # colors = sample_colorscale(c, [n / (n_strategies-1) for n in range(n_strategies)])
-            color_scale = dict(zip(strategies_c_rtn.columns, colors))
-            
-            for col in strategies_c_rtn.columns:
-                fig.append_trace(go.Scatter(
-                    x=strategies_c_rtn.index,
-                    y=strategies_c_rtn[col].values,
-                    name=col,
-                    legendgroup=col,
-                    legendrank=10000+strategies_c_rtn.columns.get_loc(col),
-                    line=dict(color=color_scale[col], width=2),
-                    ), row=1, col=1)
-                fig.append_trace(go.Scatter(
-                    x=strategies_drawdown.index,
-                    y=strategies_drawdown[col].values,
-                    name=col,
-                    legendgroup=col,
-                    legendrank=10000+strategies_c_rtn.columns.get_loc(col),
-                    showlegend=False,
-                    line=dict(color=color_scale[col], width=1.5),
-                    ), row=2, col=1)
-
-        # equity curve
-        fig.append_trace(go.Scatter(
-            x=bmk_c_return.index,
-            y=bmk_c_return.values,
-            showlegend=False,
-            name='Benchmark',
-            line=dict(color=self.fig_param['colors']['Dark Grey'], width=2),
-            ), row=1, col=1)
-        fig.append_trace(go.Scatter(
-            x=c_return.index,
-            y=c_return.values,
-            name='Strategy',
-            line=dict(color=self.fig_param['colors']['Dark Blue'], width=2),
-            ), row=1, col=1)
-
-        # drawdown
-        drawdown = (c_return+1 - (c_return+1).cummax()) / (c_return+1).cummax()
-        bmk_drawdown = (bmk_c_return+1 - (bmk_c_return+1).cummax()) / (bmk_c_return+1).cummax()
-
-        fig.append_trace(go.Scatter(
-            x=bmk_drawdown.index,
-            y=bmk_drawdown.values,
-            name='Benchmark-DD',
-            showlegend=False,
-            line=dict(color=self.fig_param['colors']['Dark Grey'], width=2),
-            ), row=2, col=1)
-        fig.append_trace(go.Scatter(
-            x=drawdown.index,
-            y=drawdown.values,
-            name='Strategy-DD',
-            line=dict(color=self.fig_param['colors']['Bright Magenta'], width=1.5),
-            ), row=2, col=1)
-
-        # portfolio size
-        p_size = portfolio_df.apply(lambda row: np.count_nonzero(row), axis=1)
-        fig.append_trace(go.Scatter(
-            x=p_size.index,
-            y=p_size.values,
-            name='Strategy-size',
-            line=dict(color=self.fig_param['colors']['Bright Orange'], width=2),
-            ), row=3, col=1)
-
-        # adjust time range
-        fig.update_xaxes(rangeslider_visible=True, rangeslider=dict(thickness=0.01), row=3, col=1)
-
-        # asjust y as % for equity curve & drawdown
-        fig.update_yaxes(tickformat=".0%", row=1, col=1)
-        fig.update_yaxes(tickformat=".0%", row=2, col=1)
-
-        # position
-        fig.update_yaxes(domain=[0.5, 0.95], row=1, col=1)
-        fig.update_yaxes(domain=[0.2, 0.4], row=2, col=1)
-        fig.update_yaxes(domain=[0, 0.1], row=3, col=1)
-
-        # titles
-        fig.add_annotation(text=self._bold(f'Cumulative Return'), x=0, y = 1, yshift=30, xref="x domain", yref="y domain", showarrow=False, row=1, col=1)
-        fig.add_annotation(text=self._bold(f'Drawdown'), x=0, y = 1, yshift=30, xref="x domain", yref="y domain", showarrow=False, row=2, col=1)
-        fig.add_annotation(text=self._bold(f'Portfolio Size'), x=0, y = 1, yshift=30, xref="x domain", yref="y domain", showarrow=False, row=3, col=1)
-
-        # fig layout
-        fig.update_layout(
-            legend=dict(x=0.01, y=0.95, xanchor='left', yanchor='top', bgcolor='rgba(0,0,0,0)', traceorder='normal'),
-            width=self.fig_param['size']['w'],
-            height=self.fig_param['size']['h'],
-            margin=self.fig_param['margin'],
-            template=self.fig_param['template'],
-        )
-        return fig
-
-    def _plot_return_heatmap(self, daily_return:pd.DataFrame=None):
-        # prepare data
-        daily_return = self.daily_return if daily_return is None else daily_return
-        monthly_return = ((1 + daily_return).resample('ME').prod() - 1)\
-            .reset_index()\
-            .assign(
-                y=lambda x: x['t_date'].dt.year.astype('str'),
-                m=lambda x: x['t_date'].dt.month,
-                )
-        annual_return = (daily_return + 1).groupby(daily_return.index.year).prod() - 1
-        my_heatmap = monthly_return.pivot(index='y', columns='m', values=0).iloc[::-1]
-        avg_mth_return = monthly_return.groupby('m')[0].mean()
-
-        # plot
-        fig = make_subplots(rows=3, cols=1, vertical_spacing=0.1)
-        pos_colorscale = self.fig_param['pos_colorscale']
-        neg_colorscale = self.fig_param['neg_colorscale']
-
-        # annual return heatmap
-        annual_return_pos = np.where(annual_return > 0, annual_return, np.nan)
-        annual_return_neg = np.where(annual_return <= 0, annual_return, np.nan)
-
-        # annual return for positive values
-        fig.append_trace(
-            go.Heatmap(
-                z=annual_return_pos.reshape(1, -1),
-                x=annual_return.index.astype('str'),
-                y=[''], 
-                text=annual_return.apply(lambda x: f"{x:.1%}").values.reshape(1, -1),
-                texttemplate="%{text}",
-                textfont=dict(size=9),
-                colorscale = pos_colorscale,
-                showscale = False,
-                zmin=0,
-                zmax=0.4,
-            ),
-            row=1, col=1
-        )
-
-        # annual return for negative values
-        fig.append_trace(
-            go.Heatmap(
-                z=annual_return_neg.reshape(1, -1),
-                x=annual_return.index.astype('str'),
-                y=[''], 
-                text=annual_return.apply(lambda x: f"{x:.1%}").values.reshape(1, -1),
-                texttemplate="%{text}",
-                textfont=dict(size=9),
-                colorscale = neg_colorscale,
-                showscale = False,
-                zmin=-0.4,
-                zmax=0,
-            ),
-            row=1, col=1
-        )
-
-
-        # monthly return heatmap
-        my_heatmap_pos = np.where(my_heatmap > 0, my_heatmap, np.nan)
-        my_heatmap_neg = np.where(my_heatmap <= 0, my_heatmap, np.nan)
-
-        # monthly return for positive values
-        fig.append_trace(
-            go.Heatmap(
-                z=my_heatmap_pos,
-                x=my_heatmap.columns,
-                y=my_heatmap.index,
-                text=np.where(my_heatmap_pos > 0, np.vectorize(lambda x: f"{x:.1%}")(my_heatmap_pos), ""),
-                texttemplate="%{text}",
-                textfont=dict(size=10),
-                colorscale = pos_colorscale,
-                showscale = False,
-                zmin=0,
-                zmax=0.1,
-            ),
-            row=2, col=1
-        )
-
-        # monthly return for negative values
-        fig.append_trace(
-            go.Heatmap(
-                z=my_heatmap_neg,
-                x=my_heatmap.columns,
-                y=my_heatmap.index,
-                text=np.where(my_heatmap_neg <= 0, np.vectorize(lambda x: f"{x:.1%}")(my_heatmap_neg), ""),
-                texttemplate="%{text}",
-                textfont=dict(size=10),
-                colorscale = neg_colorscale,
-                showscale = False,
-                zmin=-0.1,
-                zmax=0,
-            ),
-            row=2, col=1
-        )
-
-        # monthly average return
-        fig.append_trace(
-        go.Bar(
-            x=avg_mth_return.index,
-            y=avg_mth_return.values,
-            marker=dict(color=self.fig_param['colors']['Bright Orange']),
-            name='Avg. return',
-            
-        ),
-        row=3, col=1
-        )
-        fig.add_hline(
-            y=0,
-            line=dict(color="white", width=1),
-            row=3, col=1
-        )
-
-        # adjust for axes display
-        fig.update_xaxes(tickfont=dict(size=11), row=1, col=1)
-        fig.update_xaxes(tickvals=list(range(1, 13)), ticktext=[calendar.month_abbr[i] for i in range(1, 13)], row=2, col=1)
-        fig.update_xaxes(tickvals=list(range(1, 13)), ticktext=[calendar.month_abbr[i] for i in range(1, 13)], row=3, col=1, matches='x2')
-        fig.update_yaxes(tickformat=".01%", row=3, col=1)
-
-        # position
-        fig.update_yaxes(domain=[0.9, 0.95], row=1, col=1)
-        fig.update_yaxes(domain=[0.3, 0.75], row=2, col=1)
-        fig.update_yaxes(domain=[0, 0.15], row=3, col=1)
-
-        # titles
-        fig.add_annotation(text=self._bold(f'Annual Return'), x=0, y=1, yshift=30, xref="x domain", yref="y domain", showarrow=False, row=1, col=1)
-        fig.add_annotation(text=self._bold(f'Monthly Return'), x=0, y=1, yshift=30, xref="x domain", yref="y domain", showarrow=False, row=2, col=1)
-        fig.add_annotation(text=self._bold(f'Avg. monthly Return'), x=0, y=1, yshift=30, xref="x domain", yref="y domain", showarrow=False, row=3, col=1)
-
-        # fig size, colorscale & bgcolor
-        fig.update_layout(
-            width=self.fig_param['size']['w'],
-            height=self.fig_param['size']['h'],
-            margin=self.fig_param['margin'],
-            template=self.fig_param['template'],
-        )
-
-        return fig
-
-    def _plot_liquidity(self, portfolio_df:pd.DataFrame=None, money_threshold:int=500000, volume_threshold:int=50):
-        df=self._liquidity_analysis(portfolio_df)
-
-        # lqd_heatmap
-        low_money = (df['成交金額(元)'] < money_threshold).mean()
-        low_volume = (df['成交量(千股)'] < volume_threshold).mean()
-        全額交割 = (df['是否全額交割']=='Y').mean()
-        注意股票 = (df['是否為注意股票']=='Y').mean()
-        處置股票 = (df['是否為處置股票']=='Y').mean()
-        buy_limit = ((df['date']==df['sell_date'])&(df['漲跌停註記'] == '-')).mean()
-        sell_limit = ((df['date']==df['buy_date'])&(df['漲跌停註記'] == '+')).mean()
-        lqd_heatmap = pd.DataFrame({      
-            f'money < {numerize(money_threshold)}': [low_money],
-            f'volume < {numerize(volume_threshold)}': [low_volume],
-            '全額交割': [全額交割],
-            '注意股票': [注意股票],
-            '處置股票': [處置股票],
-            'buy limit up': [buy_limit],
-            'sell limit down': [sell_limit],
-            },
-            index=[0],
-        )
-
-        # safety capacity
-        principles = [500000, 1000000, 5000000, 10000000, 50000000, 100000000]
-        buys_lqd = df[df['buy_date']==df['date']]
-        vol_ratio = 10
-        capacity = pd.DataFrame({
-            'principle': [numerize(p) for p in principles], # Format principle for better readability
-            'safety_capacity': [
-                (buys_lqd.assign(
-                capacity=lambda x: x['成交金額(元)'] / vol_ratio - (principle / x.groupby('buy_date')['stock_id'].transform('nunique')),
-                spill=lambda x: np.where(x['capacity'] < 0, x['capacity'], 0)
-                )
-                .groupby('buy_date')['spill'].sum() * -1 / principle).mean()
-                for principle in principles
-                ]
-        })
-        capacity['safety_capacity'] = 1 - capacity['safety_capacity']
-
-        # entry, exit volume
-        def volume_threshold(df):
-            thresholds = [100000, 500000, 1000000, 10000000, 100000000]
-            labels = [f'{numerize(thresholds[i-1])}-{numerize(th)}' 
-                        if i > 0 else f'<= {numerize(th)}'
-                        for i, th in enumerate(thresholds)]
-            labels.append(f'> {numerize(thresholds[-1])}')
-            
-            return df.assign(
-                money_threshold=pd.cut(df['成交金額(元)'], [0] + thresholds + [np.inf], labels=labels)
-                )\
-                .groupby('money_threshold', observed=True)['stock_id']\
-                .count()\
-                .pipe(lambda x: (x / x.sum()))
-
-        ee_volume = pd.concat([
-            volume_threshold(df[df['buy_date']==df['date']]).rename('buy'),
-            volume_threshold(df[df['sell_date']==df['date']]).rename('sell')
-        ], axis=1)
-
-        # plot
-        fig = make_subplots(
-            rows=2, cols=2,
-            specs=[
-                [{"colspan": 2}, None],
-                [{}, {},]
-            ],
-            vertical_spacing=0.05,
-            horizontal_spacing=0.1,
-            )
-
-        # lqd_heatmap
-        fig.add_trace(go.Heatmap(
-            z=lqd_heatmap.loc[0].values.reshape(-1, 1), 
-            x=lqd_heatmap.columns.values, 
-            y=[''], 
-            text = lqd_heatmap.loc[0].apply(lambda x: f"{x:.2%}").values.reshape(1, -1),
-            texttemplate="%{text}",
-            transpose=True,
-            textfont=dict(size=10),
-            colorscale = 'Plotly3',
-            showscale = False,
-            zmin=0,
-            zmax=0.1,
-        ),
-        row=1, col=1)
-
-        # safety capacity
-        fig.add_trace(go.Bar(
-            x=capacity['principle'],
-            y=capacity['safety_capacity'],
-            showlegend=False,
-            marker_color=self.fig_param['colors']['Bright Orange'],
-            name='Safety cap',
-            text=capacity.safety_capacity.apply(lambda x: f"{x:.2%}").values,
-            textposition='inside',
-            width=0.7
-        ),
-        row=2, col=1)
-
-        # entry, exit volume
-        fig.add_trace(go.Bar(
-            x=ee_volume.index,
-            y=ee_volume.buy.values,
-            name='Entry',
-            marker_color=self.fig_param['colors']['Bright Cyan'], 
-        ),
-        row=2, col=2)
-        fig.add_trace(go.Bar(
-            x=ee_volume.index,
-            y=ee_volume.sell.values,
-            name='Exit',
-            marker_color=self.fig_param['colors']['Bright Red'], 
-        ),
-        row=2, col=2)
-
-        # adjust axes
-        fig.update_xaxes(tickfont=dict(size=11), side='top', row=1, col=1)
-        fig.update_xaxes(tickfont=dict(size=11), title_text='total capital', row=2, col=1)
-        fig.update_xaxes(tickfont=dict(size=11), title_text="trading money", row=2, col=2)
-
-        fig.update_yaxes(showticklabels=False, row=1, col=1)
-        fig.update_yaxes(tickformat=".0%", row=2, col=1)
-        fig.update_yaxes(tickformat=".0%", row=2, col=2)
-
-        # add titles
-        fig.add_annotation(text=self._bold(f'Liquidity Heatmap'), x=0, y = 1, yshift=50, xref="x domain", yref="y domain", showarrow=False, row=1, col=1)
-        fig.add_annotation(text=self._bold(f'Safety Capacity'), align='left', x=0, y = 1, yshift=50, xref="x domain", yref="y domain", showarrow=False, row=2, col=1)
-        fig.add_annotation(text=f'(Ratio of buy money ≤ 1/{vol_ratio} of volume for all trades)', align='left', x=0, y = 1, yshift=30, xref="x domain", yref="y domain", showarrow=False, font=dict(size=12), row=2, col=1)
-        fig.add_annotation(text=self._bold(f'Trading Money at Entry/Exit'), x=0, y = 1, yshift=50, xref="x domain", yref="y domain", showarrow=False, row=2, col=2)
-
-        # position
-        fig.update_yaxes(domain=[0.87, 0.92], row=1, col=1)
-        fig.update_yaxes(domain=[0.2, 0.65], row=2, col=1, range=[0, 1])
-        fig.update_yaxes(domain=[0.2, 0.65], row=2, col=2, dtick=0.1)
-
-        # laoyout
-        fig.update_layout(
-            legend=dict(x=0.55, y=0.65, xanchor='left', yanchor='top', bgcolor='rgba(0,0,0,0)', traceorder='normal'),
-            coloraxis1_showscale=False,
-            coloraxis1=dict(colorscale='Plasma'),
-            width=self.fig_param['size']['w'],
-            height=self.fig_param['size']['h'],
-            margin=self.fig_param['margin'],
-            template=self.fig_param['template'],
-            )
-        return fig
-    
-    def _plot_maemfe(self):
-        maemfe = self.maemfe
-        win = maemfe[maemfe['return']>0]
-        lose = maemfe[maemfe['return']<=0]
-
-        fig = make_subplots(
-            rows=2, cols=3,
-            vertical_spacing=0,
-            horizontal_spacing=0,
-            )
-
-        # colors
-        light_blue = self.fig_param['colors']['Light Blue']
-        light_red = self.fig_param['colors']['Light Red']
-        dark_blue = self.fig_param['colors']['Dark Blue']
-        dark_red = self.fig_param['colors']['Bright Red']
-
-        # return distribution
-        fig.add_trace(go.Histogram(
-            x=win['return'], 
-            marker_color=light_blue, 
-            name='win',
-            legendgroup='win',
-        ), row=1, col=1)
-        fig.add_trace(go.Histogram(
-            x=lose['return'], 
-            marker_color=light_red, 
-            name ='lose',
-            legendgroup ='lose',
-        ), row=1, col=1)
-        fig.add_vline(
-            x=maemfe['return'].mean(), 
-            line_width=2, 
-            line_dash="dash", 
-            line_color="Blue",
-            annotation_text=f'avg. rtn: {maemfe["return"].mean() :.2%}',
-            annotation_font_color='Blue',
-        row=1, col=1)
-        
-        # bmfe/ mae
-        fig.add_trace(go.Scatter(
-            x = win['gmfe'], 
-            y = win['mae']*-1, 
-            mode='markers', 
-            marker_color=light_blue, 
-            text=win.index,
-            textposition="top center",
-            name='win',
-            legendgroup='win',
-        ), row=1, col=2)
-        fig.add_trace(go.Scatter(
-            x = lose['gmfe'], 
-            y = lose['mae']*-1, 
-            mode='markers', 
-            marker_color=light_red, 
-            text=lose.index,
-            textposition="top center",
-            name='lose',
-            legendgroup ='lose',
-        ), row=1, col=2)
-        
-        # gmfe/mdd
-        fig.add_trace(go.Scatter(
-            x = win['gmfe'], 
-            y = win['mdd']*-1, 
-            mode='markers', 
-            marker_color=light_blue, 
-            name='win',
-            text=win.index,
-            textposition="top center",
-            legendgroup='win',
-        ), row=1, col=3)
-        fig.add_trace(go.Scatter(
-            x = lose['gmfe'], 
-            y = lose['mdd']*-1, 
-            mode='markers', 
-            marker_color=light_red, 
-            name='lose',
-            text=lose.index,
-            textposition="top center",
-            legendgroup ='lose',
-        ), row=1, col=3)
-        fig.add_shape(
-            type="line",
-            x0=0, y0=0, x1=1, y1=1,
-            xref='x3', yref='y3',
-            line=dict(color="Orange", width=2, dash="dash")
-        )
-
-        # positions
-        fig.update_xaxes(tickformat=".0%", domain=[0, 0.25], title_text='return', row=1, col=1)
-        fig.update_xaxes(tickformat=".0%", domain=[0.25+0.125, 0.5+0.125], title_text="gmfe", row=1, col=2)
-        fig.update_xaxes(tickformat=".0%", domain=[0.75, 1], title_text="gmfe", row=1, col=3)
-        
-        fig.update_yaxes(domain=[0.625, 0.95], title_text='count', title_standoff=2, row=1, col=1)
-        fig.update_yaxes(tickformat=".0%", domain=[0.625, 0.95], title_text='mae', title_standoff=2, row=1, col=2)
-        fig.update_yaxes(tickformat=".0%", domain=[0.625, 0.95], title_text='mdd', title_standoff=2, row=1, col=3)
-
-        # distributions
-        def plot_distributions(item, x):
-            jitter = 1e-10
-            win_data = x*win[item] + jitter
-            lose_data = x*lose[item] + jitter
-            
-            distplot=ff.create_distplot(
-                [win_data, lose_data], 
-                ['win', 'lose'], 
-                colors=['#636EFA', '#EF553B'],
-                bin_size=0.01, 
-                histnorm='probability', 
-                # curve_type='normal',
-                show_rug=False
-            )
-            distplot.update_traces(dict(marker_line_width=0))
-            return distplot
-
-        distributions={
-            'mae':{'row':2, 'col':1},
-            'bmfe':{'row':2, 'col':2},
-            'gmfe':{'row':2, 'col':3},
-        }
-
-        for key, value in distributions.items():
-            x = -1 if key =='mae' else 1
-            distplot = plot_distributions(key, x)
-            
-            # histogram
-            fig.add_trace(go.Histogram(
-                distplot['data'][0], 
-                name='win',
-                legendgroup='win', 
-            ), row=value.get('row'), col=value.get('col'))
-            fig.add_trace(go.Histogram(
-                distplot['data'][1], 
-                legendgroup ='lose', 
-            ), row=value.get('row'), col=value.get('col'))
-            
-            # curve lines
-            fig.add_trace(go.Scatter(
-                distplot['data'][2],
-                marker_color='blue'
-            ), row=value.get('row'), col=value.get('col'))
-            fig.add_trace(go.Scatter(
-                distplot['data'][3],
-                marker_color='red'
-            ), row=value.get('row'), col=value.get('col'))
-            
-            # add v lines & annotations
-            q3_win, q3_lose  = (x*win[key]).quantile(0.75), (x*lose[key]).quantile(0.75)
-            fig.add_vline(
-                x=q3_win, 
-                line_width=2, line_dash="dash", line_color=dark_blue,
-                row=value.get('row'), col=value.get('col'))
-            fig.add_vline(
-                x=q3_lose, 
-                line_width=2, line_dash="dash", line_color=dark_red,
-                row=value.get('row'), col=value.get('col'))
-            fig.add_annotation(
-                x=q3_win,
-                y = 1,
-                yref="y domain",
-                # y='paper',
-                text=f'Q3 {key} win: {q3_win:.2%}',
-                showarrow=False,
-                xshift=70,
-                font=dict(color=dark_blue),
-                row=value.get('row'), col=value.get('col'))
-            fig.add_annotation(
-                x=q3_lose,
-                y = 0.9,
-                yref="y domain",
-                text=f'Q3 {key} lose: {q3_lose:.2%}',
-                showarrow=False,
-                xshift=70,
-                # yshift=-20,
-                font=dict(color=dark_red),
-                row=value.get('row'), col=value.get('col'))
-            
-            # update yaxes
-            fig.update_yaxes(domain=[0.05, 0.425], row=value.get('row'), col=value.get('col'))
-
-            # update xaxes
-            col=value.get('col')
-            domain_start = (col - 1) * 0.375
-            domain_end = domain_start + 0.25
-            fig.update_xaxes(tickformat=".0%", domain=[domain_start, domain_end], title_text=key, row=value.get('row'), col=value.get('col'))
-
-        # add titles
-        fig.add_annotation(text=self._bold(f'Return Distribution<br>win rate: {len(win)/len(maemfe):.2%}'), x=0.5, y = 1, yshift=45, xref="x domain", yref="y domain", showarrow=False, row=1, col=1)
-        fig.add_annotation(text=self._bold(f'GMFE/ MAE'), x=0.5, y = 1, yshift=30, xref="x domain", yref="y domain", showarrow=False, row=1, col=2)
-        fig.add_annotation(text=self._bold(f"GMFE/ MDD<br>missed profit pct:{len(win[win['mdd']*-1 > win['gmfe']])/len(win):.2%}"), x=0.5, y = 1, yshift=45, xref="x domain", yref="y domain", showarrow=False, row=1, col=3)
-        fig.add_annotation(text=self._bold(f'MAE distribution'), x=0.5, y = 1, yshift=30, xref="x domain", yref="y domain", showarrow=False, row=2, col=1)
-        fig.add_annotation(text=self._bold(f'BMFE distribution'), x=0.5, y = 1, yshift=30, xref="x domain", yref="y domain", showarrow=False, row=2, col=2)
-        fig.add_annotation(text=self._bold(f'GMFE distribution'), x=0.5, y = 1, yshift=30, xref="x domain", yref="y domain", showarrow=False, row=2, col=3)
-
-        # layout
-        fig.update_layout(
-            width=self.fig_param['size']['w'],
-            height=self.fig_param['size']['h'],
-            margin=self.fig_param['margin'],
-            template=self.fig_param['template'],
-        )
-        
-        return fig
-    
-    def _plot_relative_return(self, daily_return:pd.DataFrame=None, bmk_equity_df:pd.DataFrame=None):
-        fig = make_subplots(
-            rows=2, cols=2,
-            specs=[
-                [{"colspan": 2, "secondary_y": True}, None],
-                [{}, {}],
-            ],
-            vertical_spacing=0.05,
-            horizontal_spacing=0.1,
-            shared_xaxes=True,
-        )
-
-        # relative return
-        relative_rtn, downtrend_returns = self._calc_relative_return(daily_return=daily_return)
-        bmk_rtn = bmk_equity_df or (1+self.exp_returns[self.benchmark]).cumprod() - 1
-
-        strategy_trace = go.Scatter(
-            x=relative_rtn.index,
-            y=relative_rtn.values,
-            name='Relative Return (lhs)',
-            line=dict(color=self.fig_param['colors']['Dark Blue'], width=2),
-            mode='lines',
-            yaxis='y1'
-        )
-
-        downtrend_trace = go.Scatter(
-            x=relative_rtn.index,
-            y=downtrend_returns,
-            name='Downtrend (lhs)',
-            line=dict(color=self.fig_param['colors']['Bright Red'], width=2),
-            mode='lines',
-            yaxis='y1'
-        )
-
-        benchmark_trace = go.Scatter(
-            x=bmk_rtn.index,
-            y=bmk_rtn.values,
-            name='Benchmark Return (rhs)',
-            line=dict(color=self.fig_param['colors']['Dark Grey'], width=2),
-            mode='lines',
-            yaxis='y2'
-        )
-
-        fig.add_trace(strategy_trace, row=1, col=1)
-        fig.add_trace(downtrend_trace, row=1, col=1)
-        fig.add_trace(benchmark_trace, row=1, col=1, secondary_y=True)  
-
-        # rolling beta
-        rolling_beta = self._calc_rolling_beta()
-
-        beta_trace = go.Scatter(
-            x=rolling_beta.index,
-            y=rolling_beta.values,
-            name='Rolling Beta',
-            line=dict(color=self.fig_param['colors']['Bright Orange'], width=1),
-            showlegend=False,
-        )
-        
-        fig.add_trace(beta_trace, row=2, col=1)
-        fig.add_hline(
-                    y=rolling_beta.mean(),
-                    line=dict(color="white", width=1),
-                    line_dash="dash",
-                    annotation_text=f'avg. beta: {rolling_beta.mean() :.2}',
-                    annotation_position="bottom left",
-                    annotation_textangle = 0,
-                    row=2, col=1
-                )
-
-        # information ratio
-        info_ratio = calc_info_ratio(daily_rtn=self.daily_return, benchmark_daily_returns=self.exp_returns[self.benchmark])
-
-        info_ratio_trace = go.Scatter(
-            x=info_ratio.index,
-            y=info_ratio.values,
-            name='Rolling info Ratio',
-            line=dict(color=self.fig_param['colors']['Bright Magenta'], width=1),
-            showlegend=False,
-        )
-        fig.add_trace(info_ratio_trace, row=2, col=2)
-        fig.add_hline(
-                    y=info_ratio.mean(),
-                    line=dict(color="white", width=1),
-                    line_dash="dash",
-                    annotation_text=f'avg. info ratio: {info_ratio.mean() :.2}',
-                    annotation_position="bottom left",
-                    annotation_textangle = 0,
-                    row=2, col=2
-                )
-
-        # rangeslider_visible
-        fig.update_xaxes(rangeslider_visible=True, rangeslider=dict(thickness=0.01), row=1, col=1)
-
-        # adjust axes
-        fig.update_xaxes(tickfont=dict(size=12), row=1, col=1)
-        fig.update_yaxes(tickformat=".0%", row=1, col=1, secondary_y=False, dtick=2)
-        fig.update_yaxes(tickformat=".0%", row=1, col=1, secondary_y=True, showgrid=False) # second y-axis
-
-        # position
-        fig.update_xaxes(domain=[0.025, 0.975], row=1, col=1)
-        fig.update_xaxes(domain=[0.025, 0.45], row=2, col=1)
-        fig.update_xaxes(domain=[0.55, 0.975], row=2, col=2)
-
-        fig.update_yaxes(domain=[0.6, .95], row=1, col=1)
-        fig.update_yaxes(domain=[0, 0.4], row=2, col=1)
-        fig.update_yaxes(domain=[0, 0.4], row=2, col=2)
-
-        # title
-        fig.add_annotation(text=self._bold(f'Relative Return'), x=0, y = 1, yshift=30, xref="x domain", yref="y domain", showarrow=False, row=1, col=1)
-        fig.add_annotation(text=self._bold(f'Beta'), align='left', x=0, y = 1, yshift=40, xref="x domain", yref="y domain", showarrow=False, row=2, col=1)
-        fig.add_annotation(text=self._bold(f'Information Ratio(IR)'), align='left', x=0, y = 1, yshift=40, xref="x domain", yref="y domain", showarrow=False, row=2, col=2)
-        fig.add_annotation(text='(Relative return / tracking error)', align='left', x=0, y = 1, yshift=20, xref="x domain", yref="y domain", showarrow=False, font=dict(size=12), row=2, col=2)
-
-        # laoyout
-        fig.update_layout(
-            legend=dict(x=0.05, y=0.94, xanchor='left', yanchor='top', bgcolor='rgba(0,0,0,0)'),
-            width= self.fig_param['size']['w'],
-            height= self.fig_param['size']['h'],
-            margin= self.fig_param['margin'],
-            template= self.fig_param['template'],
-            )
-        
-        return fig
-
-    def _plot_style_analysis(self):
-        betas = self.betas
-        fig = make_subplots(
-            rows=2, cols=1,
-            specs=[
-                [{"secondary_y": True}],
-                [{}],
-            ],
-            vertical_spacing=0.05,
-            horizontal_spacing=0.1,
-        )
-
-        # rolling beta
-        alpha = (1 + betas.iloc[:-1]['const']).cumprod() - 1
-        betas = betas.drop(columns=['const'])
-        betas = betas.reindex(columns=betas.iloc[-1].sort_values(ascending=False).index).round(3)
-
-        colors = sample_colorscale('Spectral', len(betas.columns))
-        for i, col in enumerate(betas.columns):
-            rolling_beta = betas.iloc[:-1]
-            total_beta = betas.iloc[-1]
-            # return (total_beta)
-            fig.add_trace(
-                go.Scatter(
-                    x=rolling_beta.index, 
-                    y=rolling_beta[col], 
-                    name=col,
-                    line=dict(color=colors[i]),
-                    showlegend=True,
-                    legendgroup=col,
-                ),
-                secondary_y=True,
-                row=1, col=1,
-            )
-
-            fig.add_trace(
-                go.Bar(
-                    x=[col],
-                    y=[total_beta[col]],
-                    text=[f'{total_beta[col]:.3f}'],
-                    textposition='auto',
-                    marker_color=colors[i],
-                    name=col,
-                    showlegend=False,
-                    legendgroup=col,
-                    width=0.6,
-                ),
-                row=2, col=1
-            )
-
-        fig.add_trace(
-            go.Scatter(
-                x=alpha.index, 
-                y=alpha.values, 
-                name='Alpha (rhs)',
-                line=dict(color=self.fig_param['colors']['Light Grey'], width=2),
-                showlegend=True,
-            ),
-            secondary_y=False,
-            row=1, col=1,
-        )
-
-        # adjust axes
-        fig.update_yaxes(tickformat=".0%", row=1, col=1, secondary_y=False, showgrid=False)
-        fig.update_yaxes(row=2, col=1, showgrid=False)
-
-        # position
-        fig.update_xaxes(domain=[0.025, 0.975], row=1, col=1)
-        fig.update_xaxes(domain=[0.025, 0.975], row=2, col=1)
-
-        fig.update_yaxes(domain=[0.55, 0.975], row=1, col=1)
-        fig.update_yaxes(domain=[0, 0.3], row=2, col=1)
-
-        # titles
-        fig.add_annotation(text=self._bold('Rolling beta'), x=0, y = 1, yshift=30, xref="x domain", yref="y domain", showarrow=False, row=1, col=1)
-        fig.add_annotation(text=self._bold('Total beta'), x=0, y = 1, yshift=40, xref="x domain", yref="y domain", showarrow=False, row=2, col=1)
-
-        # layout
-        fig.update_layout(
-            legend = dict(x=0.05, y=0.5, xanchor='left', yanchor='top', bgcolor='rgba(0,0,0,0)', tracegroupgap=.25, orientation='h'),
-            width = self.fig_param['size']['w'],
-            height = self.fig_param['size']['h'],
-            margin = self.fig_param['margin'],
-            template = self.fig_param['template'],
-            yaxis = dict(side='right'),
-            yaxis2 = dict(side='left'),
-        )
-        fig.update_polars(radialaxis_showline=False)
-
-        return fig
-
-    def _plot_efficiency_frontier(self):
-        returns = pd.concat([v[0].daily_return.rename(k) for k, v in self.strategies.items()], axis=1).dropna()
-        fig = make_subplots(rows=2, cols=1, vertical_spacing=0.05)
-
-        results = create_random_portfolios(returns)
-        max_sharpe = results.loc[results['sharpe'].argmax()]
-        min_vol = results.loc[results['std_dev'].argmin()]
-        
-        fig.add_trace(go.Scatter(
-            x=results['std_dev'],
-            y=results['return'],
-            mode='markers',
-            marker=dict(
-                size=5,
-                color=results['sharpe'],
-                colorscale='PuBu',
-                # showscale=True,
-                opacity=0.3
-            ),
-            name='Weights',
-            text=results['weights'].astype(str),
-            showlegend=False,
-        ), row=1, col=1)
-
-        # Add maximum Sharpe ratio point
-        fig.add_trace(go.Scatter(
-            x=[max_sharpe['std_dev']],
-            y=[max_sharpe['return']],
-            mode='markers',
-            marker=dict(size=10, symbol='diamond'),
-            name=f"Max Sharpe: {str(max_sharpe['weights'])}",
-            text=[str(max_sharpe['weights'])],
-            showlegend=True,
-        ), row=1, col=1)
-
-        # Add minimum volatility point
-        fig.add_trace(go.Scatter(
-            x=[min_vol['std_dev']],
-            y=[min_vol['return']],
-            mode='markers',
-            marker=dict(size=10, symbol='diamond'),
-            name=f"Min volatility: {str(min_vol['weights'])}",
-            text=[str(min_vol['weights'])],
-            showlegend=True
-        ), row=1, col=1)
-        
-        corr_plot = returns.corr()
-        corr_plot = corr_plot\
-            .mask(np.tril(np.ones(corr_plot.shape)).astype(bool))
-
-        fig.add_trace(go.Heatmap(
-            z=corr_plot.values,
-            x=corr_plot.columns,
-            y=corr_plot.index,
-            colorscale='RdBu_r',
-            text=corr_plot.map("{:.2f}".format).replace('nan', '').values,
-            texttemplate="%{text}",
-            showscale=False,
-        ), row=2, col=1)
-        
-        fig.update_yaxes(tickformat=".0%", row=1, col=1)
-        fig.update_xaxes(tickformat=".0%", row=1, col=1)
-        
-        # position
-        fig.update_yaxes(domain=[0.0, 1.0], row=1, col=1)
-        fig.update_yaxes(domain=[0.15, 0.45], row=2, col=1)
-        fig.update_xaxes(domain=[0.0, 1.0], row=1, col=1)
-        fig.update_xaxes(domain=[0.7, 1.0], row=2, col=1)
-
-        # title
-        fig.add_annotation(text=self._bold(f'Efficiency frontier'), x=0, y=1, yshift=40, xref="x domain", yref="y domain", showarrow=False, row=1, col=1)
-        fig.add_annotation(text=self._bold(f'Corr'), x=0.1, y=1, yshift=20, xref="x domain", yref="y domain", showarrow=False, row=2, col=1)
-
-        # Update layout
-        fig.update_layout(
-            legend=dict(x=0.01, y=1, xanchor='left', yanchor='top', bgcolor='rgba(0,0,0,0)', traceorder='normal'),
-            xaxis_title='Annualised volatility',
-            yaxis_title='Annualised returns',
-            width=self.fig_param['size']['w'],
-            height=self.fig_param['size']['h'],
-            template=self.fig_param['template'],
-            plot_bgcolor='rgba(0,0,0,0)',
-            xaxis=dict(showgrid=False),
-            yaxis=dict(showgrid=False),
-            xaxis2=dict(showgrid=False),
-            yaxis2=dict(showgrid=False),
-        )
-
-        return fig
-
-
-class Strategy(PlotMaster):
-    """
-    回測策略類別，用於儲存回測結果並提供分析功能。
-
-    Returns:
-        Strategy: 回測策略物件，包含以下功能:
-        
-            - summary: 回測績效摘要，包含年化報酬率、總報酬率、最大回撤、波動率等指標
-            - position_info: 持倉資訊，包含股票代碼、名稱、買賣日期、警示狀態、漲跌停、成交量額、財報公佈日期、板塊產業別等資訊
-            - report: 回測報告圖表，包含淨值曲線、相對報酬、報酬熱圖、流動性分析等
-
-    Examples:
-        ```python
-        # 建立回測策略
-        strategy = backtesting(
-            data,
-            rebalance='Q',
-            signal_shift=1,
-            benchmark='0050'
-        )
-
-        # 查看績效摘要
-        strategy.summary
-        '''
-                           strategy    0050.TT
-        Annual return       12.5%       8.2%
-        Total return        45.3%      28.4%
-        Max drawdown       -15.2%     -18.5%
-        Annual vol          18.2%      16.8%
-        Sharpe ratio         0.69       0.49
-        Calmar ratio         0.82       0.44
-        beta                 0.85         --
-        '''
-
-        # 查看持倉資訊
-        strategy.position_info
-        '''
-                    name       buy_date   sell_date  警示狀態  漲跌停  前次成交量_K  前次成交額_M  季報公佈日期    月營收公佈日期  板塊別      主產業別
-        stock_id                                                                       
-        1436         全家     2024-11-15  2025-04-01    =      =        32        6.08    2024-11-06  2025-01-09   上櫃一般版  OTC38 OTC 居家生活
-        1446         宏和     2024-11-15  2025-04-01    =      =       254        9.79    2024-11-12  2025-01-10   上市一般版  M1400 紡織纖維  
-        1519         華城     2024-11-15  2025-04-01    =      =      8714     4780.49    2024-11-12  2025-01-09   上市一般版  M1500 電機機械
-        2101         南港     2024-11-15  2025-04-01    =      =      1231       55.48    2024-11-13  2025-01-07   上市一般版  M2100 橡膠工業
-        2404         漢唐     2024-11-15  2025-04-01    =      =       170       18.47    2024-11-12  2025-01-10   上市一般版  M2300 電子工業
-        '''
-
-        # 顯示回測報告
-        strategy.report
-        '''
-        [Equity Curve] [Relative Return] [Return Heatmap] [Liquidity]
-        '''
-        ```
-
-    Note:
-        - summary、position_info、report 為回測結果物件的主要功能
-        - 可透過這些功能快速了解策略績效表現
-        - report 提供互動式圖表分析工具
-    """
-    
-    def __init__(self, exp_returns:pd.DataFrame, buy_list:Union[pd.DataFrame, pd.Series], portfolio_df:Union[pd.DataFrame, pd.Series], backtest_df:Union[pd.DataFrame, pd.Series], benchmark:Union[str], rebalance:str):
-        super().__init__()
-        self.exp_returns = exp_returns
-        self.buy_list = buy_list
+class Report:
+    def __init__(self, portfolio_df:pd.DataFrame, buy_list:pd.DataFrame, exp_returns:pd.DataFrame, benchmark_id:str, rebalance:str, **kwargs):
         self.portfolio_df = portfolio_df
-        self.backtest_df = backtest_df
-        self.benchmark = benchmark
-        self.rebalance = rebalance
-        
-        # analysis
-        self.daily_return = backtest_df.sum(axis=1)
-        self.c_return = (1 + self.daily_return).cumprod() - 1
-        self.maemfe = calc_maemfe(self.buy_list, self.portfolio_df, self.exp_returns)
-        self.betas = calc_portfolio_style(self.daily_return, total=True)
-        
-        # results
-        self.summary = self._generate_summary()
-        self.report = self._generate_report()
-        self.position_info = self._generate_position_info()
-
-        # display
-        display(self.summary)
-
-        logging.info(f"Created Strategy with CAGR: {self.summary['Strategy']['CAGR(%)']}; MDD: {self.summary['Strategy']['MDD(%)']}")
-
-    def _generate_summary(self) -> pd.DataFrame:
-        
-        df = pd.concat({
-            'Strategy':self.daily_return,
-            f'Benchmark: {self.benchmark}':self.exp_returns[self.benchmark],
-        },axis=1)
-
-        return calc_metrics(df)
-    
-    def _generate_position_info(self) -> pd.DataFrame:
-        """顯示持倉資訊
-
-        Args:
-            rebalance (str): 再平衡方式
-
-        Returns:
-            DataFrame: 包含股票代碼、名稱、買入日期、賣出日期、警示狀態、漲跌停、前次成交量、前次成交額、季報公佈日期、月營收公佈日期、市場別、主產業別的資料表
-        """
-        # print('make sure to update databank before get info!')
-
-        # 獲取買入和賣出日期
-        _t_date = Databank().read_dataset('mkt_calendar', columns=['date'], filters=[('休市原因中文說明(人工建置)','=','')]).rename(columns={'date':'t_date'})
-        rebalance_dates = _get_rebalance_date(self.rebalance, end_date=_t_date['t_date'].max())
-        buy_date = self.buy_list.index[-1]
-        try:
-            sell_date = next(d for d in rebalance_dates if d > buy_date)
-        except StopIteration as e:
-            logging.error(e)
-            print(e)
-            sell_date = None
-        
-        # 獲取持倉資訊
-        position_info = self.buy_list.iloc[-1, :]
-        position_info = position_info[position_info]\
-            .reset_index()\
-            .rename(columns={'index':'stock_id', position_info.name:'buy_date'})\
-            .assign(buy_date=position_info.name)\
-            .assign(sell_date=sell_date)
-        if position_info.empty:
-            return pd.DataFrame()
-        
-        filters=[('stock_id', 'in', position_info['stock_id'].to_list())]
-        
-        # 獲取股票中文名稱
-        ch_name = Databank().read_dataset('stock_basic_info', columns=['stock_id', '證券名稱'], filters=filters).rename(columns={'證券名稱':'name'})
-
-        # 獲取財報和月營收公佈日期
-        quarterly_report_release_date = Databank().read_dataset('fin_data', columns=['stock_id', 'release_date'], filters=filters)\
-            .loc[lambda x: x.groupby('stock_id')['release_date'].idxmax()]\
-            .rename(columns={'release_date':'季報公佈日期'})
-        monthly_rev_release_date = Databank().read_dataset('monthly_rev', columns=['stock_id', 'release_date'], filters=filters)\
-            .loc[lambda x: x.groupby('stock_id')['release_date'].idxmax()]\
-            .rename(columns={'release_date':'月營收公佈日期'})
-
-        filters.append(('date', '=', self.exp_returns.index.max()))
-
-        # 獲取市場類型、產業類別、交易狀態
-        trading_notes = Databank().read_dataset('stock_trading_notes', columns=['date', 'stock_id', '是否為注意股票', '是否為處置股票', '是否暫停交易', '是否全額交割', '漲跌停註記', '板塊別(中)', '主產業別(中)'], filters=filters)\
-        .assign(
-            警示狀態=lambda x: x.apply(
-                lambda row: ', '.join(filter(None, [
-                    '注意股' if row['是否為注意股票'] == 'Y' else '',
-                    '處置股' if row['是否為處置股票'] == 'Y' else '', 
-                    '暫停交易' if row['是否暫停交易'] == 'Y' else '',
-                    '全額交割' if row['是否全額交割'] == 'Y' else '',
-                ])), axis=1
-            ).replace('', '='),
-            漲跌停=lambda x: x['漲跌停註記'].replace('', '=')
-        )\
-        .rename(columns={'主產業別(中)':'主產業別', '板塊別(中)':'板塊別'})\
-        [['stock_id', '警示狀態', '漲跌停', '板塊別', '主產業別']]
-        
-        # 獲取交易量和交易金額
-        trading_vol = Databank().read_dataset('stock_trading_data', columns=['stock_id', '成交量(千股)', '成交金額(元)'], filters=filters)\
-        .rename(columns={
-            '成交量(千股)':'前次成交量_K',
-            '成交金額(元)':'前次成交額_M',
-                        })\
-        .assign(前次成交額_M=lambda x: (x['前次成交額_M']/1e6).round(2))
-
-        # 合併所有資訊
-        return position_info\
-            .merge(ch_name, on='stock_id', how='left')\
-                .merge(quarterly_report_release_date, on='stock_id', how='left')\
-                .merge(monthly_rev_release_date, on='stock_id', how='left')\
-                .merge(trading_notes, on='stock_id', how='left')\
-                .merge(trading_vol, on='stock_id', how='left')\
-                [[
-                    'stock_id', 'name', 'buy_date', 'sell_date', 
-                    '警示狀態', '漲跌停',
-                    '前次成交量_K', '前次成交額_M', 
-                    '季報公佈日期', '月營收公佈日期', 
-                    '板塊別', '主產業別',
-                ]].set_index('stock_id')
-
-    def _generate_report(self, exclude_tabs:list[str]=[]) -> pn.Tabs:
-        # main plots
-        pn.extension('plotly')
-        
-        # Define mapping of tab names to plot functions
-        plot_funcs = {
-            'Equity curve': self._plot_equity_curve,
-            'Relative return': self._plot_relative_return,
-            'Style analysis': self._plot_style_analysis,
-            'Return heatmap': self._plot_return_heatmap,
-            'Liquidity': self._plot_liquidity,
-            'MAE/MFE': self._plot_maemfe,
-            # 'Optimal Params': self._plot_optimal_params,
-        }
-
-        figs = {
-            name: pn.pane.Plotly(plot_funcs[name]())
-            for name in plot_funcs
-            if name not in exclude_tabs
-        }
-        tab_items = list(figs.items())
-
-        return pn.Tabs(*tab_items)
-
-
-class MultiStrategy(Strategy):
-    """
-    多重策略組合類別，用於組合多個策略並提供分析功能。
-
-    Attributes:
-    - strategies (dict[str, Tuple[Strategy, Union[float, int]]]): 策略字典，格式為:
-            
-            - key: 策略名稱
-            - value: (Strategy物件, 權重)的tuple
-    - benchmark (Union[str, list[str]]): 基準指標，可為單一或多個股票代碼
-    - rebalance (str): 再平衡頻率，可選:
-
-            - MR: 每月10日後第一個交易日
-            - QR: 每季財報公布日後第一個交易日(3/31, 5/15, 8/14, 11/14)
-            - W: 每週一
-            - M: 每月第一個交易日
-            - Q: 每季第一個交易日
-            - Y: 每年第一個交易日
-        exp_returns (Union[pd.Series, pd.DataFrame]): 個股報酬率資料
-        daily_return (Union[pd.Series, pd.DataFrame]): 策略每日報酬率序列
-
-    Returns:
-        MultiStrategy: 多重策略組合物件，包含:
-
-            - summary: 策略績效摘要，包含總報酬率、年化報酬率、最大回撤等重要指標
-            - position_info: 持股資訊，包含每日持股數量、換手率、個股權重等資訊
-            - report: 完整的回測報告，包含:
-                - Equity curve: 淨值曲線
-                - Efficiency frontier: 效率前緣
-                - Portfolio style: 投資風格分析
-                - Return heatmap: 報酬率熱圖
-                - MAE/MFE: 最大不利變動/最大有利變動分析
-
-    Examples:
-        ```python
-        # 建立兩個策略
-        strategy1 = backtesting(data1, rebalance='Q')
-        strategy2 = backtesting(data2, rebalance='M')
-
-        # 組合策略回測(等權重)
-        meta = multi_backtesting({
-            'strategy1': strategy1,
-            'strategy2': strategy2
-        })
-
-        # 組合策略回測(自訂權重)
-        meta = multi_backtesting({
-            'strategy1': (strategy1, 0.7),
-            'strategy2': (strategy2, 0.3)
-        })
-
-        # 組合策略回測(每月再平衡)
-        meta = multi_backtesting({
-            'strategy1': (strategy1, 0.7),
-            'strategy2': (strategy2, 0.3)
-        }, rebalance='M')
-        ```
-
-    Note:
-        - 繼承自Strategy類別，保留原有的分析功能
-        - 新增效率前緣分析，用於最佳化策略權重配置
-        - 可設定再平衡頻率，定期調整策略權重
-        - 支援多個基準指標的比較
-    """
-    
-    def __init__(self, strategies:dict[str, Tuple[Strategy, Union[float, int]]], benchmark:Union[str, list[str]], rebalance:str, exp_returns:Union[pd.Series, pd.DataFrame], daily_return:Union[pd.Series, pd.DataFrame]):
-        PlotMaster.__init__(self)
-        self.strategies = strategies
-        self.rebalance = rebalance
-        self.benchmark = [benchmark] if isinstance(benchmark, str) else benchmark
+        self.buy_list = buy_list
         self.exp_returns = exp_returns
-        self.daily_return = daily_return
-        self.portfolio_df = sum(v[0].portfolio_df * v[1]/sum(w[1] for w in strategies.values()) for v in strategies.values()).dropna(how='all', axis=0).fillna(0)
+        self.benchmark_id = benchmark_id
+        self.rebalance = rebalance
+        self.daily_return = (exp_returns * portfolio_df).sum(axis=1)
+        
+        # metrics
+        self.metrics = self.calc_metrics()
+        display(self.metrics)
 
+        # calculated
+        self.liquidity = calc_liquidity(self.portfolio_df)
+        self.style = calc_style(self.daily_return, window=None, total=True)
+        self.maemfe = calc_maemfe(self.buy_list, self.portfolio_df, self.exp_returns)
+        self.relative_return = calc_relative_return(self.daily_return, self.exp_returns[self.benchmark_id])
+        # tabs
+        self.tabs = self.plot_tabs()
+
+    def plot_tabs(self)-> pn.Tabs:
+        pn.extension('plotly')
+
+        plot_funcs = {
+            'Equity curve': plot_equity_curve(
+                (1+self.daily_return).cumprod()-1, 
+                (1+self.exp_returns[self.benchmark_id]).cumprod()-1, 
+                self.portfolio_df.apply(lambda row: np.count_nonzero(row), axis=1)
+            ),
+            'Relative Return': plot_relative_return(self.relative_return),
+            'Return heatmap': plot_return_heatmap(self.daily_return),
+            'Liquidity': plot_liquidity(self.liquidity),
+            'Style': plot_style(self.style),
+            'MAE/MFE': plot_maemfe(self.maemfe),
+        }
+        return pn.Tabs(*[(k, pn.pane.Plotly(v)) for k, v in plot_funcs.items()])
+
+    def calc_metrics(self)-> pd.DataFrame:
+        benchmark_daily_return = self.exp_returns[self.benchmark_id]
+        return calc_metrics(
+            pd.concat([
+                self.daily_return.rename('Strategy'), 
+                benchmark_daily_return.rename(f'Benchmark: {self.benchmark_id}'), 
+                (self.daily_return-benchmark_daily_return).rename('Excess Return')
+                ], axis=1))
+
+
+class MultiReport:
+    def __init__(self, daily_return:Union[pd.Series, pd.DataFrame], reports:dict[str, Tuple[Report, Union[float, int]]], rebalance:str, benchmark_id:str, exp_returns:Union[pd.Series, pd.DataFrame]):
+        self.daily_return = daily_return
+        self.reports = reports
+        self.rebalance = rebalance
+        self.exp_returns = exp_returns
+        self.benchmark_id = benchmark_id
+        self.portfolio_df = sum(v[0].portfolio_df for v in self.reports.values())
+        self.metrics = self.calc_metrics()
+        display(self.metrics)
+        
         # analysis
-        self.c_return = (1 + daily_return).cumprod() - 1
+        self.style = calc_style(self.daily_return, total=True)
         self.maemfe = pd.concat([
             v[0].maemfe.reset_index()\
                 .assign(index=lambda x: k+' '+x['index'].astype(str))\
                 .set_index('index')\
-            for k, v in self.strategies.items()
+            for k, v in self.reports.items()
         ], axis=0)
-        self.betas = calc_portfolio_style(self.daily_return, total=True)
-        # self.brinson_model = calc_brinson_model(self.portfolio_df, self.exp_returns, self.benchmark)
 
         # material
-        self.summary = self._generate_meta_summary()
-        self.position_info = self._generate_meta_position_info()
-        self.report = self._generate_meta_report()
-        display(self.summary)
+        self.tabs = self.plot_tabs()
+    
+    def calc_metrics(self)-> pd.DataFrame:
+        benchmark_daily_return = self.exp_returns[self.benchmark_id]
+        return calc_metrics(pd.concat([
+            self.daily_return.rename('Strategy'),
+            benchmark_daily_return.rename(f'Benchmark: {self.benchmark_id}'),
+            (self.daily_return - benchmark_daily_return).rename('Excess Return'),
+            *[v[0].daily_return.rename(k) for k, v in self.reports.items()]
+        ], axis=1).dropna())
 
-    def _generate_meta_summary(self) -> pd.DataFrame:
-        bmk = self.exp_returns[self.benchmark]
-        summary = calc_metrics(self.daily_return)
-        
-        for k, v in self.strategies.items():
-            summary = pd.concat([
-                summary,
-                calc_metrics(v[0].daily_return.loc[self.daily_return.index]).rename(columns={'Strategy':k})
-            ], axis=1)
-
-        for bmk in self.benchmark:
-            summary = pd.concat([
-                summary, 
-                calc_metrics(self.exp_returns[bmk]).rename(columns={'Strategy':f'Benchmark: {bmk}'})
-            ], axis=1)
-        return summary
-
-    def _generate_meta_position_info(self) -> pd.DataFrame:
-        return pd.concat([
-            v[0].position_info.reset_index()\
-                .assign(strategy=k)\
-                .set_index('strategy')
-                .assign(weight=lambda x: v[1]/sum(v1[1] for v1 in self.strategies.values()) * 1/len(x))\
-            for k, v in self.strategies.items()
-        ], axis=0)
-
-    def _generate_meta_report(self, exclude_tabs:list[str]=[]) -> pn.Tabs:
-        # main plots
+    def plot_tabs(self)-> pn.Tabs:
         pn.extension('plotly')
-        
-        # Define mapping of tab names to plot functions
+
         plot_funcs = {
-            'Equity curve': self._plot_equity_curve,
-            'Efficiency frontier': self._plot_efficiency_frontier,
-            'Portfolio style': self._plot_style_analysis,
-            'Return heatmap': self._plot_return_heatmap,
-            'MAE/MFE': self._plot_maemfe,
-            # 'Liquidity': self._plot_liquidity,
+            'Equity curve': plot_equity_curve(
+                (1+pd.concat([
+                    self.daily_return.rename('Strategy'), 
+                    pd.concat({k:v[0].daily_return for k, v in self.reports.items()}, axis=1),
+                ], axis=1)).cumprod()-1, 
+                (1+self.exp_returns[self.benchmark_id]).cumprod()-1, 
+                self.portfolio_df.apply(lambda row: np.count_nonzero(row), axis=1)
+            ),
+            'Efficiency frontier': plot_efficiency_frontier(
+                pd.concat([v[0].daily_return.rename(k) for k, v in self.reports.items()], axis=1).dropna()
+            ),
+            'Return heatmap': plot_return_heatmap(self.daily_return),
+            'Style': plot_style(self.style),
+            'MAE/MFE': plot_maemfe(self.maemfe),
         }
-
-        figs = {
-            name: pn.pane.Plotly(plot_funcs[name]())
-            for name in plot_funcs
-            if name not in exclude_tabs
-        }
-        tab_items = list(figs.items())
-
-        return pn.Tabs(*tab_items)
+        return pn.Tabs(*[(k, pn.pane.Plotly(v)) for k, v in plot_funcs.items()])
 
 
-# factor analysis
-def factor_analysis(factor:pd.DataFrame, asc:bool=True, rebalance:str='QR', group:int=10, benchmark:str='0050', start:str=None, end:str=None)-> 'FactorAnalysis':
-    return FactorAnalysis(factor, asc=asc, rebalance=rebalance, group=group, benchmark=benchmark, start=start, end=end)
+# factor
+def calc_factor_longshort_return(factor:pd.DataFrame, rebalance:str='QR', group:int=10, **kwargs):
+    """計算因子多空組合報酬率
 
-class FactorAnalysis(PlotMaster):
-    def __init__(self, factor:Union[pd.DataFrame, str], asc:bool=True, rebalance:str='QR', group:int=10, benchmark:str='0050', start:str=None, end:str=None):
-        super().__init__()
-        self.factor = get_rank(factor, asc=asc)
+    Args:
+        factor (Union[pd.DataFrame, str]): 因子值矩陣或因子名稱
+        asc (bool, optional): 因子值是否為越小越好. Defaults to True.
+        rebalance (str, optional): 調倉頻率. Defaults to 'QR'.
+        group (int, optional): 分組數量. Defaults to 10.
+
+    Returns:
+        pd.Series: 多空組合報酬率時間序列
+
+    Examples:
+        計算ROE因子的多空組合報酬率:
+        ```python
+        roe_ls = calc_factor_longshort_return('roe', asc=True, rebalance='QR', group=10)
+        ```
+
+    Note:
+        - 多頭為因子值前1/group的股票
+        - 空頭為因子值後1/group的股票
+        - 報酬率為多頭減去空頭的報酬率
+    """
+    
+    exp_returns = kwargs.get('exp_returns')
+    if exp_returns is None:
+        exp_returns = DatasetsHandler().read_dataset('exp_returns')
+    long = backtesting(factor>=(1-1/group), rebalance=rebalance, exp_returns=exp_returns, fee=0, tax=0)
+    short = backtesting(factor<(1/group), rebalance=rebalance, exp_returns=exp_returns, fee=0, tax=0)
+
+    return (long-short).dropna()
+
+def calc_factor_quantiles_return(factor:pd.DataFrame, rebalance:str='QR', group:int=10, **kwargs):
+    """計算因子分位數報酬率
+
+    Args:
+        factor (Union[pd.DataFrame, str]): 因子值矩陣或因子名稱
+        asc (bool, optional): 因子值是否為越小越好. Defaults to True.
+        rebalance (str, optional): 調倉頻率. Defaults to 'QR'.
+        group (int, optional): 分組數量. Defaults to 10.
+
+    Returns:
+        dict: 各分位數報酬率時間序列
+
+    Examples:
+        計算ROE因子的十分位數報酬率:
+        ```python
+        roe_quantiles = calc_factor_quantiles_return('roe', asc=True, rebalance='QR', group=10)
+        ```
+
+    Note:
+        - 將因子值依照大小分成group組
+        - 每組報酬率為等權重持有該組內所有股票
+        - 字典的key為分位數起始點*group (例如: 0代表第一組, 1代表第二組...)
+    """
+    
+    results = {}
+    exp_returns = kwargs.get('exp_returns')
+    if exp_returns is None:
+        exp_returns = DatasetsHandler().read_dataset('exp_returns')
+    
+    for q_start, q_end in [(i/group, (i+1)/group) for i in range(group)]:
+        cond = (q_start <= factor) & (factor < q_end)
+        results[q_start*group] = backtesting(data=cond, rebalance=rebalance, exp_returns=exp_returns, fee=0, tax=0, slippage=0)
+
+    return results
+
+# factor
+def factor_analysis(
+    ranked_factor:pd.DataFrame, 
+    rebalance:str='QR', group:int=10, 
+    benchmark_id:str='TRTEJ',
+    exp_returns:pd.DataFrame=None,
+)-> 'FactorReport':
+    if exp_returns is None:
+        exp_returns = DatasetsHandler().read_dataset('exp_returns')
+
+    quantiles_returns = pd.DataFrame(
+        calc_factor_quantiles_return(ranked_factor, rebalance=rebalance, group=group, exp_returns=exp_returns)
+    )
+    
+    return FactorReport(ranked_factor, quantiles_returns, rebalance, group, benchmark_id, exp_returns)
+
+class FactorReport:
+    def __init__(self, factor:pd.DataFrame, quantiles_returns:dict, rebalance:str, group:int, benchmark_id:str, exp_returns:pd.DataFrame):
+        self.factor = factor
+        self.quantiles_returns = quantiles_returns
+        self.ls_returns = quantiles_returns[quantiles_returns.columns.max()] - quantiles_returns[quantiles_returns.columns.min()]
         self.rebalance = rebalance
         self.group = group
-
-        # data
-        self.exp_returns = Databank().read_dataset('exp_returns', filter_date='t_date', start=start, end=end)
-        self.quantiles_returns = calc_factor_quantiles_return(self.factor, rebalance=rebalance, group=group, exp_returns=self.exp_returns)
-        self.ls_returns = (1 + self.quantiles_returns[max(self.quantiles_returns.keys())]) - (1 + self.quantiles_returns[0])
-        self.benchmark = benchmark
-        self.benchmark_returns = self.exp_returns[benchmark]
-
+        self.benchmark_id = benchmark_id
+        self.exp_returns = exp_returns
+        
         # analysis
-        self.betas = calc_portfolio_style(self.ls_returns, total=True)
-        self.info_coef = calc_info_coef(self.factor, self.exp_returns, rebalance)
-        
-        # result
-        self.summary = self._generate_summary()
-        self.report = self._generate_report()
+        self.style = calc_style(self.ls_returns)
+        self.ic = calc_ic(self.factor, self.exp_returns, rebalance)
+        self.ir = calc_ir(self.factor, self.exp_returns, rebalance)
 
-        display(self.summary)
+        # metrics
+        self.metrics = self.calc_metrics()
+        display(self.metrics)
 
-    def _plot_factor_returns(self):
-        returns = self.quantiles_returns
-        exp_returns = self.exp_returns
-
-        
-        fig = make_subplots(
-                    rows=2, cols=2,
-                    specs=[
-                        [{"colspan": 2, "secondary_y": True}, None],
-                        [{}, {}],
-                    ],
-                    vertical_spacing=0.05,
-                    horizontal_spacing=0.1,
-                )
-
-        # relative return
-        # base_key = 0
-        # # for key in sorted(results.keys()):
-        # #     if (results[key]).isna().count() / len(pd.DataFrame(results)) >0.5:
-        # #         base_key = key
-        # #         break
-        ls_daily_returns = self.ls_returns
-        benchmark_daily_returns = exp_returns['0050']
-
-        relative_returns, downtrend_returns = calc_relative_return(ls_daily_returns, benchmark_daily_returns)
-        benchmark_c_returns = (1+benchmark_daily_returns).cumprod()-1
-
-        # relative return
-        strategy_trace = go.Scatter(
-            x=relative_returns.index,
-            y=relative_returns.values,
-            name='Relative Return (lhs)',
-            line=dict(color=self.fig_param['colors']['Dark Blue'], width=2),
-            mode='lines',
-            yaxis='y1',
-        )
-
-        # downtrend
-        downtrend_trace = go.Scatter(
-            x=relative_returns.index,
-            y=downtrend_returns,
-            name='Downtrend (lhs)',
-            line=dict(color=self.fig_param['colors']['Bright Red'], width=2),
-            mode='lines',
-            yaxis='y1',
-        )
-
-        # factor return
-        ls_c_returns  = (1+ls_daily_returns).cumprod()-1
-        factor_return_trace = go.Scatter(
-            x=ls_c_returns.index,
-            y=ls_c_returns.values,
-            name='Factor Return (rhs)',
-            line=dict(color=self.fig_param['colors']['White'], width=2),
-            mode='lines',
-            yaxis='y2',
-        )
-
-
-        benchmark_trace = go.Scatter(
-            x=benchmark_c_returns.index,
-            y=benchmark_c_returns.values,
-            name='Benchmark Return (rhs)',
-            line=dict(color=self.fig_param['colors']['Dark Grey'], width=2),
-            mode='lines',
-            yaxis='y2',
-        )
-
-        fig.add_trace(strategy_trace, row=1, col=1)
-        fig.add_trace(downtrend_trace, row=1, col=1)
-        fig.add_trace(factor_return_trace, row=1, col=1, secondary_y=True)
-        fig.add_trace(benchmark_trace, row=1, col=1, secondary_y=True)
-
-        # c return
-        num_lines = len(returns)
-        color_scale = sample_colorscale('PuBu', [n / num_lines for n in range(num_lines)])
-        for (key, value), color in zip(reversed(list(returns.items())), color_scale):
-            value = (1+value).cumprod()-1
-            annual_rtn = (1 + value.iloc[-1]) ** (240 / len(value)) - 1 if not value.empty else 0
-            fig.add_trace(go.Scatter(
-                x=value.index,
-                y=value.values,
-                name=int(key),
-                line=dict(color=color),
-                showlegend=False,
-            ),
-            row=2, col=1)
-
-            # annual return
-            fig.add_annotation(
-                x=value.index[-1],
-                y=value.values[-1], 
-                xref="x", 
-                yref="y", 
-                text=f'{int(key)}: {annual_rtn: .2%}',  
-                showarrow=False, 
-                xanchor="left", 
-                yanchor="middle", 
-                font=dict(color="white", size=10),
-            row=2, col=1)
-
-        # IC
-        ic = self.info_coef.rolling(window=20).mean()
-
-        fig.add_trace(go.Scatter(
-            x=ic.index, 
-            y=ic.values, 
-            mode='lines', 
-            name='IC', 
-            line=dict(color=self.fig_param['colors']['Bright Orange'], width=1),
-            showlegend=False,
-            ),
-            row=2, col=2)
-        fig.add_hline(
-            y=0,
-            line=dict(color="white", width=1),
-            row=2, col=2
-        )
-
-        # rangeslider_visible
-        fig.update_xaxes(rangeslider_visible=True, rangeslider=dict(thickness=0.01), row=1, col=1)
-
-        # position
-        fig.update_xaxes(domain=[0.025, 0.975], row=1, col=1)
-        fig.update_xaxes(domain=[0.025, 0.45], row=2, col=1)
-        fig.update_xaxes(domain=[0.55, 0.975], row=2, col=2)
-
-        fig.update_yaxes(domain=[0.6, .95], row=1, col=1)
-        fig.update_yaxes(domain=[0, 0.4], row=2, col=1)
-        fig.update_yaxes(domain=[0, 0.4], row=2, col=2)
-
-        # adjust axes
-        fig.update_xaxes(tickfont=dict(size=12), row=1, col=1)
-        fig.update_yaxes(tickformat=".0%", row=1, col=1, secondary_y=False)
-        fig.update_yaxes(tickformat=".0%", row=1, col=1, secondary_y=True, showgrid=False) # second y-axis
-        fig.update_yaxes(tickformat=".0%", row=2, col=1)
-
-        # add titles
-        fig.add_annotation(text=self._bold(f'Factor Relative Returns'), x=0, y = 1, yshift=30, xref="x domain", yref="y domain", showarrow=False, row=1, col=1)
-        fig.add_annotation(text=self._bold(f'Factor Return by Quantiles'), x=0, y = 1, yshift=50, xref="x domain", yref="y domain", showarrow=False, row=2, col=1)
-        fig.add_annotation(text=self._bold(f'Information Coefficient(IC)'), x=0, y = 1, yshift=50, xref="x domain", yref="y domain", showarrow=False, row=2, col=2)
-
-        ic_mean = ic.mean()
-        ic_std = ic.std()
-        info_ratio = ic_mean/ic_std
-        positive_ratio = len(ic[ic>0])/len(ic)
-        fig.add_annotation(text=f'Mean: {ic_mean :.2f}, SD: {ic_std :.2f}, IR: {info_ratio :.2f}, Positive Ratio: {positive_ratio:.0%}', x=0, y = 1, yshift=30, xref="x domain", yref="y domain", showarrow=False, row=2, col=2)
-
-        # wrap up
-        fig.update_layout(
-            legend=dict(x=0.05, y=0.94, xanchor='left', yanchor='top', bgcolor='rgba(0,0,0,0)'),    
-            height=self.fig_param['size']['h'], 
-            width=self.fig_param['size']['w'], 
-            margin= self.fig_param['margin'],
-            template=self.fig_param['template'],
-        )
-        return fig
-
-    def _generate_summary(self):
-        self.summary_dfs = self._generate_summary_dfs()
-        
-        html = """
-        <div style="display: flex; gap: 5px;row-gap: 10px;">
-            <div>{}<br>{}</div>
-            <div>{}</div>
-            <div>{}</div>
-        </div>
-        """.format(
-            self.summary_dfs['summary_metrics'].to_html(), 
-            self.summary_dfs['ic'].to_html(), 
-            self.summary_dfs['quantiles'].to_html(), 
-            self.summary_dfs['styles'].to_html(),
-        )
-        return HTML(html)
+        # plot
+        self.tabs = self.plot_tabs()
     
-    def _generate_summary_dfs(self):
-        # Factor Returns
-        summary_metrics = calc_metrics(
-            pd.concat([pd.DataFrame(self.quantiles_returns), pd.DataFrame(self.ls_returns).rename(columns={0: 'ls'})], axis=1)
-        )
-        # returns = pd.concat([self.ls_returns.rename('f_return'), self.benchmark_returns], axis=1)\
-        #     .dropna()\
-        #     .assign(rel_return = lambda df: df['f_return']-df[self.benchmark])\
-        #     [['f_return', 'rel_return', self.benchmark]]\
-        #     .rename(columns={self.benchmark: f'{self.benchmark}.TT'})
-
-        # summary_metrics = pd.concat([calc_metrics(returns[col]).to_frame(('Performance', col)) for col in returns.columns], axis=1)\
-        #     .drop(['beta'], axis=0)
-        # summary_metrics.columns = pd.MultiIndex.from_tuples(summary_metrics.columns)
-
-        # Quantiles Returns
-        quantiles = pd.DataFrame(self.quantiles_returns, columns=range(len(self.quantiles_returns))).dropna()\
-            .assign(LS = lambda df: df[9]-df[0])\
-            .apply(lambda x: ((1+x).cumprod()).iloc[-1] ** (240 / len(x)) -1)\
-            .apply(lambda x: f'{x:.2%}')\
-            .to_frame('Quantiles Returns')
-
-        # Style
-        betas = self.betas\
-            .loc['total']\
-            .drop('const')\
-            .sort_values(ascending=False)\
-            .to_frame('Style')\
-            .round(4)
-        alpha = self.betas[['const']]\
-            .iloc[:-1]\
-            .apply(lambda x: (1+x).cumprod().iloc[-1]** (240 / len(x)) -1)\
-            .apply(lambda x: f'{x:.2%}')\
-            .rename(index={'const': 'Annualized Alpha'})\
-            .to_frame('Style')
-        styles = pd.concat([betas, alpha], axis=0)
-
-        # IC
-        ic = self.info_coef.agg({
+    def calc_metrics(self)-> pd.DataFrame:
+        main = calc_metrics(self.quantiles_returns.assign(LS=lambda df:df[df.columns.max()] - df[df.columns.min()]))
+        
+        ic = self.ic.agg({
             'mean': lambda x: x.mean().round(4),
             'std': lambda x: x.std().round(4),
             'IR': lambda x: f'{x.mean()/x.std():.2%}', 
             'positive ratio': lambda x: f'{len(x[x>0])/len(x):.2%}',
         }).to_frame('Information Coefficient')
 
-        return {
-            'summary_metrics': summary_metrics,
-            'quantiles': quantiles,
-            'styles': styles,
-            'ic': ic,
-        }
+        html = f"""
+        <div style="display: flex; gap: 5px;row-gap: 10px;">
+            <div>{main.to_html()}<br>{ic.to_html()}</div>
+        </div>
+        """
+        return HTML(html)
 
-    def _generate_report(self):
-        
-        # main plots
+    def plot_tabs(self)-> pn.Tabs:
         pn.extension('plotly')
-        
-        # Define mapping of tab names to plot functions
+
         plot_funcs = {
-            'Factor returns': self._plot_factor_returns,
-            'Style analysis': self._plot_style_analysis,
+            'Quantile Returns': plot_quantile_returns(self.quantiles_returns, self.exp_returns[self.benchmark_id]),
+            'IC/IR': plot_icir(self.ic, self.ir),
+            'Style': plot_style(self.style),
         }
-
-        figs = {
-            name: pn.pane.Plotly(plot_funcs[name]())
-            for name in plot_funcs
-        }
-        tab_items = list(figs.items())
-
-        return pn.Tabs(*tab_items)
+        return pn.Tabs(*[(k, pn.pane.Plotly(v)) for k, v in plot_funcs.items()])
+    

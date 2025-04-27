@@ -18,15 +18,12 @@ from warnings import simplefilter
 simplefilter(action="ignore", category=pd.errors.PerformanceWarning)
 pd.set_option('future.no_silent_downcasting', True)
 
-class DatabankUtils():
+class DataUtils():
     def __init__(self):
-        self.databank_path = '/Users/jianrui/Documents/GitHub/quantdev_v2/databank' #config.data_config.get('databank_path')
+        self.datasets_path = config.data_config.get('datasets_path')
+        self.databank_path = config.data_config.get('databank_path')
         os.makedirs(self.databank_path, exist_ok=True)
-        
-        self.datasets_path = os.path.join(self.databank_path, 'datasets')
-        self.data_path = os.path.join(self.databank_path, 'data')
         os.makedirs(self.datasets_path, exist_ok=True)
-        os.makedirs(self.data_path, exist_ok=True)
         
         self.start_date = '2005-01-01'
         self.data_type = 'parquet'
@@ -111,7 +108,7 @@ class DatabankUtils():
         logging.info(f'Saved {dataset} as parquet from DataFrame')
 
 
-class TEJHandler(DatabankUtils):
+class TEJHandler(DataUtils):
     def __init__(self):
         super().__init__()
         tejapi.ApiConfig.api_key = config.data_config.get('tej_token')
@@ -526,7 +523,7 @@ class TEJHandler(DatabankUtils):
             logging.info(f'Updated {dataset} from tej')
 
 
-class ProcessedHandler(DatabankUtils):
+class ProcessedHandler(DataUtils):
     def __init__(self):
         super().__init__()
         self.processed_datasets = {
@@ -673,18 +670,18 @@ class ProcessedHandler(DatabankUtils):
         return self.write_dataset(dataset='trading_activity_w_pct_lag', df=df)
 
     # update
-    def update_processed_data(self):
+    def update_processed_datasets(self):
         for v in self.processed_datasets.values():
             v['func']()
 
      
-class FactorModelHandler(DatabankUtils):
+class FactorModelHandler(DataUtils):
     def __init__(self):
         super().__init__()
     
     def update_factor_model(self):
-        from quantdevv2.backtest import get_rank, calc_factor_longshort_return
-        data = Data()
+        from quantdev.backtest import get_rank, calc_factor_longshort_return
+        data = Databank()
         model = pd.DataFrame({
             'MKT':self.calc_market_factor(),
             'PBR':calc_factor_longshort_return(get_rank(data['股價淨值比'], asc=False), rebalance='QR'),
@@ -692,10 +689,8 @@ class FactorModelHandler(DatabankUtils):
             'SIZE':calc_factor_longshort_return(get_rank(data['個股市值(元)'], asc=False), rebalance='Q'),
             'VOL':calc_factor_longshort_return(get_rank(data['成交金額(元)'].rolling(60).mean(), asc=False), rebalance='Q'),
             'MTM3m':calc_factor_longshort_return(get_rank((data['收盤價']/data['收盤價'].shift(60))*data['調整係數']-1), rebalance='Q'),
-            'MTM6m':calc_factor_longshort_return(get_rank((data['收盤價']/data['收盤價'].shift(120))*data['調整係數']-1), rebalance='Q'),
             'ROE':calc_factor_longshort_return(get_rank(data['常續ROE']), rebalance='QR'),
             'OPM':calc_factor_longshort_return(get_rank(data['營業利益率']), rebalance='QR'),
-            'CMA':calc_factor_longshort_return(get_rank(data['資產成長率']), rebalance='QR'),
         }).dropna(how='all')
 
         self.write_dataset('factor_model', model)
@@ -746,37 +741,61 @@ class FactorModelHandler(DatabankUtils):
         return (mkt_rtn - rf_rate).shift(-1).rename_axis('t_date')
 
 
-class DataHandler(DatabankUtils):
+class DatasetsHandler(TEJHandler, ProcessedHandler, FactorModelHandler):
     def __init__(self):
         super().__init__()
+    
+    def update_datasets(self):
+        self.update_tej_datasets()
+        self.update_processed_datasets()
+        self.update_factor_model()
+
+
+class Databank(DataUtils):
+    def __init__(self, sec_type:Union[str, list[str]]=['普通股']):
+        super().__init__()
+        self._ignore()
         self.cashe_dict = {}
         self.func_dict = {}
-        
-        # security type
-        # ['封閉型基金', 'ETF', '普通股', '特別股', '台灣存託憑證', '指數', 'REIT', '國外ETF', '普通股-海外']
-        # if sec_type:
-        #     self.sec_type = None
-        #     sec_type_data = self['證券種類(中)']
-        #     sec_type = sec_type_data.isin([sec_type] if isinstance(sec_type, str) else sec_type)
-        #     self.sec_type = sec_type.loc[:, sec_type.sum()>0]
-
-        # items to be stored
-        self.unstacked_ingore_datasets = [
+        self.sec_type = None
+        if sec_type:
+            sec_type = [sec_type] if isinstance(sec_type, str) else sec_type
+            sec_types = ['封閉型基金', 'ETF', '普通股', '特別股', '台灣存託憑證', '指數', 'REIT', '國外ETF', '普通股-海外']
+            if any(t not in sec_types for t in sec_type):
+                raise ValueError(f'Security type must be one of {sec_types}')
+            stdata = self['證券種類(中)']\
+                .isin(sec_type)
+            self.sec_type = stdata\
+                .loc[:, stdata.sum()>0]
+    
+    def _ignore(self):
+        # ignore
+        self.ingore_datasets = [
             'exp_returns', 'exp_returns_daytrade', 
             'div_policy', 'cash_div', 'capital_formation', 'capital_formation_listed',
             'glbl_rates', 'twn_rates', 'index_components',
             'stock_info', 'mkt_calendar', 
         ]
-        self.unstacked_ignore_cols = [
+        self.ignore_cols = [
             'date', 'release_date', 'stock_id', 't_date', 'insert_time', 
             '期間別', '序號', '季別', '合併(Y/N)', '幣別', '產業別', '市場別', '營收發布時點', '備註說明', 'release_date_集保股權', 'release_date_集保庫存', 
         ]
 
-    def write_data(self, name:str, data:pd.DataFrame):
-        path = os.path.join(self.data_path, f'{name}.{self.data_type}')
-        data.to_parquet(path)
+    def find(self, keyword:str):
+        datasets = [d for d in self.list_datasets() if d not in self.ingore_datasets]
+        columns = [c for d in datasets for c in self.list_columns(d) if c not in self.ignore_cols]
+        return [c for c in columns if keyword in c]
     
-    def convert_to_data(self, data:pd.DataFrame, t_date:pd.DataFrame=None, has_price:pd.DataFrame=None):
+    def find_dataset(self, key:str):
+        datasets = [d for d in self.list_datasets() if d not in self.ingore_datasets]
+        map = {d:[c for c in self.list_columns(d) if c not in self.ignore_cols] for d in datasets}
+        target_datasets = [k for k, v in map.items() if key in v]
+        if len(target_datasets) >1:
+            raise ValueError(f'{key} appears in more than one dataset: {target_datasets}')
+        else:
+            return target_datasets[0]
+    
+    def unstack_data(self, data:pd.DataFrame, t_date:pd.DataFrame=None, has_price:pd.DataFrame=None):
         t_date = self.read_dataset('mkt_calendar', columns=['date'], filters=[('休市原因中文說明(人工建置)','=','')])\
             .rename(columns={'date':'t_date'})\
             .loc[lambda x: x['t_date'] <= pd.to_datetime(dt.datetime.today().date()+dt.timedelta(days=1))] if t_date is None else t_date
@@ -801,66 +820,15 @@ class DataHandler(DatabankUtils):
         unstacked_data.iloc[unstacked_data.notna().any(axis=1).values.nonzero()[0][-1]:] = unstacked_data.iloc[unstacked_data.notna().any(axis=1).values.nonzero()[0][-1]:].ffill()
         return unstacked_data
     
-    def update_data(self, dataset:Union[str, list[str]]=None, threading:bool=True):
-        t_date = self.read_dataset('mkt_calendar', columns=['date'], filters=[('休市原因中文說明(人工建置)','=','')])\
-            .rename(columns={'date':'t_date'})\
-            .loc[lambda x: x['t_date'] <= (pd.to_datetime(dt.datetime.today().date())+dt.timedelta(days=1))]
-        has_price = self.read_dataset('trading_data', columns=['date', 'stock_id', '收盤價'])\
-            .rename(columns={'date':'t_date'})\
-            .set_index(['t_date', 'stock_id'])\
-            .unstack('stock_id')\
-            .droplevel(0, axis=1)\
-            .notna()
-        
-        if isinstance(dataset, str):
-            datasets = [dataset]
-        elif isinstance(dataset, list):
-            datasets = dataset
-        elif dataset is None:
-            datasets = [d for d in self.list_datasets() if d not in self.unstacked_ingore_datasets]
-        
-        for d in datasets:
-            data = self.read_dataset(d)
-            columns = [col for col in data.columns if col not in self.unstacked_ignore_cols]
+    def to_databank(self, key:str):
+        dataset = self.find_dataset(key)
+        data = self.read_dataset(dataset, columns=['t_date', 'stock_id', key])
+        data = self.unstack_data(data)
+        self[key] = data
 
-            if threading:
-                def process_column(col):
-                    unstacked_data = self.convert_to_data(data[['t_date', 'stock_id', col]], t_date, has_price)
-                    self.write_data(col, unstacked_data)
-                with ThreadPoolExecutor() as executor:
-                    futures = list(executor.map(process_column, columns))
-                    for _ in futures:
-                        pass
-            else:
-                for col in columns:
-                    process_column(col)
-
-
-class Databank(TEJHandler, ProcessedHandler, FactorModelHandler, DataHandler):
-    def __init__(self):
-        super().__init__()
-    def update_databank(self):
-        self.update_tej_datasets()
-        self.update_processed_data()
-        self.update_data()
-        self.update_factor_model()
-
-
-class Data(DataHandler):
-    def __init__(self, sec_type:Union[str, list[str]]=['普通股']):
-        super().__init__()
-        self.cashe_dict = {}
-        self.func_dict = {}
-        self.sec_type = None
-        if sec_type:
-            sec_type = [sec_type] if isinstance(sec_type, str) else sec_type
-            sec_types = ['封閉型基金', 'ETF', '普通股', '特別股', '台灣存託憑證', '指數', 'REIT', '國外ETF', '普通股-海外']
-            if any(t not in sec_types for t in sec_type):
-                raise ValueError(f'Security type must be one of {sec_types}')
-            stdata = self['證券種類(中)']\
-                .isin(sec_type)
-            self.sec_type = stdata\
-                .loc[:, stdata.sum()>0]
+    def __setitem__(self, key:str, value:pd.DataFrame):
+        path = os.path.join(self.databank_path, f'{key}.{self.data_type}')
+        value.to_parquet(path)
 
     def __getitem__(self, key):
         if key in self.cashe_dict:
@@ -868,18 +836,22 @@ class Data(DataHandler):
         elif key in self.func_dict:
             return self.func_dict[key]
         else:
-            path = os.path.join(self.data_path, f'{key}.{self.data_type}')
+            path = os.path.join(self.databank_path, f'{key}.{self.data_type}')
             
             if os.path.exists(path):
                 try:
+                    if pq.read_table(path, columns=['t_date']).to_pandas().index.max() \
+                       < pd.Timestamp(dt.datetime.today().date()):
+                        self.to_databank(key)
                     if self.sec_type is not None:
                         return pd.read_parquet(path).reindex_like(self.sec_type)
                     else:
                         return pd.read_parquet(path)
                 except Exception as e:
-                    print(e)
-                    raise ValueError(f'Cannot read {path}')
-            raise ValueError(f'{path} not exist')
+                    raise ValueError(f'Cannot read {path}, error: {e}')
+            else:
+                self.to_databank(key)
+                return self[key]
 
     def __call__(self, key):
         return self.__getitem__(key)
