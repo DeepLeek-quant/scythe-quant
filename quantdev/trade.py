@@ -54,9 +54,12 @@ from functools import wraps
 import datetime as dt
 import pandas as pd
 import numpy as np
-import shioaji as sj
 import time
 import json
+
+import shioaji as sj
+from fubon_neo.sdk import FubonSDK, Order
+from fubon_neo.constant import TimeInForce, OrderType, PriceType, MarketType, BSAction
 
 from .config import config
 
@@ -1210,3 +1213,69 @@ class PortfolioManager(Trader):
                 break
 
             time.sleep(60*freq)
+
+# fubon trade
+class FubonAccount(FubonSDK):
+    def __init__(self, key:dict=None, sim:bool=False):
+        """Fubon Account
+
+        繼承自 fubon_neo.sdk.FubonSDK，提供自動登入和憑證啟用功能。
+
+        Args:
+            key (dict): API 金鑰和憑證資訊，必須包含以下欄位：
+                - id_number: 身分證字號
+                - password: 登入密碼
+                - ca_path: 憑證路徑
+                - ca_passwd: 憑證密碼
+            sim (bool): 是否使用模擬環境，預設為 False
+
+        Examples:
+            ```python
+            # 建立 API 物件
+            api_key = {
+                'api_key': 'your_api_key',
+                'secret_key': 'your_secret_key',
+                'ca_path': '/path/to/ca.pfx',
+                'ca_passwd': 'your_ca_password',
+                'person_id': 'your_person_id'
+            }
+            api = SinoPacAccount(key=api_key, sim=False)
+            ```
+
+        Available Functions:
+            - login: 登入 API
+            - logout: 登出 API
+            - activate_ca: 啟用憑證
+            - list_accounts: 列出帳戶
+            - set_default_account: 設定預設帳戶
+            - get_account_margin: 取得帳戶保證金
+            - get_account_openposition: 取得帳戶未平倉部位
+            - get_account_settle_profitloss: 取得帳戶已實現損益
+            - get_stock_account_funds: 取得股票帳戶資金
+            - get_stock_account_unreal_profitloss: 取得股票帳戶未實現損益
+            - get_stock_account_real_profitloss: 取得股票帳戶已實現損益
+            - place_order: 下單
+            - update_order: 更新委託
+            - update_status: 更新狀態
+            - list_trades: 列出交易
+        """
+        
+        
+        self.__key = key or config.fubon_config
+        
+        # login
+        self.login(
+            id_number=self.__key['id_number'],
+            password=self.__key['password'],
+        )
+        # CA
+        self.activate_ca(
+            ca_path=self.__key['ca_path'],
+            ca_passwd=self.__key['ca_passwd'],
+        )
+    
+    @property
+    def usage(self) -> pd.DataFrame:
+        """Returns current API usage as a DataFrame"""
+        return pd.DataFrame([dict(super().usage())])
+

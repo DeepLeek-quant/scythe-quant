@@ -5985,3 +5985,5 @@
 2025-04-15 00:13:17,361 - root - INFO - Saved trading_activity_w_pct as parquet from DataFrame
 2025-04-15 00:13:25,861 - root - INFO - Saved trading_activity_w_pct_lag as parquet from DataFrame
 2025-04-15 00:26:04,605 - root - INFO - TEJ API usage: 1.70%, 30.76%
+2025-04-27 17:32:24,679 - root - INFO - TEJ API usage: 0.00%, 0.00%
+2025-04-28 13:14:26,141 - shioaji - ERROR - {'status': {'status_code': 400}, 'response': {'token': '', 'accounts': [], 'detail': '6L8sqPSsW2epUTUwwcKrshhdhuGaoWwqBF4MVT7Htys2 is expired.', 'ip_address': '101.12.147.143', 'person_id': 'A127945492', 'client_name': '', 'contract_download': False, 'web_token': '', 'solace_props': None}}

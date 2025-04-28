@@ -37,14 +37,14 @@ def calc_metrics(daily_returns:Union[pd.DataFrame, pd.Series]):
     }, axis=1).round(2).T
 
 def calc_ic(factor:pd.DataFrame, exp_returns:pd.DataFrame, rebalance:Literal['MR', 'QR', 'W', 'M', 'Q', 'Y']=None, rank:bool=True)->pd.Series:
-    from quantdevv2.backtest import get_rebalance_date
+    from quantdev.backtest import get_rebalance_date
     r_date = pd.Index(get_rebalance_date(rebalance)).intersection(exp_returns.index)
     
     factor = factor[factor.index.isin(r_date)].stack().rename('factor')
     returns =  resample_returns(exp_returns, rebalance).stack().rename_axis(['t_date', 'stock_id']).rename('return')
-    merged_data = pd.concat([factor, returns], axis=1).dropna()
     
-    return merged_data\
+    return pd.concat([factor, returns], axis=1)\
+        .dropna()\
         .groupby('t_date')\
         .apply(lambda x: stats.spearmanr(x['factor'], x['return'])[0] if rank else stats.pearsonr(x['factor'], x['return'])[0])
 
@@ -82,7 +82,7 @@ def resample_returns(returns: pd.DataFrame, t: Literal['MR', 'QR', 'W', 'M', 'Q'
     """
     
     try:
-        from quantdevv2.backtest import get_rebalance_date
+        from quantdev.backtest import get_rebalance_date
         dates =  pd.DatetimeIndex(get_rebalance_date(t)+[returns.index.max()])
 
         def cum_rtns(group):

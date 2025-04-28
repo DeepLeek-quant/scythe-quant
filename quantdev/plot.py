@@ -872,7 +872,7 @@ def plot_relative_return(relative_return:pd.DataFrame)-> go.Figure:
 
 # multi Report
 def plot_efficiency_frontier(returns:pd.DataFrame):
-    from quantdevv2.analysis import create_random_portfolios
+    from quantdev.analysis import create_random_portfolios
     portfolios = create_random_portfolios(returns)
     max_sharpe = portfolios.loc[portfolios['sharpe'].argmax()]
     min_vol = portfolios.loc[portfolios['std_dev'].argmin()]

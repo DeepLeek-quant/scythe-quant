@@ -69,6 +69,8 @@ from .plot import *
 from .analysis import calc_metrics, calc_style, calc_maemfe, calc_liquidity, calc_relative_return, calc_ic, calc_ir
 
 pd.set_option('future.no_silent_downcasting', True)
+import warnings
+warnings.simplefilter(action='ignore', category=FutureWarning)
 
 # backtest
 def get_release_pct_rebalance(type_:Literal['MR', 'QR'], pct:int=80):
@@ -775,7 +777,7 @@ class FactorReport:
             'std': lambda x: x.std().round(4),
             'IR': lambda x: f'{x.mean()/x.std():.2%}', 
             'positive ratio': lambda x: f'{len(x[x>0])/len(x):.2%}',
-        }).to_frame('Information Coefficient')
+        }).to_frame('Rank IC')
 
         html = f"""
         <div style="display: flex; gap: 5px;row-gap: 10px;">
@@ -789,7 +791,7 @@ class FactorReport:
 
         plot_funcs = {
             'Quantile Returns': plot_quantile_returns(self.quantiles_returns, self.exp_returns[self.benchmark_id]),
-            'IC/IR': plot_icir(self.ic, self.ir),
+            'Rank IC/IR': plot_icir(self.ic, self.ir),
             'Style': plot_style(self.style),
         }
         return pn.Tabs(*[(k, pn.pane.Plotly(v)) for k, v in plot_funcs.items()])

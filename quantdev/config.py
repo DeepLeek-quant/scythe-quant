@@ -8,6 +8,7 @@ class Config:
         self.data_config = self._load_config('data.json')
         self.fugle_config = self._load_config('fugle_marketdata.json')
         self.sinopac_config = self._load_config('sinopac.json')
+        self.fubon_config = self._load_config('fubon.json')
         self.pf_path_config = self._load_config('portfolio_path.json')
 
     def _load_config(self, file_name: str) -> dict:

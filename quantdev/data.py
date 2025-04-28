@@ -777,7 +777,7 @@ class Databank(DataUtils):
             'stock_info', 'mkt_calendar', 
         ]
         self.ignore_cols = [
-            'date', 'release_date', 'stock_id', 't_date', 'insert_time', 
+            'date', 'release_date', 'stock_id', 't_date', 'insert_time', 'MTM3m'
             '期間別', '序號', '季別', '合併(Y/N)', '幣別', '產業別', '市場別', '營收發布時點', '備註說明', 'release_date_集保股權', 'release_date_集保庫存', 
         ]
 
@@ -792,6 +792,8 @@ class Databank(DataUtils):
         target_datasets = [k for k, v in map.items() if key in v]
         if len(target_datasets) >1:
             raise ValueError(f'{key} appears in more than one dataset: {target_datasets}')
+        elif len(target_datasets) == 0:
+            raise ValueError(f'{key} not found in any dataset')
         else:
             return target_datasets[0]
     
