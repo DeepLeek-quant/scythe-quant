@@ -1,0 +1,299 @@
+[2025-05-06 09:48:17.767988 +08:00 INFO] [login] personal_id="A127945492"
+[2025-05-06 09:48:17.834264 +08:00 INFO] this account require 2fa
+[2025-05-06 09:48:18.008834 +08:00 INFO] [future_option_mapping]: 112.7915ms
+[2025-05-06 09:48:18.061714 +08:00 INFO] [future_option_mapping]: 49.926083ms
+[2025-05-06 09:48:18.218718 +08:00 INFO] [future_option_mapping]: 156.55225ms
+[2025-05-06 09:48:18.294844 +08:00 INFO] [future_option_mapping]: 62.668042ms
+[2025-05-06 09:48:18.308596 +08:00 INFO] [get inventories] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }
+[2025-05-06 09:48:18.370779 +08:00 INFO] [inventory_result]: 62.126667ms
+[2025-05-06 09:50:23.808835 +08:00 INFO] [place_order] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" },order=Order { oxtp: NewOrder, market_type: IntradayOdd, sess: Some("0"), date: None, buy_sell: Buy, stock_no: "2881", price_type: Limit, price: Some("78.7"), quantity: 100, time_in_force: ROD, order_type: Stock, user_def: None }, is_async=false
+[2025-05-06 09:50:23.880834 +08:00 INFO] [place_order]: 72.355ms
+[2025-05-06 09:50:45.074687 +08:00 INFO] [get_order_results] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }
+[2025-05-06 09:50:45.166759 +08:00 INFO] [order_result]: 92.01375ms
+[2025-05-06 09:51:01.469452 +08:00 INFO] [place_order] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" },order=Order { oxtp: NewOrder, market_type: IntradayOdd, sess: Some("0"), date: None, buy_sell: Buy, stock_no: "2881", price_type: Limit, price: Some("78.7"), quantity: 10, time_in_force: ROD, order_type: Stock, user_def: Some("TW3F") }, is_async=false
+[2025-05-06 09:51:01.534303 +08:00 INFO] [place_order]: 65.212792ms
+[2025-05-06 09:51:12.728154 +08:00 INFO] [get_order_results] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }
+[2025-05-06 09:51:12.778351 +08:00 INFO] [order_result]: 50.15325ms
+[2025-05-06 09:53:31.020491 +08:00 INFO] [get inventories] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }
+[2025-05-06 09:53:31.095333 +08:00 INFO] [inventory_result]: 74.78325ms
+[2025-05-06 09:53:36.921434 +08:00 INFO] [get inventories] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }
+[2025-05-06 09:53:36.982059 +08:00 INFO] [inventory_result]: 60.5515ms
+[2025-05-06 09:54:18.730986 +08:00 INFO] [get_order_results] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }
+[2025-05-06 09:54:18.792611 +08:00 INFO] [order_result]: 61.458833ms
+[2025-05-06 09:54:18.815280 +08:00 INFO] [cancel_order] order=OrderResult { function_type: None, date: "2025/05/06", seq_no: "02075306775", branch_no: "20210", account: "217177", order_no: "o1287", asset_type: 0, market: "TAIEX", market_type: IntradayOdd, stock_no: "2881", buy_sell: Buy, price_type: Limit, price: 78.7, quantity: 100, time_in_force: ROD, order_type: Stock, is_pre_order: false, status: 10, after_price_type: None, after_price: 78.7, unit: 1, after_qty: 100, filled_qty: 0, filled_money: 0, before_qty: None, before_price: None, user_def: None, last_time: "09:50:24.042", details: None, error_message: None }, is_async=false
+[2025-05-06 09:54:18.879707 +08:00 INFO] [cancel_order]: 64.458291ms
+[2025-05-06 09:54:18.881527 +08:00 INFO] [cancel_order] order=OrderResult { function_type: None, date: "2025/05/06", seq_no: "02075306995", branch_no: "20210", account: "217177", order_no: "o1295", asset_type: 0, market: "TAIEX", market_type: IntradayOdd, stock_no: "2881", buy_sell: Buy, price_type: Limit, price: 78.7, quantity: 10, time_in_force: ROD, order_type: Stock, is_pre_order: false, status: 10, after_price_type: None, after_price: 78.7, unit: 1, after_qty: 10, filled_qty: 0, filled_money: 0, before_qty: None, before_price: None, user_def: "TW3F", last_time: "09:51:01.698", details: None, error_message: None }, is_async=false
+[2025-05-06 09:54:18.939038 +08:00 INFO] [cancel_order]: 57.510833ms
+[2025-05-06 10:02:27.626179 +08:00 INFO] [place_order] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" },order=Order { oxtp: NewOrder, market_type: IntradayOdd, sess: Some("0"), date: None, buy_sell: Buy, stock_no: "2881", price_type: Limit, price: Some("78.9"), quantity: 100, time_in_force: ROD, order_type: Stock, user_def: Some("TEST") }, is_async=false
+[2025-05-06 10:02:27.731875 +08:00 INFO] [place_order]: 106.038709ms
+[2025-05-06 10:04:40.445050 +08:00 INFO] [get_order_results] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }
+[2025-05-06 10:04:40.509790 +08:00 INFO] [order_result]: 64.688417ms
+[2025-05-06 10:04:40.510504 +08:00 INFO] [cancel_order] order=OrderResult { function_type: None, date: "2025/05/06", seq_no: "02075306775", branch_no: "20210", account: "217177", order_no: "o1287", asset_type: 0, market: "TAIEX", market_type: IntradayOdd, stock_no: "2881", buy_sell: Buy, price_type: Limit, price: 78.7, quantity: 100, time_in_force: ROD, order_type: Stock, is_pre_order: false, status: 30, after_price_type: None, after_price: 78.7, unit: 1, after_qty: 0, filled_qty: 0, filled_money: 0, before_qty: None, before_price: None, user_def: None, last_time: "09:50:24.042", details: None, error_message: None }, is_async=false
+[2025-05-06 10:04:40.554654 +08:00 INFO] [cancel_order] order=OrderResult { function_type: None, date: "2025/05/06", seq_no: "02075306995", branch_no: "20210", account: "217177", order_no: "o1295", asset_type: 0, market: "TAIEX", market_type: IntradayOdd, stock_no: "2881", buy_sell: Buy, price_type: Limit, price: 78.7, quantity: 10, time_in_force: ROD, order_type: Stock, is_pre_order: false, status: 30, after_price_type: None, after_price: 78.7, unit: 1, after_qty: 0, filled_qty: 0, filled_money: 0, before_qty: None, before_price: None, user_def: "TW3F", last_time: "09:51:01.698", details: None, error_message: None }, is_async=false
+[2025-05-06 10:04:40.615068 +08:00 INFO] [cancel_order] order=OrderResult { function_type: None, date: "2025/05/06", seq_no: "02075311355", branch_no: "20210", account: "217177", order_no: "o1394", asset_type: 0, market: "TAIEX", market_type: IntradayOdd, stock_no: "2881", buy_sell: Buy, price_type: Limit, price: 78.9, quantity: 100, time_in_force: ROD, order_type: Stock, is_pre_order: false, status: 10, after_price_type: None, after_price: 78.9, unit: 1, after_qty: 100, filled_qty: 0, filled_money: 0, before_qty: None, before_price: None, user_def: "TEST", last_time: "10:02:27.822", details: None, error_message: None }, is_async=false
+[2025-05-06 10:04:40.695533 +08:00 INFO] [cancel_order]: 80.689417ms
+[2025-05-06 10:05:56.208574 +08:00 INFO] [place_order] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" },order=Order { oxtp: NewOrder, market_type: IntradayOdd, sess: Some("0"), date: None, buy_sell: Buy, stock_no: "2881", price_type: Limit, price: Some("79"), quantity: 100, time_in_force: ROD, order_type: Stock, user_def: Some("TEST") }, is_async=false
+[2025-05-06 10:05:56.272470 +08:00 INFO] [place_order]: 65.314417ms
+[2025-05-06 10:06:03.213886 +08:00 INFO] [get_order_results] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }
+[2025-05-06 10:06:03.259632 +08:00 INFO] [order_result]: 45.61775ms
+[2025-05-06 10:12:12.098674 +08:00 INFO] [get_order_results] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }
+[2025-05-06 10:12:12.134140 +08:00 INFO] [order_result]: 35.421958ms
+[2025-05-06 10:13:00.239644 +08:00 INFO] [get_order_results] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }
+[2025-05-06 10:13:00.280071 +08:00 INFO] [order_result]: 40.384292ms
+[2025-05-06 10:13:00.280601 +08:00 INFO] [cancel_order] order=OrderResult { function_type: None, date: "2025/05/06", seq_no: "02075306775", branch_no: "20210", account: "217177", order_no: "o1287", asset_type: 0, market: "TAIEX", market_type: IntradayOdd, stock_no: "2881", buy_sell: Buy, price_type: Limit, price: 78.7, quantity: 100, time_in_force: ROD, order_type: Stock, is_pre_order: false, status: 30, after_price_type: None, after_price: 78.7, unit: 1, after_qty: 0, filled_qty: 0, filled_money: 0, before_qty: None, before_price: None, user_def: None, last_time: "09:50:24.042", details: None, error_message: None }, is_async=false
+[2025-05-06 10:13:00.320461 +08:00 INFO] [cancel_order] order=OrderResult { function_type: None, date: "2025/05/06", seq_no: "02075306995", branch_no: "20210", account: "217177", order_no: "o1295", asset_type: 0, market: "TAIEX", market_type: IntradayOdd, stock_no: "2881", buy_sell: Buy, price_type: Limit, price: 78.7, quantity: 10, time_in_force: ROD, order_type: Stock, is_pre_order: false, status: 30, after_price_type: None, after_price: 78.7, unit: 1, after_qty: 0, filled_qty: 0, filled_money: 0, before_qty: None, before_price: None, user_def: "TW3F", last_time: "09:51:01.698", details: None, error_message: None }, is_async=false
+[2025-05-06 10:13:00.366082 +08:00 INFO] [cancel_order] order=OrderResult { function_type: None, date: "2025/05/06", seq_no: "02075311355", branch_no: "20210", account: "217177", order_no: "o1394", asset_type: 0, market: "TAIEX", market_type: IntradayOdd, stock_no: "2881", buy_sell: Buy, price_type: Limit, price: 78.9, quantity: 100, time_in_force: ROD, order_type: Stock, is_pre_order: false, status: 30, after_price_type: None, after_price: 78.9, unit: 1, after_qty: 0, filled_qty: 0, filled_money: 0, before_qty: None, before_price: None, user_def: "TEST", last_time: "10:02:27.822", details: None, error_message: None }, is_async=false
+[2025-05-06 10:13:00.423492 +08:00 INFO] [cancel_order] order=OrderResult { function_type: None, date: "2025/05/06", seq_no: "02075312488", branch_no: "20210", account: "217177", order_no: "o1416", asset_type: 0, market: "TAIEX", market_type: IntradayOdd, stock_no: "2881", buy_sell: Buy, price_type: Limit, price: 79, quantity: 100, time_in_force: ROD, order_type: Stock, is_pre_order: false, status: 50, after_price_type: None, after_price: 79, unit: 1, after_qty: 100, filled_qty: 100, filled_money: 7900, before_qty: None, before_price: None, user_def: "TEST", last_time: "10:05:56.381", details: None, error_message: None }, is_async=false
+[2025-05-06 10:14:41.033006 +08:00 INFO] [query_settlement] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }, range="3d"
+[2025-05-06 10:19:08.826115 +08:00 INFO] [get inventories] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }
+[2025-05-06 10:19:08.885294 +08:00 INFO] [inventory_result]: 59.128042ms
+[2025-05-06 10:19:51.567450 +08:00 INFO] [place_order] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" },order=Order { oxtp: NewOrder, market_type: Common, sess: None, date: None, buy_sell: Buy, stock_no: "2881", price_type: Limit, price: Some("78.8"), quantity: 1, time_in_force: ROD, order_type: Stock, user_def: Some("TEST2") }, is_async=false
+[2025-05-06 10:20:00.701033 +08:00 INFO] [place_order] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" },order=Order { oxtp: NewOrder, market_type: Common, sess: None, date: None, buy_sell: Buy, stock_no: "2881", price_type: Limit, price: Some("78.8"), quantity: 1000, time_in_force: ROD, order_type: Stock, user_def: Some("TEST2") }, is_async=false
+[2025-05-06 10:20:00.777995 +08:00 INFO] [place_order]: 77.76475ms
+[2025-05-06 10:20:25.024880 +08:00 INFO] [get inventories] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }
+[2025-05-06 10:20:25.070323 +08:00 INFO] [inventory_result]: 45.381208ms
+[2025-05-06 10:20:39.544306 +08:00 INFO] [get_order_results] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }
+[2025-05-06 10:20:39.581448 +08:00 INFO] [order_result]: 37.094625ms
+[2025-05-06 10:20:50.707007 +08:00 INFO] [get_order_results] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }
+[2025-05-06 10:20:50.755033 +08:00 INFO] [order_result]: 47.934958ms
+[2025-05-06 10:34:30.971744 +08:00 INFO] [get_order_results] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }
+[2025-05-06 10:34:31.018973 +08:00 INFO] [order_result]: 47.183333ms
+[2025-05-06 10:34:48.129218 +08:00 INFO] [get_order_results] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }
+[2025-05-06 10:34:48.174498 +08:00 INFO] [order_result]: 45.191667ms
+[2025-05-06 10:35:00.174256 +08:00 INFO] [get_order_results] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }
+[2025-05-06 10:35:00.222227 +08:00 INFO] [order_result]: 47.910292ms
+[2025-05-06 10:35:11.523236 +08:00 INFO] [get_order_results] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }
+[2025-05-06 10:35:11.575050 +08:00 INFO] [order_result]: 51.678833ms
+[2025-05-06 10:51:11.527116 +08:00 INFO] [get_order_results] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }
+[2025-05-06 10:51:38.452105 +08:00 INFO] [login] personal_id="A127945492"
+[2025-05-06 10:51:38.507471 +08:00 INFO] this account require 2fa
+[2025-05-06 10:51:38.647125 +08:00 INFO] [future_option_mapping]: 87.559584ms
+[2025-05-06 10:51:38.687552 +08:00 INFO] [future_option_mapping]: 37.595208ms
+[2025-05-06 10:51:38.841043 +08:00 INFO] [future_option_mapping]: 153.1745ms
+[2025-05-06 10:51:38.901428 +08:00 INFO] [future_option_mapping]: 50.183125ms
+[2025-05-06 10:51:38.906266 +08:00 INFO] [get inventories] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }
+[2025-05-06 10:51:38.956069 +08:00 INFO] [inventory_result]: 49.767334ms
+[2025-05-06 10:52:08.063078 +08:00 INFO] [login] personal_id="A127945492"
+[2025-05-06 10:52:08.091967 +08:00 INFO] this account require 2fa
+[2025-05-06 10:52:08.230822 +08:00 INFO] [future_option_mapping]: 100.473416ms
+[2025-05-06 10:52:08.272848 +08:00 INFO] [future_option_mapping]: 39.47425ms
+[2025-05-06 10:52:08.396940 +08:00 INFO] [future_option_mapping]: 123.73575ms
+[2025-05-06 10:52:08.444859 +08:00 INFO] [future_option_mapping]: 36.924ms
+[2025-05-06 10:52:10.690651 +08:00 INFO] [get_order_results] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }
+[2025-05-06 10:52:10.741648 +08:00 INFO] [order_result]: 50.931417ms
+[2025-05-06 10:52:16.881832 +08:00 INFO] [get_order_results] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }
+[2025-05-06 10:52:17.024813 +08:00 INFO] [order_result]: 142.887084ms
+[2025-05-06 10:52:17.026739 +08:00 INFO] [cancel_order] order=OrderResult { function_type: None, date: "2025/05/06", seq_no: "02075306775", branch_no: "20210", account: "217177", order_no: "o1287", asset_type: 0, market: "TAIEX", market_type: IntradayOdd, stock_no: "2881", buy_sell: Buy, price_type: Limit, price: 78.7, quantity: 100, time_in_force: ROD, order_type: Stock, is_pre_order: false, status: 30, after_price_type: None, after_price: 78.7, unit: 1, after_qty: 0, filled_qty: 0, filled_money: 0, before_qty: None, before_price: None, user_def: None, last_time: "09:50:24.042", details: None, error_message: None }, is_async=false
+[2025-05-06 10:52:17.085943 +08:00 INFO] [cancel_order] order=OrderResult { function_type: None, date: "2025/05/06", seq_no: "02075306995", branch_no: "20210", account: "217177", order_no: "o1295", asset_type: 0, market: "TAIEX", market_type: IntradayOdd, stock_no: "2881", buy_sell: Buy, price_type: Limit, price: 78.7, quantity: 10, time_in_force: ROD, order_type: Stock, is_pre_order: false, status: 30, after_price_type: None, after_price: 78.7, unit: 1, after_qty: 0, filled_qty: 0, filled_money: 0, before_qty: None, before_price: None, user_def: "TW3F", last_time: "09:51:01.698", details: None, error_message: None }, is_async=false
+[2025-05-06 10:52:17.126102 +08:00 INFO] [cancel_order] order=OrderResult { function_type: None, date: "2025/05/06", seq_no: "02075311355", branch_no: "20210", account: "217177", order_no: "o1394", asset_type: 0, market: "TAIEX", market_type: IntradayOdd, stock_no: "2881", buy_sell: Buy, price_type: Limit, price: 78.9, quantity: 100, time_in_force: ROD, order_type: Stock, is_pre_order: false, status: 30, after_price_type: None, after_price: 78.9, unit: 1, after_qty: 0, filled_qty: 0, filled_money: 0, before_qty: None, before_price: None, user_def: "TEST", last_time: "10:02:27.822", details: None, error_message: None }, is_async=false
+[2025-05-06 10:52:17.185018 +08:00 INFO] [cancel_order] order=OrderResult { function_type: None, date: "2025/05/06", seq_no: "02075312488", branch_no: "20210", account: "217177", order_no: "o1416", asset_type: 0, market: "TAIEX", market_type: IntradayOdd, stock_no: "2881", buy_sell: Buy, price_type: Limit, price: 79, quantity: 100, time_in_force: ROD, order_type: Stock, is_pre_order: false, status: 50, after_price_type: None, after_price: 79, unit: 1, after_qty: 100, filled_qty: 100, filled_money: 7900, before_qty: None, before_price: None, user_def: "TEST", last_time: "10:05:56.381", details: None, error_message: None }, is_async=false
+[2025-05-06 10:52:17.435453 +08:00 INFO] [cancel_order] order=OrderResult { function_type: None, date: "2025/05/06", seq_no: "00026469018", branch_no: "20210", account: "217177", order_no: "o1537", asset_type: 0, market: "TAIEX", market_type: Common, stock_no: "2881", buy_sell: Buy, price_type: Limit, price: 78.8, quantity: 1000, time_in_force: ROD, order_type: Stock, is_pre_order: false, status: 50, after_price_type: None, after_price: 78.8, unit: 1000, after_qty: 1000, filled_qty: 1000, filled_money: 78800, before_qty: None, before_price: None, user_def: "TEST2", last_time: "10:20:00.889", details: None, error_message: None }, is_async=false
+[2025-05-06 10:52:20.814852 +08:00 INFO] [get_order_results] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }
+[2025-05-06 10:52:20.872242 +08:00 INFO] [order_result]: 57.339ms
+[2025-05-06 10:53:10.453933 +08:00 INFO] [get_order_results] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }
+[2025-05-06 10:53:10.491869 +08:00 INFO] [order_result]: 37.703625ms
+[2025-05-06 10:53:25.449004 +08:00 INFO] [get_order_results] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }
+[2025-05-06 10:53:25.517626 +08:00 INFO] [order_result]: 68.463958ms
+[2025-05-06 10:56:43.878496 +08:00 INFO] [get_order_results] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }
+[2025-05-06 10:56:43.926526 +08:00 INFO] [order_result]: 47.9675ms
+[2025-05-06 10:57:04.153721 +08:00 INFO] [get_order_results] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }
+[2025-05-06 10:57:04.211985 +08:00 INFO] [order_result]: 58.204666ms
+[2025-05-06 10:57:21.674612 +08:00 INFO] [get_order_results] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }
+[2025-05-06 10:57:21.724485 +08:00 INFO] [order_result]: 49.785167ms
+[2025-05-06 10:57:33.913682 +08:00 INFO] [get_order_results] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }
+[2025-05-06 10:57:33.948976 +08:00 INFO] [order_result]: 35.250541ms
+[2025-05-06 11:00:52.517016 +08:00 INFO] [get_order_results] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }
+[2025-05-06 11:00:52.557107 +08:00 INFO] [order_result]: 40.013417ms
+[2025-05-06 11:01:19.237271 +08:00 INFO] [get_order_results] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }
+[2025-05-06 11:01:19.300086 +08:00 INFO] [order_result]: 62.731458ms
+[2025-05-06 11:01:39.923889 +08:00 INFO] [get_order_results] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }
+[2025-05-06 11:01:39.974100 +08:00 INFO] [order_result]: 50.098834ms
+[2025-05-06 11:02:07.015710 +08:00 INFO] [get_order_results] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }
+[2025-05-06 11:02:07.076385 +08:00 INFO] [order_result]: 59.093959ms
+[2025-05-06 11:02:26.624662 +08:00 INFO] [get_order_results] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }
+[2025-05-06 11:02:26.675827 +08:00 INFO] [order_result]: 51.007125ms
+[2025-05-06 11:02:40.708599 +08:00 INFO] [get_order_results] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }
+[2025-05-06 11:02:40.758582 +08:00 INFO] [order_result]: 49.940667ms
+[2025-05-06 11:02:54.614312 +08:00 INFO] [get_order_results] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }
+[2025-05-06 11:02:54.700578 +08:00 INFO] [order_result]: 86.200208ms
+[2025-05-06 11:03:25.786285 +08:00 INFO] [get_order_results] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }
+[2025-05-06 11:03:25.823743 +08:00 INFO] [order_result]: 37.408666ms
+[2025-05-06 11:04:39.742732 +08:00 INFO] [get_order_results] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }
+[2025-05-06 11:04:39.780376 +08:00 INFO] [order_result]: 37.437208ms
+[2025-05-06 11:04:54.233139 +08:00 INFO] [get_order_results] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }
+[2025-05-06 11:04:54.293210 +08:00 INFO] [order_result]: 59.926458ms
+[2025-05-06 11:06:18.197663 +08:00 INFO] [get_order_results] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }
+[2025-05-06 11:06:18.244338 +08:00 INFO] [order_result]: 46.484834ms
+[2025-05-06 11:06:24.301821 +08:00 INFO] [get_order_results] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }
+[2025-05-06 11:06:24.328887 +08:00 INFO] [order_result]: 27.035166ms
+[2025-05-06 11:06:45.594458 +08:00 INFO] [get_order_results] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }
+[2025-05-06 11:06:45.620123 +08:00 INFO] [order_result]: 25.431791ms
+[2025-05-06 11:06:50.308050 +08:00 INFO] [get_order_results] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }
+[2025-05-06 11:06:50.358519 +08:00 INFO] [order_result]: 50.412917ms
+[2025-05-06 11:43:32.616107 +08:00 INFO] [get_order_results] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }
+[2025-05-06 11:43:32.702752 +08:00 INFO] [order_result]: 85.889667ms
+[2025-05-06 11:43:59.013014 +08:00 INFO] [get_order_results] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }
+[2025-05-06 11:43:59.051100 +08:00 INFO] [order_result]: 37.904875ms
+[2025-05-06 11:44:09.464550 +08:00 INFO] [get_order_results] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }
+[2025-05-06 11:44:09.492228 +08:00 INFO] [order_result]: 27.41425ms
+[2025-05-06 11:44:56.987851 +08:00 INFO] [get_order_results] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }
+[2025-05-06 11:44:57.049954 +08:00 INFO] [order_result]: 61.910709ms
+[2025-05-06 11:46:25.602704 +08:00 INFO] [get_order_results] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }
+[2025-05-06 11:46:25.675301 +08:00 INFO] [order_result]: 72.397042ms
+[2025-05-06 11:46:27.412869 +08:00 INFO] [get_order_results] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }
+[2025-05-06 11:46:27.488243 +08:00 INFO] [order_result]: 75.318875ms
+[2025-05-06 11:46:28.130823 +08:00 INFO] [get_order_results] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }
+[2025-05-06 11:46:28.215908 +08:00 INFO] [order_result]: 85.009792ms
+[2025-05-06 11:46:28.954927 +08:00 INFO] [get_order_results] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }
+[2025-05-06 11:46:28.991632 +08:00 INFO] [order_result]: 36.666333ms
+[2025-05-06 11:46:33.955620 +08:00 INFO] [get_order_results] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }
+[2025-05-06 11:46:33.993266 +08:00 INFO] [order_result]: 37.500292ms
+[2025-05-06 11:46:34.694073 +08:00 INFO] [get_order_results] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }
+[2025-05-06 11:46:34.731483 +08:00 INFO] [order_result]: 37.376333ms
+[2025-05-06 11:46:35.198921 +08:00 INFO] [get_order_results] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }
+[2025-05-06 11:46:35.251019 +08:00 INFO] [order_result]: 51.992542ms
+[2025-05-06 11:46:35.580394 +08:00 INFO] [get_order_results] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }
+[2025-05-06 11:46:35.618216 +08:00 INFO] [order_result]: 37.675917ms
+[2025-05-06 11:46:36.068854 +08:00 INFO] [get_order_results] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }
+[2025-05-06 11:46:36.118380 +08:00 INFO] [order_result]: 49.480958ms
+[2025-05-06 11:46:36.521258 +08:00 INFO] [get_order_results] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }
+[2025-05-06 11:46:36.559135 +08:00 INFO] [order_result]: 37.756125ms
+[2025-05-06 11:46:36.935739 +08:00 INFO] [get_order_results] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }
+[2025-05-06 11:46:37.078905 +08:00 INFO] [order_result]: 143.061041ms
+[2025-05-06 11:46:37.256844 +08:00 INFO] [get_order_results] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }
+[2025-05-06 11:46:37.294669 +08:00 INFO] [order_result]: 37.776042ms
+[2025-05-06 11:48:31.172135 +08:00 INFO] [get inventories] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }
+[2025-05-06 11:48:31.246539 +08:00 INFO] [inventory_result]: 74.224625ms
+[2025-05-06 11:49:54.941138 +08:00 INFO] [get inventories] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }
+[2025-05-06 11:49:54.988576 +08:00 INFO] [inventory_result]: 47.199542ms
+[2025-05-06 11:50:00.870659 +08:00 INFO] [get inventories] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }
+[2025-05-06 11:50:00.918644 +08:00 INFO] [inventory_result]: 47.920458ms
+[2025-05-06 11:52:22.558592 +08:00 INFO] [get inventories] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }
+[2025-05-06 11:52:22.606809 +08:00 INFO] [inventory_result]: 47.945542ms
+[2025-05-06 12:05:19.712683 +08:00 INFO] [get inventories] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }
+[2025-05-06 12:05:19.752779 +08:00 INFO] [inventory_result]: 39.84675ms
+[2025-05-06 12:05:30.415036 +08:00 INFO] [get inventories] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }
+[2025-05-06 12:05:30.462763 +08:00 INFO] [inventory_result]: 47.475625ms
+[2025-05-06 12:06:39.487568 +08:00 INFO] [get inventories] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }
+[2025-05-06 12:06:39.546831 +08:00 INFO] [inventory_result]: 59.057458ms
+[2025-05-06 12:06:51.883432 +08:00 INFO] [get inventories] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }
+[2025-05-06 12:06:51.945802 +08:00 INFO] [inventory_result]: 62.194917ms
+[2025-05-06 12:06:57.068161 +08:00 INFO] [get inventories] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }
+[2025-05-06 12:06:57.118197 +08:00 INFO] [inventory_result]: 49.968208ms
+[2025-05-06 12:07:00.245133 +08:00 INFO] [get inventories] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }
+[2025-05-06 12:07:00.283498 +08:00 INFO] [inventory_result]: 38.319459ms
+[2025-05-06 12:08:18.263790 +08:00 INFO] [login] personal_id="A127945492"
+[2025-05-06 12:08:18.333155 +08:00 INFO] this account require 2fa
+[2025-05-06 12:08:18.607235 +08:00 INFO] [future_option_mapping]: 218.455791ms
+[2025-05-06 12:08:18.647440 +08:00 INFO] [future_option_mapping]: 35.456042ms
+[2025-05-06 12:08:19.283295 +08:00 INFO] [future_option_mapping]: 635.224125ms
+[2025-05-06 12:08:19.359313 +08:00 INFO] [future_option_mapping]: 62.939917ms
+[2025-05-06 12:08:19.364081 +08:00 INFO] [get inventories] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }
+[2025-05-06 12:08:19.399617 +08:00 INFO] [inventory_result]: 35.498417ms
+[2025-05-06 12:08:30.897109 +08:00 INFO] [get inventories] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }
+[2025-05-06 12:08:30.948008 +08:00 INFO] [inventory_result]: 50.69425ms
+[2025-05-06 12:08:47.220204 +08:00 INFO] [get_order_results] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }
+[2025-05-06 12:08:47.272504 +08:00 INFO] [order_result]: 52.069084ms
+[2025-05-06 12:09:02.133096 +08:00 INFO] [get_order_results] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }
+[2025-05-06 12:09:02.174041 +08:00 INFO] [order_result]: 40.819375ms
+[2025-05-06 12:09:50.699750 +08:00 INFO] [get inventories] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }
+[2025-05-06 12:09:50.772628 +08:00 INFO] [inventory_result]: 72.6875ms
+[2025-05-06 12:10:04.815052 +08:00 INFO] [get inventories] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }
+[2025-05-06 12:10:04.865965 +08:00 INFO] [inventory_result]: 50.34625ms
+[2025-05-06 12:10:44.428184 +08:00 INFO] [get inventories] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }
+[2025-05-06 12:10:44.490097 +08:00 INFO] [inventory_result]: 61.729791ms
+[2025-05-06 12:11:08.327601 +08:00 INFO] [get inventories] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }
+[2025-05-06 12:11:08.400036 +08:00 INFO] [inventory_result]: 72.266541ms
+[2025-05-06 12:11:49.490169 +08:00 INFO] [get inventories] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }
+[2025-05-06 12:11:49.528011 +08:00 INFO] [inventory_result]: 37.642541ms
+[2025-05-06 12:11:54.164506 +08:00 INFO] [get inventories] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }
+[2025-05-06 12:11:54.274934 +08:00 INFO] [inventory_result]: 110.391667ms
+[2025-05-06 12:13:23.929450 +08:00 INFO] [unrealized gains and loses] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }
+[2025-05-06 12:13:24.011485 +08:00 INFO] [inventory_stock_detail_result]: 81.7635ms
+[2025-05-06 12:13:41.273588 +08:00 INFO] [unrealized gains and loses] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }
+[2025-05-06 12:13:41.382647 +08:00 INFO] [inventory_stock_detail_result]: 108.527125ms
+[2025-05-06 12:13:52.331571 +08:00 INFO] [unrealized gains and loses] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }
+[2025-05-06 12:13:52.396835 +08:00 INFO] [inventory_stock_detail_result]: 64.98325ms
+[2025-05-06 12:14:28.309133 +08:00 INFO] [unrealized gains and loses] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }
+[2025-05-06 12:14:28.443826 +08:00 INFO] [inventory_stock_detail_result]: 134.527958ms
+[2025-05-06 12:21:09.525566 +08:00 INFO] [get_order_results] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }
+[2025-05-06 12:21:09.593118 +08:00 INFO] [order_result]: 66.758166ms
+[2025-05-06 12:22:42.246233 +08:00 INFO] [get_order_results] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }
+[2025-05-06 12:22:42.293730 +08:00 INFO] [order_result]: 47.191125ms
+[2025-05-06 12:22:48.731324 +08:00 INFO] [get_order_results] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }
+[2025-05-06 12:22:48.775928 +08:00 INFO] [order_result]: 43.64ms
+[2025-05-06 12:32:41.587116 +08:00 INFO] [login] personal_id="A127945492"
+[2025-05-06 12:32:41.682192 +08:00 INFO] this account require 2fa
+[2025-05-06 12:32:42.037368 +08:00 INFO] [future_option_mapping]: 298.995667ms
+[2025-05-06 12:32:42.077718 +08:00 INFO] [future_option_mapping]: 36.482625ms
+[2025-05-06 12:32:42.745678 +08:00 INFO] [future_option_mapping]: 667.477375ms
+[2025-05-06 12:32:42.818283 +08:00 INFO] [future_option_mapping]: 59.655958ms
+[2025-05-06 12:32:42.823632 +08:00 INFO] [get inventories] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }
+[2025-05-06 12:32:42.872331 +08:00 INFO] [inventory_result]: 48.658625ms
+[2025-05-06 12:32:51.977278 +08:00 INFO] [get_order_results] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }
+[2025-05-06 12:32:52.112816 +08:00 INFO] [order_result]: 135.317959ms
+[2025-05-06 12:34:20.236730 +08:00 INFO] [get_order_results] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }
+[2025-05-06 12:34:20.263858 +08:00 INFO] [order_result]: 26.981792ms
+[2025-05-06 12:34:23.147326 +08:00 INFO] [get_order_results] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }
+[2025-05-06 12:34:23.190891 +08:00 INFO] [order_result]: 43.4555ms
+[2025-05-06 12:34:24.477536 +08:00 INFO] [get_order_results] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }
+[2025-05-06 12:34:24.527652 +08:00 INFO] [order_result]: 50.086083ms
+[2025-05-06 12:34:25.689896 +08:00 INFO] [get_order_results] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }
+[2025-05-06 12:34:25.727564 +08:00 INFO] [order_result]: 37.6195ms
+[2025-05-06 12:34:35.558931 +08:00 INFO] [login] personal_id="A127945492"
+[2025-05-06 12:34:35.596837 +08:00 INFO] this account require 2fa
+[2025-05-06 12:34:35.745262 +08:00 INFO] [future_option_mapping]: 97.273ms
+[2025-05-06 12:34:35.786845 +08:00 INFO] [future_option_mapping]: 39.483166ms
+[2025-05-06 12:34:35.954141 +08:00 INFO] [future_option_mapping]: 166.976625ms
+[2025-05-06 12:34:36.016465 +08:00 INFO] [future_option_mapping]: 50.385958ms
+[2025-05-06 12:34:36.018892 +08:00 INFO] [get inventories] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }
+[2025-05-06 12:34:36.068200 +08:00 INFO] [inventory_result]: 49.25825ms
+[2025-05-06 12:34:38.772585 +08:00 INFO] [get_order_results] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }
+[2025-05-06 12:34:38.807294 +08:00 INFO] [order_result]: 34.658375ms
+[2025-05-06 12:34:41.251673 +08:00 INFO] [get_order_results] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }
+[2025-05-06 12:34:41.289356 +08:00 INFO] [order_result]: 37.604333ms
+[2025-05-06 12:34:41.290022 +08:00 INFO] [cancel_order] order=OrderResult { function_type: None, date: "2025/05/06", seq_no: "02075306775", branch_no: "20210", account: "217177", order_no: "o1287", asset_type: 0, market: "TAIEX", market_type: IntradayOdd, stock_no: "2881", buy_sell: Buy, price_type: Limit, price: 78.7, quantity: 100, time_in_force: ROD, order_type: Stock, is_pre_order: false, status: 30, after_price_type: None, after_price: 78.7, unit: 1, after_qty: 0, filled_qty: 0, filled_money: 0, before_qty: None, before_price: None, user_def: None, last_time: "09:50:24.042", details: None, error_message: None }, is_async=false
+[2025-05-06 12:34:41.367270 +08:00 INFO] [cancel_order] order=OrderResult { function_type: None, date: "2025/05/06", seq_no: "02075306995", branch_no: "20210", account: "217177", order_no: "o1295", asset_type: 0, market: "TAIEX", market_type: IntradayOdd, stock_no: "2881", buy_sell: Buy, price_type: Limit, price: 78.7, quantity: 10, time_in_force: ROD, order_type: Stock, is_pre_order: false, status: 30, after_price_type: None, after_price: 78.7, unit: 1, after_qty: 0, filled_qty: 0, filled_money: 0, before_qty: None, before_price: None, user_def: "TW3F", last_time: "09:51:01.698", details: None, error_message: None }, is_async=false
+[2025-05-06 12:34:41.412410 +08:00 INFO] [cancel_order] order=OrderResult { function_type: None, date: "2025/05/06", seq_no: "02075311355", branch_no: "20210", account: "217177", order_no: "o1394", asset_type: 0, market: "TAIEX", market_type: IntradayOdd, stock_no: "2881", buy_sell: Buy, price_type: Limit, price: 78.9, quantity: 100, time_in_force: ROD, order_type: Stock, is_pre_order: false, status: 30, after_price_type: None, after_price: 78.9, unit: 1, after_qty: 0, filled_qty: 0, filled_money: 0, before_qty: None, before_price: None, user_def: "TEST", last_time: "10:02:27.822", details: None, error_message: None }, is_async=false
+[2025-05-06 12:34:41.481240 +08:00 INFO] [get_order_results] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }
+[2025-05-06 12:34:41.533460 +08:00 INFO] [order_result]: 52.17975ms
+[2025-05-06 12:35:23.986979 +08:00 INFO] [get_order_results] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }
+[2025-05-06 12:35:24.027058 +08:00 INFO] [order_result]: 40.011833ms
+[2025-05-06 12:35:24.027569 +08:00 INFO] [cancel_order] order=OrderResult { function_type: None, date: "2025/05/06", seq_no: "02075306775", branch_no: "20210", account: "217177", order_no: "o1287", asset_type: 0, market: "TAIEX", market_type: IntradayOdd, stock_no: "2881", buy_sell: Buy, price_type: Limit, price: 78.7, quantity: 100, time_in_force: ROD, order_type: Stock, is_pre_order: false, status: 30, after_price_type: None, after_price: 78.7, unit: 1, after_qty: 0, filled_qty: 0, filled_money: 0, before_qty: None, before_price: None, user_def: None, last_time: "09:50:24.042", details: None, error_message: None }, is_async=false
+[2025-05-06 12:35:24.067398 +08:00 INFO] [cancel_order] order=OrderResult { function_type: None, date: "2025/05/06", seq_no: "02075306995", branch_no: "20210", account: "217177", order_no: "o1295", asset_type: 0, market: "TAIEX", market_type: IntradayOdd, stock_no: "2881", buy_sell: Buy, price_type: Limit, price: 78.7, quantity: 10, time_in_force: ROD, order_type: Stock, is_pre_order: false, status: 30, after_price_type: None, after_price: 78.7, unit: 1, after_qty: 0, filled_qty: 0, filled_money: 0, before_qty: None, before_price: None, user_def: "TW3F", last_time: "09:51:01.698", details: None, error_message: None }, is_async=false
+[2025-05-06 12:35:24.118745 +08:00 INFO] [cancel_order] order=OrderResult { function_type: None, date: "2025/05/06", seq_no: "02075311355", branch_no: "20210", account: "217177", order_no: "o1394", asset_type: 0, market: "TAIEX", market_type: IntradayOdd, stock_no: "2881", buy_sell: Buy, price_type: Limit, price: 78.9, quantity: 100, time_in_force: ROD, order_type: Stock, is_pre_order: false, status: 30, after_price_type: None, after_price: 78.9, unit: 1, after_qty: 0, filled_qty: 0, filled_money: 0, before_qty: None, before_price: None, user_def: "TEST", last_time: "10:02:27.822", details: None, error_message: None }, is_async=false
+[2025-05-06 12:35:24.170896 +08:00 INFO] [get_order_results] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }
+[2025-05-06 12:35:24.208376 +08:00 INFO] [order_result]: 37.38625ms
+[2025-05-06 12:35:24.595049 +08:00 INFO] [bank remain] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }
+[2025-05-06 12:35:25.001271 +08:00 INFO] [bank remain]: 405.959583ms
+[2025-05-06 12:35:25.001725 +08:00 INFO] [query_settlement] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }, range="3d"
+[2025-05-06 12:35:34.552757 +08:00 INFO] [get_order_results] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }
+[2025-05-06 12:35:34.603353 +08:00 INFO] [order_result]: 50.53775ms
+[2025-05-06 12:35:34.603835 +08:00 INFO] [cancel_order] order=OrderResult { function_type: None, date: "2025/05/06", seq_no: "02075306775", branch_no: "20210", account: "217177", order_no: "o1287", asset_type: 0, market: "TAIEX", market_type: IntradayOdd, stock_no: "2881", buy_sell: Buy, price_type: Limit, price: 78.7, quantity: 100, time_in_force: ROD, order_type: Stock, is_pre_order: false, status: 30, after_price_type: None, after_price: 78.7, unit: 1, after_qty: 0, filled_qty: 0, filled_money: 0, before_qty: None, before_price: None, user_def: None, last_time: "09:50:24.042", details: None, error_message: None }, is_async=false
+[2025-05-06 12:35:34.661150 +08:00 INFO] [cancel_order] order=OrderResult { function_type: None, date: "2025/05/06", seq_no: "02075306995", branch_no: "20210", account: "217177", order_no: "o1295", asset_type: 0, market: "TAIEX", market_type: IntradayOdd, stock_no: "2881", buy_sell: Buy, price_type: Limit, price: 78.7, quantity: 10, time_in_force: ROD, order_type: Stock, is_pre_order: false, status: 30, after_price_type: None, after_price: 78.7, unit: 1, after_qty: 0, filled_qty: 0, filled_money: 0, before_qty: None, before_price: None, user_def: "TW3F", last_time: "09:51:01.698", details: None, error_message: None }, is_async=false
+[2025-05-06 12:35:34.718869 +08:00 INFO] [cancel_order] order=OrderResult { function_type: None, date: "2025/05/06", seq_no: "02075311355", branch_no: "20210", account: "217177", order_no: "o1394", asset_type: 0, market: "TAIEX", market_type: IntradayOdd, stock_no: "2881", buy_sell: Buy, price_type: Limit, price: 78.9, quantity: 100, time_in_force: ROD, order_type: Stock, is_pre_order: false, status: 30, after_price_type: None, after_price: 78.9, unit: 1, after_qty: 0, filled_qty: 0, filled_money: 0, before_qty: None, before_price: None, user_def: "TEST", last_time: "10:02:27.822", details: None, error_message: None }, is_async=false
+[2025-05-06 12:35:34.764748 +08:00 INFO] [get_order_results] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }
+[2025-05-06 12:35:34.817943 +08:00 INFO] [order_result]: 53.049125ms
+[2025-05-06 12:35:35.339414 +08:00 INFO] [bank remain] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }
+[2025-05-06 12:35:35.991398 +08:00 INFO] [bank remain]: 651.782416ms
+[2025-05-06 12:35:35.991754 +08:00 INFO] [query_settlement] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }, range="3d"
+[2025-05-06 12:35:48.544410 +08:00 INFO] [get_order_results] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }
+[2025-05-06 12:35:48.580568 +08:00 INFO] [order_result]: 36.104375ms
+[2025-05-06 12:35:50.901643 +08:00 INFO] [get_order_results] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }
+[2025-05-06 12:35:50.961609 +08:00 INFO] [order_result]: 59.918291ms
+[2025-05-06 12:35:55.471149 +08:00 INFO] [login] personal_id="A127945492"
+[2025-05-06 12:35:55.523968 +08:00 INFO] this account require 2fa
+[2025-05-06 12:35:55.747240 +08:00 INFO] [future_option_mapping]: 171.686875ms
+[2025-05-06 12:35:55.802621 +08:00 INFO] [future_option_mapping]: 52.004375ms
+[2025-05-06 12:35:56.217426 +08:00 INFO] [future_option_mapping]: 414.2155ms
+[2025-05-06 12:35:56.262543 +08:00 INFO] [future_option_mapping]: 35.263708ms
+[2025-05-06 12:35:56.265837 +08:00 INFO] [get inventories] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }
+[2025-05-06 12:35:56.310739 +08:00 INFO] [inventory_result]: 44.805ms
+[2025-05-06 12:40:45.731923 +08:00 INFO] [login] personal_id="A127945492"
+[2025-05-06 12:40:45.787971 +08:00 INFO] this account require 2fa
+[2025-05-06 12:40:46.058128 +08:00 INFO] [future_option_mapping]: 226.519875ms
+[2025-05-06 12:40:46.127184 +08:00 INFO] [future_option_mapping]: 64.733875ms
+[2025-05-06 12:40:46.571026 +08:00 INFO] [future_option_mapping]: 443.274208ms
+[2025-05-06 12:40:46.649799 +08:00 INFO] [future_option_mapping]: 65.302459ms
+[2025-05-06 12:40:46.654270 +08:00 INFO] [get inventories] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }
+[2025-05-06 12:40:46.704954 +08:00 INFO] [inventory_result]: 50.150583ms

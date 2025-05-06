@@ -1,0 +1,102 @@
+[2025-05-02 16:09:06.796087 +08:00 INFO] [login] personal_id="A127945492"
+[2025-05-02 16:09:06.888263 +08:00 INFO] this account require 2fa
+[2025-05-02 16:09:07.042169 +08:00 INFO] [future_option_mapping]: 100.508375ms
+[2025-05-02 16:09:07.083044 +08:00 INFO] [future_option_mapping]: 38.73075ms
+[2025-05-02 16:09:07.212576 +08:00 INFO] [future_option_mapping]: 129.247917ms
+[2025-05-02 16:09:07.283248 +08:00 INFO] [future_option_mapping]: 60.019375ms
+[2025-05-02 16:10:35.728627 +08:00 INFO] [login] personal_id="A127945492"
+[2025-05-02 16:10:35.781378 +08:00 INFO] this account require 2fa
+[2025-05-02 16:10:35.922686 +08:00 INFO] [future_option_mapping]: 100.512791ms
+[2025-05-02 16:10:35.953947 +08:00 INFO] [future_option_mapping]: 27.911292ms
+[2025-05-02 16:10:36.092424 +08:00 INFO] [future_option_mapping]: 138.057167ms
+[2025-05-02 16:10:36.140342 +08:00 INFO] [future_option_mapping]: 37.742666ms
+[2025-05-02 16:11:16.830819 +08:00 INFO] [query_settlement] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }, range="2d"
+[2025-05-02 16:11:22.237381 +08:00 INFO] [query_settlement] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }, range="3d"
+[2025-05-02 16:11:24.121656 +08:00 INFO] [query_settlement] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }, range="4d"
+[2025-05-02 16:11:31.339348 +08:00 INFO] [query_settlement] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }, range="0d"
+[2025-05-02 16:11:58.576330 +08:00 INFO] [query_settlement] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }, range="1d"
+[2025-05-02 16:12:00.565563 +08:00 INFO] [query_settlement] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }, range="2d"
+[2025-05-02 17:51:30.412389 +08:00 INFO] [query_settlement] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }, range="2d"
+[2025-05-02 17:51:36.225356 +08:00 INFO] [query_settlement] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }, range="2d"
+[2025-05-02 17:51:38.147977 +08:00 INFO] [query_settlement] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }, range="2d"
+[2025-05-02 17:51:41.880226 +08:00 INFO] [query_settlement] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }, range="1d"
+[2025-05-02 17:51:45.209824 +08:00 INFO] [query_settlement] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }, range="0d"
+[2025-05-02 17:51:47.837009 +08:00 INFO] [login] personal_id="A127945492"
+[2025-05-02 17:51:47.916355 +08:00 INFO] this account require 2fa
+[2025-05-02 17:51:48.055545 +08:00 INFO] [future_option_mapping]: 99.770208ms
+[2025-05-02 17:51:48.093656 +08:00 INFO] [future_option_mapping]: 35.304542ms
+[2025-05-02 17:51:48.237069 +08:00 INFO] [future_option_mapping]: 143.047458ms
+[2025-05-02 17:51:48.286440 +08:00 INFO] [future_option_mapping]: 39.647292ms
+[2025-05-02 17:51:49.195067 +08:00 INFO] [query_settlement] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }, range="0d"
+[2025-05-02 17:51:53.864696 +08:00 INFO] [query_settlement] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }, range="0d"
+[2025-05-02 17:51:56.445281 +08:00 INFO] [query_settlement] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }, range="0d"
+[2025-05-02 17:51:58.469413 +08:00 INFO] [query_settlement] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }, range="0d"
+[2025-05-02 17:52:03.411320 +08:00 INFO] [query_settlement] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }, range="0d"
+[2025-05-02 17:52:05.956383 +08:00 INFO] [query_settlement] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }, range="0d"
+[2025-05-02 17:57:08.412805 +08:00 INFO] [query_settlement] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }, range="0d"
+[2025-05-02 17:57:11.743975 +08:00 INFO] [query_settlement] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }, range="0d"
+[2025-05-02 17:58:08.064015 +08:00 INFO] [query_settlement] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }, range="0d"
+[2025-05-02 17:58:14.239543 +08:00 INFO] [query_settlement] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }, range="0d"
+[2025-05-02 17:58:17.727331 +08:00 INFO] [query_settlement] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }, range="0d"
+[2025-05-02 17:58:22.387510 +08:00 INFO] [query_settlement] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }, range="0d"
+[2025-05-02 17:58:28.700076 +08:00 INFO] [query_settlement] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }, range="0d"
+[2025-05-02 17:58:31.643246 +08:00 INFO] [query_settlement] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }, range="0d"
+[2025-05-02 17:58:33.878960 +08:00 INFO] [query_settlement] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }, range="0d"
+[2025-05-02 17:58:37.523507 +08:00 INFO] [query_settlement] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }, range="0d"
+[2025-05-02 17:59:04.252598 +08:00 INFO] [query_settlement] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }, range="0d"
+[2025-05-02 17:59:26.432307 +08:00 INFO] [query_settlement] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }, range="0d"
+[2025-05-02 17:59:48.111669 +08:00 INFO] [query_settlement] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }, range="0d"
+[2025-05-02 17:59:51.991702 +08:00 INFO] [query_settlement] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }, range="0d"
+[2025-05-02 18:00:04.623334 +08:00 INFO] [query_settlement] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }, range="0d"
+[2025-05-02 18:00:24.529332 +08:00 INFO] [query_settlement] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }, range="0d"
+[2025-05-02 18:00:27.762471 +08:00 INFO] [query_settlement] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }, range="0d"
+[2025-05-02 18:00:29.281931 +08:00 INFO] [query_settlement] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }, range="0d"
+[2025-05-02 18:02:03.958005 +08:00 INFO] [query_settlement] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }, range="0d"
+[2025-05-02 18:02:05.590624 +08:00 INFO] [query_settlement] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }, range="3d"
+[2025-05-02 18:02:13.438595 +08:00 INFO] [query_settlement] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }, range="3d"
+[2025-05-02 18:02:15.222193 +08:00 INFO] [query_settlement] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }, range="3d"
+[2025-05-02 18:02:17.547503 +08:00 INFO] [query_settlement] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }, range="3d"
+[2025-05-02 18:02:59.719295 +08:00 INFO] [query_settlement] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }, range="3d"
+[2025-05-02 18:03:11.658632 +08:00 INFO] [query_settlement] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }, range="3d"
+[2025-05-02 18:03:19.225658 +08:00 INFO] [query_settlement] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }, range="3d"
+[2025-05-02 18:03:29.968650 +08:00 INFO] [query_settlement] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }, range="3d"
+[2025-05-02 18:03:37.958897 +08:00 INFO] [query_settlement] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }, range="3d"
+[2025-05-02 18:03:46.704693 +08:00 INFO] [query_settlement] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }, range="3d"
+[2025-05-02 18:03:54.357325 +08:00 INFO] [query_settlement] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }, range="3d"
+[2025-05-02 18:03:56.214805 +08:00 INFO] [query_settlement] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }, range="3d"
+[2025-05-02 18:04:19.010060 +08:00 INFO] [query_settlement] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }, range="3d"
+[2025-05-02 18:20:00.353768 +08:00 INFO] [get inventories] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }
+[2025-05-02 18:20:00.406362 +08:00 INFO] [inventory_result]: 52.549625ms
+[2025-05-02 18:20:11.075074 +08:00 INFO] [get inventories] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }
+[2025-05-02 18:20:11.112898 +08:00 INFO] [inventory_result]: 37.769542ms
+[2025-05-02 18:20:15.330604 +08:00 INFO] [get inventories] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }
+[2025-05-02 18:20:15.370631 +08:00 INFO] [inventory_result]: 39.982333ms
+[2025-05-02 18:20:24.161464 +08:00 INFO] [query_settlement] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }, range="3d"
+[2025-05-02 18:21:09.430394 +08:00 INFO] [bank remain] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }
+[2025-05-02 18:21:09.870453 +08:00 INFO] [bank remain]: 439.9605ms
+[2025-05-02 18:21:14.237717 +08:00 INFO] [bank remain] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }
+[2025-05-02 18:21:14.635759 +08:00 INFO] [bank remain]: 397.937916ms
+[2025-05-02 18:21:19.362490 +08:00 INFO] [bank remain] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }
+[2025-05-02 18:21:19.790991 +08:00 INFO] [bank remain]: 428.435042ms
+[2025-05-02 18:21:24.728031 +08:00 INFO] [bank remain] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }
+[2025-05-02 18:21:25.117499 +08:00 INFO] [bank remain]: 389.423458ms
+[2025-05-02 18:21:27.868052 +08:00 INFO] [bank remain] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }
+[2025-05-02 18:21:28.279729 +08:00 INFO] [bank remain]: 411.477959ms
+[2025-05-02 18:21:35.800612 +08:00 INFO] [bank remain] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }
+[2025-05-02 18:21:36.196595 +08:00 INFO] [bank remain]: 395.86975ms
+[2025-05-02 18:21:37.985750 +08:00 INFO] [bank remain] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }
+[2025-05-02 18:21:38.472910 +08:00 INFO] [bank remain]: 487.075ms
+[2025-05-02 18:21:48.184237 +08:00 INFO] [bank remain] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }
+[2025-05-02 18:21:48.602604 +08:00 INFO] [bank remain]: 418.263959ms
+[2025-05-02 18:21:51.642743 +08:00 INFO] [bank remain] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }
+[2025-05-02 18:21:52.024431 +08:00 INFO] [bank remain]: 381.48775ms
+[2025-05-02 18:21:55.696910 +08:00 INFO] [bank remain] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }
+[2025-05-02 18:21:56.087608 +08:00 INFO] [bank remain]: 390.565833ms
+[2025-05-02 23:25:25.429606 +08:00 INFO] [login] personal_id="A127945492"
+[2025-05-02 23:25:25.493031 +08:00 INFO] this account require 2fa
+[2025-05-02 23:25:25.653530 +08:00 INFO] [future_option_mapping]: 110.909041ms
+[2025-05-02 23:25:25.682365 +08:00 INFO] [future_option_mapping]: 25.125541ms
+[2025-05-02 23:25:25.842388 +08:00 INFO] [future_option_mapping]: 159.506583ms
+[2025-05-02 23:25:25.891999 +08:00 INFO] [future_option_mapping]: 37.693625ms
+[2025-05-02 23:25:28.368641 +08:00 INFO] [bank remain] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }
+[2025-05-02 23:25:28.980221 +08:00 INFO] [bank remain]: 611.519625ms

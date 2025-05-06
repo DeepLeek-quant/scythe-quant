@@ -1,0 +1,19 @@
+{
+    "fugle_marketdata": {
+        "fugle_api_key": "your_fugle_api_key"
+    },
+    "sinopac_api": {
+        "api_key": "your_api_key",
+        "secret_key": "your_secret_key",
+        "ca_path": "your_ca_path",
+        "ca_password": "your_ca_password",
+        "person_id": "your_person_id",
+        "sj_log_path": "your_sj_log_path(optional)"
+    },
+    "fubon_api": {
+        "id_number": "your_id_number",
+        "password": "your_password",
+        "ca_path": "your_ca_path",
+        "ca_password": "your_ca_password"
+    }
+}

@@ -1,3 +1,4 @@
 {
-    "portfolio_path": "your_portfolio_path"
+    "sinopac_portfolio_path": "your_sinopac_portfolio_path",
+    "fubon_portfolio_path": "your_fubon_portfolio_path"
 }

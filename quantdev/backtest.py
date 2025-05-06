@@ -420,7 +420,7 @@ def backtesting(
     rebalance_dates = get_rebalance_date(rebalance, start=start, end=end) if rebalance != 'daytrade' else None
     if rebalance == 'daytrade':
         exp_returns = DatasetsHandler().read_dataset('exp_returns_daytrade', filter_date='t_date', start=start, end=end) if exp_returns is None else exp_returns
-        exp_returns *= longshort 
+        exp_returns *= longshort
         exp_returns -= ((fee*fee_discount)*2 + tax/2 + slippage*2)
     else:
         exp_returns = DatasetsHandler().read_dataset('exp_returns', filter_date='t_date', start=start, end=end) if exp_returns is None else exp_returns
@@ -467,7 +467,6 @@ def multi_backtesting(
     """多重策略回測並返回組合策略回測結果。
 
     Args:
-        
         - strategies (dict[str, Union['Report', Tuple['Report', float]]]): 策略字典，格式為:  
             - key: 策略名稱
             - value: Report物件，或是(Report物件, 權重)的tuple

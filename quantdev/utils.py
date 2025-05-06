@@ -98,3 +98,21 @@ pd.DataFrame.largest = lambda self, n: largest(self, n)
 pd.DataFrame.smallest = lambda self, n: smallest(self, n)
 pd.DataFrame.to_factor = lambda self, method='Z', remove_outlier='MAD', universe=None: to_factor(self, method, remove_outlier, universe)
 pd.DataFrame.to_rank = lambda self, asc=True, universe=None: to_rank(self, asc, universe)
+
+def add_dfs(x_list:list[pd.DataFrame]) -> pd.DataFrame:
+    if len(x_list)==2:
+        return x_list[0] + x_list[1]
+    else:
+        return pd.concat(x_list, keys=range(len(x_list))).groupby(level=1).sum()
+    
+def mean_dfs(x_list:list[pd.DataFrame]) -> pd.DataFrame:
+    return pd.concat(x_list, keys=range(len(x_list))).groupby(level=1).mean()
+
+def std_dfs(x_list:list[pd.DataFrame]) -> pd.DataFrame:
+    return pd.concat(x_list, keys=range(len(x_list))).groupby(level=1).std()
+
+def var_dfs(x_list:list[pd.DataFrame]) -> pd.DataFrame:
+    return pd.concat(x_list, keys=range(len(x_list))).groupby(level=1).var()
+
+def cov_dfs(x_list:list[pd.DataFrame]) -> pd.DataFrame:
+    return pd.concat(x_list, keys=range(len(x_list))).groupby(level=1).cov()

@@ -1,0 +1,19 @@
+[2025-05-05 17:53:19.571176 +08:00 INFO] [login] personal_id="A127945492"
+[2025-05-05 17:53:19.661303 +08:00 INFO] this account require 2fa
+[2025-05-05 17:53:19.837904 +08:00 INFO] [future_option_mapping]: 121.103ms
+[2025-05-05 17:53:19.877043 +08:00 INFO] [future_option_mapping]: 37.003625ms
+[2025-05-05 17:53:20.150649 +08:00 INFO] [future_option_mapping]: 273.254333ms
+[2025-05-05 17:53:20.212540 +08:00 INFO] [future_option_mapping]: 52.558083ms
+[2025-05-05 17:53:20.217691 +08:00 INFO] [get inventories] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }
+[2025-05-05 17:53:20.265737 +08:00 INFO] [inventory_result]: 47.976167ms
+[2025-05-05 18:03:21.376694 +08:00 INFO] [get inventories] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }
+[2025-05-05 18:03:21.426662 +08:00 INFO] [inventory_result]: 49.901125ms
+[2025-05-05 18:03:41.090164 +08:00 INFO] [get_order_results] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }
+[2025-05-05 18:03:41.152755 +08:00 INFO] [order_result]: 62.543375ms
+[2025-05-05 18:03:54.039832 +08:00 INFO] [bank remain] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }
+[2025-05-05 18:03:54.582885 +08:00 INFO] [bank remain]: 542.950875ms
+[2025-05-05 18:04:02.913587 +08:00 INFO] [query_settlement] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }, range="3d"
+[2025-05-05 18:04:09.583383 +08:00 INFO] [query_settlement] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }, range="3d"
+[2025-05-05 18:04:13.616417 +08:00 INFO] [query_settlement] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }, range="3d"
+[2025-05-05 18:04:38.765559 +08:00 INFO] [query_settlement] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }, range="3d"
+[2025-05-05 18:04:45.192936 +08:00 INFO] [query_settlement] account=Account { branch_no: "20210", account: "217177", account_type: "stock", name: "簡叡" }, range="3d"

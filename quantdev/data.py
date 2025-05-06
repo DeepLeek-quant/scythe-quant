@@ -680,17 +680,17 @@ class FactorModelHandler(DataUtils):
         super().__init__()
     
     def update_factor_model(self):
-        from quantdev.backtest import get_rank, calc_factor_longshort_return
+        from quantdev.backtest import calc_factor_longshort_return
         data = Databank()
         model = pd.DataFrame({
             'MKT':self.calc_market_factor(),
-            'PBR':calc_factor_longshort_return(get_rank(data['股價淨值比'], asc=False), rebalance='QR'),
-            'MCAP_to_REV':calc_factor_longshort_return(get_rank(data['個股市值(元)']/1000/data['營業收入'], asc=False), rebalance='QR'),
-            'SIZE':calc_factor_longshort_return(get_rank(data['個股市值(元)'], asc=False), rebalance='Q'),
-            'VOL':calc_factor_longshort_return(get_rank(data['成交金額(元)'].rolling(60).mean(), asc=False), rebalance='Q'),
-            'MTM3m':calc_factor_longshort_return(get_rank((data['收盤價']/data['收盤價'].shift(60))*data['調整係數']-1), rebalance='Q'),
-            'ROE':calc_factor_longshort_return(get_rank(data['常續ROE']), rebalance='QR'),
-            'OPM':calc_factor_longshort_return(get_rank(data['營業利益率']), rebalance='QR'),
+            'PBR':calc_factor_longshort_return((-1*data['股價淨值比']).to_factor().to_rank(), rebalance='QR'),
+            'MCAP_to_REV':calc_factor_longshort_return((-1*data['個股市值(元)']/1000/data['營業收入']).to_factor().to_rank(), rebalance='QR'),
+            'SIZE':calc_factor_longshort_return((data['個股市值(元)']).to_factor().to_rank(), rebalance='Q'),
+            'VOL':calc_factor_longshort_return((data['成交金額(元)'].rolling(60).mean()).to_factor().to_rank(), rebalance='Q'),
+            'MTM3m':calc_factor_longshort_return(((data['收盤價']/data['收盤價'].shift(60))*data['調整係數']-1).to_factor().to_rank(), rebalance='Q'),
+            'ROE':calc_factor_longshort_return((data['常續ROE']).to_factor().to_rank(), rebalance='QR'),
+            'OPM':calc_factor_longshort_return((data['營業利益率']).to_factor().to_rank(), rebalance='QR'),
         }).dropna(how='all')
 
         self.write_dataset('factor_model', model)
@@ -797,10 +797,16 @@ class Databank(DataUtils):
         else:
             return target_datasets[0]
     
+    def get_t_date(self):
+        t_date = DatasetsHandler().read_dataset('mkt_calendar', columns=['date'], filters=[('休市原因中文說明(人工建置)','=','')])\
+            .rename(columns={'date':'t_date'})
+        nearest_next_t_date = t_date\
+            .loc[lambda x: x['t_date'] > pd.to_datetime(dt.datetime.today().date())]\
+            .iloc[0]['t_date']
+        return t_date.loc[lambda x: x['t_date'] <= nearest_next_t_date]
+
     def unstack_data(self, data:pd.DataFrame, t_date:pd.DataFrame=None, has_price:pd.DataFrame=None):
-        t_date = self.read_dataset('mkt_calendar', columns=['date'], filters=[('休市原因中文說明(人工建置)','=','')])\
-            .rename(columns={'date':'t_date'})\
-            .loc[lambda x: x['t_date'] <= pd.to_datetime(dt.datetime.today().date()+dt.timedelta(days=1))] if t_date is None else t_date
+        t_date = self.get_t_date() if t_date is None else t_date
 
         has_price = self.read_dataset('trading_data', columns=['date', 'stock_id', '收盤價'])\
             .rename(columns={'date':'t_date'})\
@@ -819,7 +825,6 @@ class Databank(DataUtils):
             .reindex(index = t_date['t_date'],method='ffill')\
             .ffill()\
             [has_price]
-        unstacked_data.iloc[unstacked_data.notna().any(axis=1).values.nonzero()[0][-1]:] = unstacked_data.iloc[unstacked_data.notna().any(axis=1).values.nonzero()[0][-1]:].ffill()
         return unstacked_data
     
     def to_databank(self, key:str):

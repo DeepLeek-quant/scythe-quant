@@ -6,10 +6,11 @@ class Config:
     def __init__(self):
         self.config_dir = get_config_dir()
         self.data_config = self._load_config('data.json')
-        self.fugle_config = self._load_config('fugle_marketdata.json')
-        self.sinopac_config = self._load_config('sinopac.json')
-        self.fubon_config = self._load_config('fubon.json')
-        self.pf_path_config = self._load_config('portfolio_path.json')
+        # self.fugle_config = self._load_config('fugle_marketdata.json')
+        # self.sinopac_config = self._load_config('sinopac.json')
+        # self.fubon_config = self._load_config('fubon.json')
+        self.trade_api_config = self._load_config('trade_api.json')
+        self.portfolio_path_config = self._load_config('portfolio_path.json')
 
     def _load_config(self, file_name: str) -> dict:
         """

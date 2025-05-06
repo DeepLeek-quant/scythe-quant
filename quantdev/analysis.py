@@ -376,7 +376,7 @@ def calc_max_ir_weights(ic_df:pd.DataFrame, window:int=4, neg_weight:bool=False)
     
     return weights
 
-def calc_max_ic_weights(ic_df: pd.DataFrame, window: int = 4, neg_weight: bool = False) -> pd.DataFrame:
+def calc_max_ic_weights(ic_df: pd.DataFrame, window:int=4, neg_weight: bool=False) -> pd.DataFrame:
     """
     計算「最大化加權IC」的解析解權重：
     w = V^(-1) * mean(IC)，再做歸一化

@@ -1,5 +1,5 @@
 {
     "tej_token": "your_tej_token",
-    "finmind_token": "your_finmind_token",
+    "datasets_path": "your_datasets_path",
     "databank_path": "your_databank_path"
 }
