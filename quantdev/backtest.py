@@ -64,9 +64,10 @@ import numpy as np
 import panel as pn
 import logging
 
+from .analysis import calc_metrics, calc_style, calc_maemfe, calc_liquidity, calc_relative_return, calc_ic, calc_ir
 from .data import DatasetsHandler
 from .plot import *
-from .analysis import calc_metrics, calc_style, calc_maemfe, calc_liquidity, calc_relative_return, calc_ic, calc_ir
+from .utils import *
 
 pd.set_option('future.no_silent_downcasting', True)
 import warnings
@@ -428,8 +429,16 @@ def backtesting(
         if (fee_discount*fee+tax) != 0:
             idx = exp_returns.index.get_indexer(rebalance_dates)
             col = exp_returns.columns.get_indexer(data.columns)
-            exp_returns.iloc[idx, col] -= (fee*fee_discount + slippage) # buy
-            exp_returns.iloc[(idx-1)[1:], col] -= (fee*fee_discount + tax + slippage) # sell
+            exp_returns.iloc[idx, col] = np.where(
+                exp_returns.iloc[idx, col].notna(),
+                exp_returns.iloc[idx, col] - (fee*fee_discount + slippage),
+                exp_returns.iloc[idx, col]
+            ) # buy
+            exp_returns.iloc[(idx-1)[1:], col] = np.where(
+                exp_returns.iloc[(idx-1)[1:], col].notna(),
+                exp_returns.iloc[(idx-1)[1:], col] - (fee*fee_discount + tax + slippage),
+                exp_returns.iloc[(idx-1)[1:], col]
+            ) # sell
 
     buy_list, portfolio_df = get_portfolio(
         data=data, 
@@ -733,12 +742,15 @@ def calc_factor_quantiles_return(factor:pd.DataFrame, rebalance:str='QR', group:
 # factor
 def factor_analysis(
     ranked_factor:pd.DataFrame, 
-    rebalance:str='QR', group:int=10, 
+    rebalance:str='QR', 
+    group:int=10, 
     benchmark_id:str='TRTEJ',
     exp_returns:pd.DataFrame=None,
+    start:str=None,
+    end:str=None,
 )-> 'FactorReport':
     if exp_returns is None:
-        exp_returns = DatasetsHandler().read_dataset('exp_returns')
+        exp_returns = DatasetsHandler().read_dataset('exp_returns', filter_date='t_date', start=start, end=end)
 
     quantiles_returns = pd.DataFrame(
         calc_factor_quantiles_return(ranked_factor, rebalance=rebalance, group=group, exp_returns=exp_returns)

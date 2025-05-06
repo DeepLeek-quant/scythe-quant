@@ -3,7 +3,7 @@ import logging
 
 from .utils import *
 
-__version__ = '2.0.0'
+__version__ = '2.0.1'
 
 # Set up logging
 logging.basicConfig(

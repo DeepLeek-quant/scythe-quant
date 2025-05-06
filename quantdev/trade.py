@@ -16,7 +16,7 @@ import shioaji as sj
 
 from .backtest import Report
 from .config import config
-
+from .utils import *
 SJ_LOG_PATH = config.trade_api_config.get('sinopac_api').get('sj_log_path')
 quote_api = RestClient(api_key=config.trade_api_config.get('fugle_marketdata').get('fugle_api_key'))
 

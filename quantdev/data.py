@@ -13,6 +13,7 @@ import re
 
 # config
 from .config import config
+from .utils import *
 
 from warnings import simplefilter
 simplefilter(action="ignore", category=pd.errors.PerformanceWarning)
@@ -579,13 +580,14 @@ class ProcessedHandler(DataUtils):
         return self.write_dataset(dataset='fin_data_ath', df=df[['date', 'stock_id', 'release_date', *[col for col in df.columns if col.endswith('_ATH')], 't_date']])
 
     def update_monthly_rev_lag(self, lag_period:int=24):
+        target_cols = ['單月營收(千元)', '單月營收成長率％']
         lag_columns = {
-            f'單月營收(千元)_lag{i}': lambda df, i=i: df.groupby('stock_id')['單月營收(千元)'].shift(i)
-            for i in range(1, lag_period+1)
+            f'{col}_lag{i}': lambda df, i=i, col=col: df.groupby('stock_id')[col].shift(i)
+            for i in range(1, lag_period+1) for col in target_cols
         }
         df = self.read_dataset(
                 dataset='monthly_rev', 
-                columns=['date', 'stock_id', '單月營收(千元)', 't_date'])\
+                columns=['date', 'stock_id', *target_cols, 't_date'])\
             .assign(**lag_columns)
         lag_cols = [col for col in df.columns if 'lag' in col]
         df = df[['date', 'stock_id', *lag_cols, 't_date']].dropna(subset=lag_cols, how='all')
