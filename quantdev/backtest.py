@@ -418,7 +418,7 @@ def backtesting(
         - 投資組合權重預設為等權重配置，除非提供自定義權重
         - 若無持有期間限制，則持有至下次再平衡日
     """
-    rebalance_dates = get_rebalance_date(rebalance, start=start, end=end) if rebalance != 'daytrade' else None
+    rebalance_dates = get_rebalance_date(rebalance) if rebalance != 'daytrade' else None
     if rebalance == 'daytrade':
         exp_returns = DatasetsHandler().read_dataset('exp_returns_daytrade', filter_date='t_date', start=start, end=end) if exp_returns is None else exp_returns
         exp_returns *= longshort

@@ -406,8 +406,8 @@ def plot_style(betas:pd.DataFrame)-> go.Figure:
 def plot_liquidity(lq_df:pd.DataFrame, money_threshold:int=500000, volume_threshold:int=50)-> go.Figure:
 
     # lqd_heatmap
-    low_money = (lq_df['成交金額(元)'] < money_threshold).mean()
-    low_volume = (lq_df['成交量(千股)'] < volume_threshold).mean()
+    low_money = (lq_df['成交金額'] < money_threshold).mean()
+    low_volume = (lq_df['成交量'] < volume_threshold).mean()
     全額交割 = (lq_df['是否全額交割']=='Y').mean()
     注意股票 = (lq_df['是否為注意股票']=='Y').mean()
     處置股票 = (lq_df['是否為處置股票']=='Y').mean()
@@ -433,7 +433,7 @@ def plot_liquidity(lq_df:pd.DataFrame, money_threshold:int=500000, volume_thresh
         'principle': [numerize(p) for p in principles], # Format principle for better readability
         'safety_capacity': [
             (buys_lqd.assign(
-            capacity=lambda x: x['成交金額(元)'] / vol_ratio - (principle / x.groupby('buy_date')['stock_id'].transform('nunique')),
+            capacity=lambda x: x['成交金額'] / vol_ratio - (principle / x.groupby('buy_date')['stock_id'].transform('nunique')),
             spill=lambda x: np.where(x['capacity'] < 0, x['capacity'], 0)
             )
             .groupby('buy_date')['spill'].sum() * -1 / principle).mean()
@@ -451,7 +451,7 @@ def plot_liquidity(lq_df:pd.DataFrame, money_threshold:int=500000, volume_thresh
         labels.append(f'> {numerize(thresholds[-1])}')
         
         return data\
-            .assign(money_threshold=pd.cut(data['成交金額(元)'], [0, *thresholds, np.inf], labels=labels))\
+            .assign(money_threshold=pd.cut(data['成交金額'], [0, *thresholds, np.inf], labels=labels))\
             .groupby('money_threshold', observed=True)['stock_id']\
             .count()\
             .pipe(lambda x: (x / x.sum()))
