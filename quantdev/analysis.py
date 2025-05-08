@@ -87,9 +87,15 @@ def resample_returns(returns: pd.DataFrame, t: Literal['MR', 'QR', 'W', 'M', 'Q'
 
         def cum_rtns(group):
             all_na_cols = group.isna().all()
-            result = (group + 1).prod() - 1    
-            result[all_na_cols] = np.nan
-            return result
+            if (len(group.shape)>1) and (group.shape[1]>1):
+                result = (group + 1).prod() - 1    
+                result[all_na_cols] = np.nan
+                return result
+            else:
+                if all_na_cols:
+                    return np.nan
+                else:
+                    return (group + 1).prod() - 1
 
         return returns\
             .groupby(dates[dates.searchsorted(returns.index)], group_keys=True)\

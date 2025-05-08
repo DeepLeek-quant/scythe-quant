@@ -403,27 +403,25 @@ def plot_style(betas:pd.DataFrame)-> go.Figure:
 
     return fig
 
-def plot_liquidity(lq_df:pd.DataFrame, money_threshold:int=500000, volume_threshold:int=50)-> go.Figure:
+def plot_liquidity(lq_df:pd.DataFrame, volume_threshold:int=50)-> go.Figure:
 
     # lqd_heatmap
-    low_money = (lq_df['成交金額'] < money_threshold).mean()
-    low_volume = (lq_df['成交量'] < volume_threshold).mean()
-    全額交割 = (lq_df['是否全額交割']=='Y').mean()
-    注意股票 = (lq_df['是否為注意股票']=='Y').mean()
-    處置股票 = (lq_df['是否為處置股票']=='Y').mean()
-    buy_limit = ((lq_df['date']==lq_df['sell_date'])&(lq_df['漲跌停註記'] == '-')).mean()
-    sell_limit = ((lq_df['date']==lq_df['buy_date'])&(lq_df['漲跌停註記'] == '+')).mean()
-    lqd_heatmap = pd.DataFrame({
-        f'money < {numerize(money_threshold)}': [low_money],
-        f'volume < {numerize(volume_threshold)}': [low_volume],
-        '全額交割': [全額交割],
-        '注意股票': [注意股票],
-        '處置股票': [處置股票],
-        'buy limit up': [buy_limit],
-        'sell limit down': [sell_limit],
-        },
-        index=[0],
-    )
+    full_settle = (lq_df['是否全額交割']=='Y')
+    notice = (lq_df['是否為注意股票']=='Y')
+    disposal = (lq_df['是否為處置股票']=='Y')
+    buy_limit = ((lq_df['date']==lq_df['sell_date'])&(lq_df['漲跌停註記'] == '-'))
+    sell_limit = ((lq_df['date']==lq_df['buy_date'])&(lq_df['漲跌停註記'] == '+'))
+    low_volume = (lq_df['成交量']<50)
+    low_money = (lq_df['成交金額']<5e5)
+    lqd_timeline = pd.concat([
+        lq_df[low_money].groupby('date')['stock_id'].count().rename(f'成交量<50萬: {low_money.mean():.2%}'),
+        lq_df[low_volume].groupby('date')['stock_id'].count().rename(f'成交量<50張: {low_volume.mean():.2%}'),
+        lq_df[full_settle].groupby('date')['stock_id'].count().rename(f'全額交割股: {full_settle.mean():.2%}'),
+        lq_df[notice].groupby('date')['stock_id'].count().rename(f'注意股: {notice.mean():.2%}'),
+        lq_df[disposal].groupby('date')['stock_id'].count().rename(f'處置股: {disposal.mean():.2%}'),
+        lq_df[buy_limit].groupby('date')['stock_id'].count().rename(f'買在漲停: {buy_limit.mean():.2%}'),
+        lq_df[sell_limit].groupby('date')['stock_id'].count().rename(f'賣在跌停: {sell_limit.mean():.2%}'),
+    ], axis=1).fillna(0)
 
     # safety capacity
     principles = [500000, 1000000, 5000000, 10000000, 50000000, 100000000]
@@ -472,21 +470,20 @@ def plot_liquidity(lq_df:pd.DataFrame, money_threshold:int=500000, volume_thresh
         horizontal_spacing=0.1,
         )
 
-    # lqd_heatmap
-    fig.add_trace(go.Heatmap(
-        z=lqd_heatmap.loc[0].values.reshape(-1, 1), 
-        x=lqd_heatmap.columns.values, 
-        y=[''], 
-        text = lqd_heatmap.loc[0].apply(lambda x: f"{x:.2%}").values.reshape(1, -1),
-        texttemplate="%{text}",
-        transpose=True,
-        textfont=dict(size=10),
-        colorscale = 'Plotly3',
-        showscale = False,
-        zmin=0,
-        zmax=0.1,
-    ),
-    row=1, col=1)
+    # lqd timeline
+    colors = sample_colorscale('Plotly3', [n/(lqd_timeline.shape[1]) for n in range(lqd_timeline.shape[1])])
+    color_scale = dict(zip(lqd_timeline.columns, colors))
+
+    for col in lqd_timeline.columns:
+        fig.add_trace(go.Scatter(
+            x=lqd_timeline.index,
+            y=lqd_timeline[col],
+            mode='lines',
+            # line=dict(width=1), 
+            line=dict(color=color_scale.get(col), width=1.5),
+            name=col,
+        ),
+        row=1, col=1)
 
     # safety capacity
     fig.add_trace(go.Bar(
@@ -507,6 +504,7 @@ def plot_liquidity(lq_df:pd.DataFrame, money_threshold:int=500000, volume_thresh
         y=ee_volume.buy.values,
         name='Entry',
         marker_color=fig_param['colors']['Bright Cyan'], 
+        showlegend=False,
     ),
     row=2, col=2)
     fig.add_trace(go.Bar(
@@ -514,32 +512,33 @@ def plot_liquidity(lq_df:pd.DataFrame, money_threshold:int=500000, volume_thresh
         y=ee_volume.sell.values,
         name='Exit',
         marker_color=fig_param['colors']['Bright Red'], 
+        showlegend=False,
     ),
     row=2, col=2)
 
     # adjust axes
-    fig.update_xaxes(tickfont=dict(size=11), side='top', row=1, col=1)
-    fig.update_xaxes(tickfont=dict(size=11), title_text='total capital', row=2, col=1)
-    fig.update_xaxes(tickfont=dict(size=11), title_text="trading money", row=2, col=2)
+    fig.update_xaxes(tickfont=dict(size=11), row=1, col=1)
+    fig.update_xaxes(tickfont=dict(size=11), title_text='total capital', title_font=dict(size=12), row=2, col=1)
+    fig.update_xaxes(tickfont=dict(size=11), title_text="trading money", title_font=dict(size=12), row=2, col=2)
 
-    fig.update_yaxes(showticklabels=False, row=1, col=1)
+    fig.update_yaxes(tickformat=".0f", title_text='size', title_font=dict(size=12), row=1, col=1)
     fig.update_yaxes(tickformat=".0%", row=2, col=1)
     fig.update_yaxes(tickformat=".0%", row=2, col=2)
 
     # add titles
-    fig.add_annotation(text=_bold(f'Liquidity Heatmap'), x=0, y = 1, yshift=50, xref="x domain", yref="y domain", showarrow=False, row=1, col=1)
+    fig.add_annotation(text=_bold(f'Liquidity Heatmap'), x=0, y = 1, yshift=40, xref="x domain", yref="y domain", showarrow=False, row=1, col=1)
     fig.add_annotation(text=_bold(f'Safety Capacity'), align='left', x=0, y = 1, yshift=50, xref="x domain", yref="y domain", showarrow=False, row=2, col=1)
     fig.add_annotation(text=f'(Ratio of buy money ≤ 1/{vol_ratio} of volume for all trades)', align='left', x=0, y = 1, yshift=30, xref="x domain", yref="y domain", showarrow=False, font=dict(size=12), row=2, col=1)
     fig.add_annotation(text=_bold(f'Trading Money at Entry/Exit'), x=0, y = 1, yshift=50, xref="x domain", yref="y domain", showarrow=False, row=2, col=2)
 
     # position
-    fig.update_yaxes(domain=[0.87, 0.92], row=1, col=1)
-    fig.update_yaxes(domain=[0.2, 0.65], row=2, col=1, range=[0, 1])
-    fig.update_yaxes(domain=[0.2, 0.65], row=2, col=2, dtick=0.1)
+    fig.update_yaxes(domain=[0.6, 0.97], row=1, col=1)
+    fig.update_yaxes(domain=[0.1, 0.4], row=2, col=1, range=[0, 1])
+    fig.update_yaxes(domain=[0.1, 0.4], row=2, col=2, dtick=0.1)
 
     # laoyout
     fig.update_layout(
-        legend=dict(x=0.55, y=0.65, xanchor='left', yanchor='top', bgcolor='rgba(0,0,0,0)', traceorder='normal'),
+        legend=dict(x=0, y=1, xanchor='left', yanchor='top', bgcolor='rgba(0,0,0,0)', groupclick='togglegroup', itemclick='toggleothers'),
         coloraxis1_showscale=False,
         coloraxis1=dict(colorscale='Plasma'),
         width=fig_param['size']['w'],
