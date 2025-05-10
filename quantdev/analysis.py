@@ -439,13 +439,12 @@ def combine_factors(
             .droplevel(0, axis=1)
     
     # methods
-    from quantdev.backtest import get_factor
     if method == 'EW':
-        return get_factor(sum(factors) / len(factors), universe=universe)
+        return (sum(factors) / len(factors)).to_factor(universe=universe)
     elif method.startswith('HR'):
         # Calculate factor weights using historical regression
-        from quantdev.backtest import _get_rebalance_date
-        factors_df = pd.concat([f[f.index.isin(_get_rebalance_date(rebalance))].stack() for f in factors], axis=1).dropna()
+        from quantdev.backtest import get_rebalance_date
+        factors_df = pd.concat([f[f.index.isin(get_rebalance_date(rebalance))].stack() for f in factors], axis=1).dropna()
         weights = calc_reg_returns(factors_df, rebalance)
         
         # Apply rolling mean or exponential weighted mean based on method
@@ -456,10 +455,10 @@ def combine_factors(
         
         # Combine factors with weights
         combined_factor = calc_weighted_factors(factors_df, weights)
-        return get_factor(combined_factor, universe=universe)
+        return combined_factor.to_factor(universe=universe)
     elif (method.endswith('IC')) or (method.endswith('IR')):
-        from quantdev.backtest import _get_rebalance_date
-        factors_df = pd.concat([f[f.index.isin(_get_rebalance_date(rebalance))].stack() for f in factors], axis=1).dropna()
+        from quantdev.backtest import get_rebalance_date
+        factors_df = pd.concat([f[f.index.isin(get_rebalance_date(rebalance))].stack() for f in factors], axis=1).dropna()
         
         from quantdev.data import DatasetsHandler
         exp_returns = DatasetsHandler().read_dataset('exp_returns')
@@ -475,4 +474,4 @@ def combine_factors(
         else:
             raise ValueError(f"Invalid method: {method}")
         combined_factor = calc_weighted_factors(factors_df, weights)
-        return get_factor(combined_factor, universe=universe)
+        return combined_factor.to_factor(universe=universe)

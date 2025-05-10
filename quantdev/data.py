@@ -15,8 +15,8 @@ import re
 from .config import config
 from .utils import *
 
-from warnings import simplefilter
-simplefilter(action="ignore", category=pd.errors.PerformanceWarning)
+import warnings
+warnings.filterwarnings('ignore', category=pd.errors.PerformanceWarning)
 pd.set_option('future.no_silent_downcasting', True)
 
 class DataUtils():
@@ -539,7 +539,7 @@ class ProcessedHandler(DataUtils):
         }
 
     # financial data
-    def update_fin_data_lag(self, lag_period:int=8):
+    def update_fin_data_lag(self, lag_period:int=12):
         ignore_cols = ['期間別', '序號', '季別', '合併(Y/N)', '幣別', '產業別', 'date', 'release_date', 'stock_id', 't_date', 'insert_time']
         
         
@@ -579,7 +579,7 @@ class ProcessedHandler(DataUtils):
         
         return self.write_dataset(dataset='fin_data_ath', df=df[['date', 'stock_id', 'release_date', *[col for col in df.columns if col.endswith('_ATH')], 't_date']])
 
-    def update_monthly_rev_lag(self, lag_period:int=24):
+    def update_monthly_rev_lag(self, lag_period:int=36):
         target_cols = ['單月營收(千元)', '單月營收成長率％']
         lag_columns = {
             f'{col}_lag{i}': lambda df, i=i, col=col: df.groupby('stock_id')[col].shift(i)

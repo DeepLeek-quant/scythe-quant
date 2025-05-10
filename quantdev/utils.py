@@ -99,7 +99,7 @@ pd.DataFrame.smallest = lambda self, n: smallest(self, n)
 pd.DataFrame.to_factor = lambda self, method='Z', remove_outlier='MAD', universe=None: to_factor(self, method, remove_outlier, universe)
 pd.DataFrame.to_rank = lambda self, asc=True, universe=None: to_rank(self, asc, universe)
 
-def add_dfs(x_list:list[pd.DataFrame]) -> pd.DataFrame:
+def sum_dfs(x_list:list[pd.DataFrame]) -> pd.DataFrame:
     if len(x_list)==2:
         return x_list[0] + x_list[1]
     else:
@@ -116,3 +116,20 @@ def var_dfs(x_list:list[pd.DataFrame]) -> pd.DataFrame:
 
 def cov_dfs(x_list:list[pd.DataFrame]) -> pd.DataFrame:
     return pd.concat(x_list, keys=range(len(x_list))).groupby(level=1).cov()
+
+def calc_surprise(item: str, lag:int=12, std_window:int=24, method: Literal['std', 'drift']='drift'):
+    try:
+        db
+    except:
+        from .data import Databank
+        db = Databank()
+    diffs = [db[f'{item}_lag{i}' if i != 0 else item].fillna(0)-db[f'{item}_lag{i+lag}'].fillna(0) for i in range(0, std_window)]
+    seasonal_diff = db[item]-db[f'{item}_lag{lag}']
+    
+    if method == 'std':
+        surprise = seasonal_diff / std_dfs(diffs)
+    elif method == 'drift':
+        surprise = (seasonal_diff - mean_dfs(diffs)) / std_dfs(diffs)
+        
+    return surprise\
+        .replace([np.inf, -np.inf], np.nan)
