@@ -379,7 +379,7 @@ def backtesting(
     weights:pd.DataFrame=None, signal_shift:int=0, hold_period:int=None, weight_limit:float=None,
     fee:float=0.001425, fee_discount:float=0.25, tax:float=0.003, slippage:float=0.001,
     stop_loss:Union[float, pd.DataFrame]=None, stop_profit:Union[float, pd.DataFrame]=None, stop_at:Literal['intraday', 'next_day']='next_day', 
-    start:Union[int, str]=None, end:Union[int, str]=None, 
+    start:Union[int, str]='2006-01-01', end:Union[int, str]=None, 
     benchmark_id:str='TRTEJ', report:bool=False,
     exp_returns:pd.DataFrame=None,
     **kwargs,
@@ -746,7 +746,7 @@ def factor_analysis(
     group:int=10, 
     benchmark_id:str='TRTEJ',
     exp_returns:pd.DataFrame=None,
-    start:str=None,
+    start:str='2006-01-01',
     end:str=None,
 )-> 'FactorReport':
     if exp_returns is None:

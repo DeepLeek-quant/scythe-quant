@@ -530,12 +530,16 @@ class ProcessedHandler(DataUtils):
         self.processed_datasets = {
             'fin_data_lag':{'source':'fin_data', 'func':self.update_fin_data_lag},
             'fin_data_ath':{'source':'fin_data', 'func':self.update_fin_data_ath},
+            'fin_data_ind_avg':{'source':'fin_data', 'func':self.update_fin_data_ind_avg},
+            'fin_data_ind_avg_lag':{'source':'fin_data_ind_avg', 'func':self.update_fin_data_ind_avg_lag},
             'monthly_rev_lag':{'source':'monthly_rev', 'func':self.update_monthly_rev_lag},
             'monthly_rev_ath':{'source':'monthly_rev', 'func':self.update_monthly_rev_ath},
+            'monthly_rev_ind_avg':{'source':'monthly_rev', 'func':self.update_monthly_rev_ind_avg},
             'exp_returns':{'source':'trading_data', 'func':self.update_exp_returns}, 
             'exp_returns_daytrade':{'source':'trading_data', 'func':self.update_exp_returns_daytrade},
             'trading_activity_w_pct':{'source':'trading_activity_w', 'func':self.update_trading_activity_w_pct},
             'trading_activity_w_pct_lag':{'source':'trading_activity_w_pct', 'func':self.update_trading_activity_w_pct_lag},
+            'trading_data_ind_avg':{'source':'trading_data', 'func':self.update_trading_data_ind_avg},
         }
 
     # financial data
@@ -676,7 +680,90 @@ class ProcessedHandler(DataUtils):
         for v in self.processed_datasets.values():
             v['func']()
 
-     
+    # industry average
+    def update_fin_data_ind_avg(self):
+        industry_data = self.read_dataset('trading_notes', columns=['t_date','stock_id', '主產業別(中)', '子產業別(中)'])\
+            .assign(main_ind = lambda x: x[['主產業別(中)']].apply(lambda x: x.str.split(' ').str[-1]).fillna(''))\
+            .assign(sub_ind = lambda x: x[['子產業別(中)']].apply(lambda x: x.str.split(' ').str[-1]).fillna(''))\
+            [['t_date', 'stock_id', 'main_ind', 'sub_ind']]
+
+        df = self.read_dataset('fin_data')\
+            .merge(industry_data, on=['t_date', 'stock_id'], how='left')
+        
+        ignore_cols = ['期間別', '序號', '季別', '合併(Y/N)', '幣別', '產業別', 'date', 'release_date', 'stock_id', 't_date', 'insert_time']
+        cols = [col for col in self.list_columns('fin_data') if col not in ignore_cols]
+        main_ind_avg_columns = {f'{col}_main_ind_avg': lambda df, col=col: df.groupby(['date', 'main_ind'])[col].transform('mean') for col in cols}
+        sub_ind_avg_columns = {f'{col}_sub_ind_avg': lambda df, col=col: df.groupby(['date', 'sub_ind'])[col].transform('mean') for col in cols}
+
+        df = df.assign(**main_ind_avg_columns, **sub_ind_avg_columns)
+
+        ind_cols = [col for col in df.columns if 'ind_avg' in col]
+        df = df[['date', 'stock_id', 'release_date', *ind_cols, 't_date']].dropna(subset=ind_cols, how='all')
+
+        return self.write_dataset(dataset='fin_data_ind_avg', df=df)
+
+    def update_fin_data_ind_avg_lag(self, lag_period:int=12):
+        ignore_cols = ['期間別', '序號', '季別', '合併(Y/N)', '幣別', '產業別', 'date', 'release_date', 'stock_id', 't_date', 'insert_time']
+        
+        lag_columns = {
+            f'{col}_lag{i}': lambda df, i=i, col=col: df.groupby('stock_id')[col].shift(i)
+            for i in range(1, lag_period+1) for col in [col for col in self.list_columns('fin_data_ind_avg') if col not in ignore_cols]
+        }
+
+        df = self.read_dataset('fin_data_ind_avg')\
+            .assign(**lag_columns)
+        lag_cols = [col for col in df.columns if 'lag' in col]
+        df = df[['date', 'stock_id', *lag_cols, 't_date']].dropna(subset=lag_cols, how='all')
+        return self.write_dataset(dataset='fin_data_ind_avg_lag', df=df)
+
+    def update_monthly_rev_ind_avg(self):
+        industry_data = self.read_dataset('trading_notes', columns=['t_date','stock_id', '主產業別(中)', '子產業別(中)'])\
+            .assign(main_ind = lambda x: x[['主產業別(中)']].apply(lambda x: x.str.split(' ').str[-1]).fillna(''))\
+            .assign(sub_ind = lambda x: x[['子產業別(中)']].apply(lambda x: x.str.split(' ').str[-1]).fillna(''))\
+            [['t_date', 'stock_id', 'main_ind', 'sub_ind']]
+
+        target_cols = ['單月營收(千元)', '單月營收成長率％']
+        main_ind_avg_columns = {f'{col}_main_ind_avg': lambda df, col=col: df.groupby(['date', 'main_ind'])[col].transform('mean') for col in target_cols}
+        sub_ind_avg_columns = {f'{col}_sub_ind_avg': lambda df, col=col: df.groupby(['date', 'sub_ind'])[col].transform('mean') for col in target_cols}
+        df = self.read_dataset(
+            dataset='monthly_rev', 
+            columns=['date', 'stock_id', *target_cols, 't_date'])\
+        .merge(industry_data, on=['t_date', 'stock_id'], how='left')\
+        .assign(**main_ind_avg_columns, **sub_ind_avg_columns)
+        
+        
+        ind_cols = [col for col in df.columns if 'ind_avg' in col]
+        df = df[['date', 'stock_id', *ind_cols, 't_date']].dropna(subset=ind_cols, how='all')
+        return self.write_dataset(dataset='monthly_rev_ind_avg', df=df)
+
+    def update_trading_data_ind_avg(self):
+        target_cols = [
+            '報酬率',
+            '周轉率',
+            '本益比',
+            '股價淨值比',
+            '股利殖利率',
+            '現金股利率(TEJ)',
+            '本益比(TEJ)',
+            '股價淨值比(TEJ)',
+            '股價營收比(TEJ)',
+        ]
+        industry_data = self.read_dataset('trading_notes', columns=['t_date','stock_id', '主產業別(中)', '子產業別(中)'])\
+            .assign(main_ind = lambda x: x[['主產業別(中)']].apply(lambda x: x.str.split(' ').str[-1]).fillna(''))\
+            .assign(sub_ind = lambda x: x[['子產業別(中)']].apply(lambda x: x.str.split(' ').str[-1]).fillna(''))\
+            [['t_date', 'stock_id', 'main_ind', 'sub_ind']]
+        main_ind_avg_columns = {f'{col}_main_ind_avg': lambda df, col=col: df.groupby(['date', 'main_ind'])[col].transform('mean') for col in target_cols}
+        sub_ind_avg_columns = {f'{col}_sub_ind_avg': lambda df, col=col: df.groupby(['date', 'sub_ind'])[col].transform('mean') for col in target_cols}
+        
+        df = self.read_dataset(dataset='trading_data', columns=['date', 'stock_id', *target_cols, 't_date'])\
+            .merge(industry_data, on=['t_date', 'stock_id'], how='left')\
+            .assign(**main_ind_avg_columns, **sub_ind_avg_columns)
+
+        ind_cols = [col for col in df.columns if 'ind_avg' in col]
+        df = df[['date', 'stock_id', *ind_cols, 't_date']].dropna(subset=ind_cols, how='all')
+        return self.write_dataset(dataset='trading_data_ind_avg', df=df)
+            
+
 class FactorModelHandler(DataUtils):
     def __init__(self):
         super().__init__()
