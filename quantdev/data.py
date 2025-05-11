@@ -663,7 +663,7 @@ class ProcessedHandler(DataUtils):
         
         return self.write_dataset(dataset='trading_activity_w_pct', df=df)
 
-    def update_trading_activity_w_pct_lag(self, lag_period:int=12):
+    def update_trading_activity_w_pct_lag(self, lag_period:int=24):
         cols_to_lag = ['未滿400張_pct', '超過400張_pct', '超過600張_pct', '超過800張_pct', '超過1000張_pct']
         lag_columns = {
             f'{col}_lag{i}': lambda df, i=i, col=col: df.groupby('stock_id')[col].shift(i)
