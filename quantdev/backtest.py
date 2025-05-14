@@ -187,11 +187,8 @@ def get_rebalance_date(rebalance:Literal['D', 'MR', 'QR', 'W', 'M', 'Q', 'Y'], s
     t_date = DatasetsHandler().read_dataset('mkt_calendar', columns=['date'], filters=[('休市原因中文說明(人工建置)','=','')], start=start, end=end).rename(columns={'date':'t_date'})
     start_date = t_date['t_date'].min()
     end_date = t_date['t_date'].max()
-    
 
-    if rebalance == 'D':
-        return t_date[(t_date['t_date'] <= end_date)]['t_date'].to_list()
-    elif rebalance.startswith('W'):
+    if rebalance.startswith('W'):
         if len(rebalance.split('-')) == 1:
             r_date = pd.DataFrame(pd.date_range(start=start_date, end=end_date, freq='W-MON'), columns=['r_date'])
         else:
@@ -226,9 +223,8 @@ def get_rebalance_date(rebalance:Literal['D', 'MR', 'QR', 'W', 'M', 'Q', 'Y'], s
     elif rebalance == 'Y':
         r_date = pd.DataFrame(pd.date_range(start=start_date, end=end_date, freq='YS'), columns=['r_date'])
     else:
-        raise ValueError("Invalid frequency. Allowed values are 'QR', 'W', 'M', 'Q', 'Y'.")
+        raise ValueError("Invalid frequency. Allowed values are 'W', 'MR, 'QR', 'M', 'Q', 'Y'.")
 
-    
     r_date['r_date'] = r_date['r_date'].astype('datetime64[ms]')
     
     return pd.merge_asof(
@@ -275,14 +271,9 @@ def get_portfolio(
     """
     
     if rebalance_dates is None:
-        portfolio = data.astype(int)
-        if weights:
-            portfolio = portfolio * weights
-        portfolio = portfolio.apply(lambda x: x / x.sum(), axis=1)
-        return portfolio, portfolio
-    
-    # rebalance
-    buy_list =  data[data.index.isin(rebalance_dates)]
+        buy_list = data
+    else:
+        buy_list =  data[data.index.isin(rebalance_dates)]
 
     # filter 漲跌停
     # buy_list = buy_list[buy_list.apply(lambda x: x.isin([0, 1]).all())]
@@ -301,7 +292,7 @@ def get_portfolio(
             .fillna(0)
     else:
         portfolio = portfolio\
-            .reindex(index = data.index)\
+            .reindex(index = exp_returns.index)\
             .shift(signal_shift)\
             .ffill(limit=hold_period)\
             .fillna(0)
@@ -374,7 +365,7 @@ def stop_loss_or_profit(buy_list:pd.DataFrame, portfolio_df:pd.DataFrame, exp_re
 
 def backtesting(
     data:pd.DataFrame, 
-    rebalance:Literal['MR', 'QR', 'W', 'M', 'Q', 'Y', 'daytrade']='QR', 
+    rebalance:Literal['MR', 'QR', 'W', 'M', 'Q', 'Y', 'daytrade', 'event']='QR', 
     longshort:Union[Literal[1], Literal[-1]]=1, 
     weights:pd.DataFrame=None, signal_shift:int=0, hold_period:int=None, weight_limit:float=None,
     fee:float=0.001425, fee_discount:float=0.25, tax:float=0.003, slippage:float=0.001,
@@ -418,27 +409,17 @@ def backtesting(
         - 投資組合權重預設為等權重配置，除非提供自定義權重
         - 若無持有期間限制，則持有至下次再平衡日
     """
-    rebalance_dates = get_rebalance_date(rebalance) if rebalance != 'daytrade' else None
-    if rebalance == 'daytrade':
+    if rebalance in ['daytrade', 'DT']:
         exp_returns = DatasetsHandler().read_dataset('exp_returns_daytrade', filter_date='t_date', start=start, end=end) if exp_returns is None else exp_returns
-        exp_returns *= longshort
-        exp_returns -= ((fee*fee_discount)*2 + tax/2 + slippage*2)
+        rebalance_dates = None
+    if rebalance == 'event':
+        exp_returns = DatasetsHandler().read_dataset('exp_returns', filter_date='t_date', start=start, end=end) if exp_returns is None else exp_returns
+        rebalance_dates = None
+        hold_period = 1 if hold_period is None else hold_period
     else:
         exp_returns = DatasetsHandler().read_dataset('exp_returns', filter_date='t_date', start=start, end=end) if exp_returns is None else exp_returns
-        exp_returns *= longshort
-        if (fee_discount*fee+tax) != 0:
-            idx = exp_returns.index.get_indexer(rebalance_dates)
-            col = exp_returns.columns.get_indexer(data.columns)
-            exp_returns.iloc[idx, col] = np.where(
-                exp_returns.iloc[idx, col].notna(),
-                exp_returns.iloc[idx, col] - (fee*fee_discount + slippage),
-                exp_returns.iloc[idx, col]
-            ) # buy
-            exp_returns.iloc[(idx-1)[1:], col] = np.where(
-                exp_returns.iloc[(idx-1)[1:], col].notna(),
-                exp_returns.iloc[(idx-1)[1:], col] - (fee*fee_discount + tax + slippage),
-                exp_returns.iloc[(idx-1)[1:], col]
-            ) # sell
+        rebalance_dates = get_rebalance_date(rebalance)
+    exp_returns *= longshort
 
     buy_list, portfolio_df = get_portfolio(
         data=data, 
@@ -456,6 +437,37 @@ def backtesting(
     if stop_profit is not None:
         portfolio_df = stop_loss_or_profit(buy_list, portfolio_df, exp_returns, pct=stop_profit, stop_at=stop_at).infer_objects(copy=False).replace({np.nan: 0})
 
+    # trading cost
+    if (fee_discount*fee+tax+slippage) != 0:
+        if rebalance in ['daytrade', 'DT']:
+            exp_returns -= ((fee*fee_discount)*2 + tax/2 + slippage*2)
+        elif rebalance == 'event':
+            
+            buy = ((portfolio_df.shift(1).fillna(0) == 0) & (portfolio_df != 0)).reindex(columns=exp_returns.columns, fill_value=False)
+            sell = ((portfolio_df.shift(-1).fillna(0) == 0) & (portfolio_df != 0)).reindex(columns=exp_returns.columns, fill_value=False)
+            exp_returns.iloc[:,:] = np.where(
+                buy,
+                exp_returns - (fee*fee_discount+slippage),
+                exp_returns
+            ) # buy
+            exp_returns.iloc[:,:] = np.where(
+                sell,
+                exp_returns - (fee*fee_discount+tax+slippage),
+                exp_returns
+            ) # sell
+        else:
+            idx = exp_returns.index.get_indexer(rebalance_dates)
+            col = exp_returns.columns.get_indexer(data.columns)
+            exp_returns.iloc[idx, col] = np.where(
+                exp_returns.iloc[idx, col].notna(),
+                exp_returns.iloc[idx, col] - (fee*fee_discount+slippage),
+                exp_returns.iloc[idx, col]
+            ) # buy
+            exp_returns.iloc[(idx-1)[1:], col] = np.where(
+                exp_returns.iloc[(idx-1)[1:], col].notna(),
+                exp_returns.iloc[(idx-1)[1:], col] - (fee*fee_discount+tax+slippage),
+                exp_returns.iloc[(idx-1)[1:], col]
+            ) # sell
 
     if report:
         return Report(
@@ -466,7 +478,7 @@ def backtesting(
             rebalance=rebalance,
         )
     else:
-        return (exp_returns * portfolio_df).sum(axis=1)
+        return (exp_returns * portfolio_df).dropna(how='all').sum(axis=1)
 
 def multi_backtesting(
     reports:dict[str, Union['Report', Tuple['Report', float]]], 
@@ -576,7 +588,7 @@ class Report:
         self.exp_returns = exp_returns
         self.benchmark_id = benchmark_id
         self.rebalance = rebalance
-        self.daily_return = (exp_returns * portfolio_df).sum(axis=1)
+        self.daily_return = (exp_returns * portfolio_df).dropna(how='all').sum(axis=1)
         
         # metrics
         self.metrics = self.calc_metrics()
@@ -608,7 +620,7 @@ class Report:
         return pn.Tabs(*[(k, pn.pane.Plotly(v)) for k, v in plot_funcs.items()])
 
     def calc_metrics(self)-> pd.DataFrame:
-        benchmark_daily_return = self.exp_returns[self.benchmark_id]
+        benchmark_daily_return = self.exp_returns[self.benchmark_id].dropna()
         return calc_metrics(
             pd.concat([
                 self.daily_return.rename('Strategy'), 
@@ -698,7 +710,7 @@ def calc_factor_longshort_return(factor:pd.DataFrame, rebalance:str='QR', group:
     
     exp_returns = kwargs.get('exp_returns')
     if exp_returns is None:
-        exp_returns = DatasetsHandler().read_dataset('exp_returns')
+        exp_returns = DatasetsHandler().read_dataset('exp_returns', start=kwargs.get('start'))
     long = backtesting(factor>=(1-1/group), rebalance=rebalance, exp_returns=exp_returns, fee=0, tax=0)
     short = backtesting(factor<(1/group), rebalance=rebalance, exp_returns=exp_returns, fee=0, tax=0)
 
@@ -731,7 +743,7 @@ def calc_factor_quantiles_return(factor:pd.DataFrame, rebalance:str='QR', group:
     results = {}
     exp_returns = kwargs.get('exp_returns')
     if exp_returns is None:
-        exp_returns = DatasetsHandler().read_dataset('exp_returns')
+        exp_returns = DatasetsHandler().read_dataset('exp_returns', start=kwargs.get('start'))
     
     for q_start, q_end in [(i/group, (i+1)/group) for i in range(group)]:
         cond = (q_start <= factor) & (factor < q_end)

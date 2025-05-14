@@ -11,12 +11,18 @@ import tejapi
 import os
 import re
 
+import warnings
+warnings.filterwarnings('ignore', category=pd.errors.PerformanceWarning)
+try:
+    import IPython
+    IPython.get_ipython().run_line_magic('warnings', 'ignore::pandas.errors.PerformanceWarning')
+except:
+    pass
+
 # config
 from .config import config
 from .utils import *
 
-import warnings
-warnings.filterwarnings('ignore', category=pd.errors.PerformanceWarning)
 pd.set_option('future.no_silent_downcasting', True)
 
 class DataUtils():
@@ -108,6 +114,13 @@ class DataUtils():
         pq.write_table(table, path)
         logging.info(f'Saved {dataset} as parquet from DataFrame')
 
+    def get_t_date(self):
+        t_date = DatasetsHandler().read_dataset('mkt_calendar', columns=['date'], filters=[('休市原因中文說明(人工建置)','=','')])\
+            .rename(columns={'date':'t_date'})
+        nearest_next_t_date = t_date\
+            .loc[lambda x: x['t_date'] > pd.to_datetime(dt.datetime.today().date())]\
+            .iloc[0]['t_date']
+        return t_date.loc[lambda x: x['t_date'] <= nearest_next_t_date]
 
 class TEJHandler(DataUtils):
     def __init__(self):
@@ -546,7 +559,6 @@ class ProcessedHandler(DataUtils):
     def update_fin_data_lag(self, lag_period:int=12):
         ignore_cols = ['期間別', '序號', '季別', '合併(Y/N)', '幣別', '產業別', 'date', 'release_date', 'stock_id', 't_date', 'insert_time']
         
-        
         lag_columns = {
             f'{col}_lag{i}': lambda df, i=i, col=col: df.groupby('stock_id')[col].shift(i)
             for i in range(1, lag_period+1) for col in [col for col in self.list_columns('fin_data') if col not in ignore_cols]
@@ -621,6 +633,7 @@ class ProcessedHandler(DataUtils):
 
     # backtest 
     def update_exp_returns(self):
+        t_date = self.get_t_date()
         df = self.read_dataset('trading_data', columns=['date', 'stock_id', '報酬率'])\
             .assign(rtn=lambda df: df.groupby('stock_id')['報酬率'].shift(-1) /100)\
             [['date', 'stock_id', 'rtn']]\
@@ -628,10 +641,12 @@ class ProcessedHandler(DataUtils):
             .set_index(['t_date', 'stock_id'])\
             .unstack('stock_id')\
             .droplevel(0, axis=1)\
-            .dropna(axis=0, how='all')
+            .dropna(axis=0, how='all')\
+            .reindex(index=t_date['t_date'])
         return self.write_dataset(dataset='exp_returns', df=df)
     
     def update_exp_returns_daytrade(self):
+        t_date = self.get_t_date()
         df = self.read_dataset('trading_data', columns=['date', 'stock_id', '開盤價', '收盤價'])\
             .assign(rtn=lambda df: df['收盤價']/df['開盤價']-1)\
             [['date', 'stock_id', 'rtn']]\
@@ -640,8 +655,28 @@ class ProcessedHandler(DataUtils):
             .unstack('stock_id')\
             .droplevel(0, axis=1)\
             .replace([np.inf, -np.inf], np.nan)\
-            .dropna(axis=0, how='all')
+            .dropna(axis=0, how='all')\
+            .reindex(index=t_date['t_date'])
         return self.write_dataset(dataset='exp_returns_daytrade', df=df)
+
+    def update_exp_returns_overnighttrade(self):
+        # buy at close, sell at open
+        t_date = self.get_t_date()
+        df = self.read_dataset('trading_data', columns=['date', 'stock_id', '收盤價', '開盤價', '調整係數'])\
+            .assign(
+                收盤價_adj=lambda df: df['收盤價']*df['調整係數'], 
+                開盤價_adj=lambda df: df['開盤價']*df['調整係數'], 
+                rtn=lambda df: df.groupby('stock_id')['開盤價_adj'].shift(-1)/df['收盤價_adj']-1
+            )\
+            [['date', 'stock_id', 'rtn']]\
+            .rename(columns={'date':'t_date'})\
+            .set_index(['t_date', 'stock_id'])\
+            .unstack('stock_id')\
+            .droplevel(0, axis=1)\
+            .replace([np.inf, -np.inf], np.nan)\
+            .dropna(axis=0, how='all')\
+            .reindex(index=t_date['t_date'])
+        return self.write_dataset(dataset='exp_returns_overnighttrade', df=df)
     
     # trading_activity_w
     def update_trading_activity_w_pct(self):
@@ -886,14 +921,6 @@ class Databank(DataUtils):
         else:
             return target_datasets[0]
     
-    def get_t_date(self):
-        t_date = DatasetsHandler().read_dataset('mkt_calendar', columns=['date'], filters=[('休市原因中文說明(人工建置)','=','')])\
-            .rename(columns={'date':'t_date'})
-        nearest_next_t_date = t_date\
-            .loc[lambda x: x['t_date'] > pd.to_datetime(dt.datetime.today().date())]\
-            .iloc[0]['t_date']
-        return t_date.loc[lambda x: x['t_date'] <= nearest_next_t_date]
-
     def unstack_data(self, data:pd.DataFrame, t_date:pd.DataFrame=None, has_price:pd.DataFrame=None):
         t_date = self.get_t_date() if t_date is None else t_date
 
@@ -903,7 +930,9 @@ class Databank(DataUtils):
             .unstack('stock_id')\
             .droplevel(0, axis=1)\
             .dropna(axis=0, how='all')\
-            .notna() if has_price is None else has_price
+            .notna()\
+            .reindex(index=t_date['t_date'])\
+            .ffill() if has_price is None else has_price
 
         unstacked_data = data\
             .drop_duplicates(subset=['t_date','stock_id'], keep='last')\

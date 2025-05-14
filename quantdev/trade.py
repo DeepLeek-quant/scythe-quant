@@ -180,7 +180,7 @@ def gen_position_info(report:Report)-> pd.DataFrame:
         .rename(columns={'release_date':'月營收公佈日期'})\
         .set_index('stock_id')
 
-    filters.append(('date', '=', report.exp_returns.index.max()))
+    filters.append(('date', '=', report.exp_returns.dropna(how='all').index.max()))
 
     # market status
     trading_notes = DatasetsHandler().read_dataset('trading_notes', columns=['date', 'stock_id', '是否為注意股票', '是否為處置股票', '是否暫停交易', '是否全額交割', '漲跌停註記', '板塊別(中)', '主產業別(中)'], filters=filters)\
@@ -412,6 +412,7 @@ class SinoPacTrader:
         return self.api.list_positions(self.api.stock_account, unit=sj.constant.Unit.Share)
 
     def list_orders(self) -> List[sj.order.Order]:
+        self._update_status()
         return self.api.list_trades()
 
     def place_order(self, 
@@ -503,13 +504,14 @@ class SinoPacTrader:
     def update_portfolio(self):
         current_portfolio = self.portfolio['portfolio'].copy()
         last_update_time = dt.datetime.strptime(self.portfolio['update_time'], '%Y-%m-%d %H:%M:%S')
-        traded_orders={
-            (order.order.custom_field, order.contract.code):\
-            max(order.contract.unit, 1) * \
-            (-1 if order.order.action=='Sell' else 1) * \
-            sum([deal.quantity for deal in order.status.deals if dt.datetime.fromtimestamp(deal.ts) > last_update_time])
-            for order in self.list_orders()
-        }
+        traded_orders = {}
+        for order in self.list_orders():
+            if (order.order.custom_field, order.contract.code) not in traded_orders:
+                traded_orders[(order.order.custom_field, order.contract.code)] = 0
+            traded_orders[(order.order.custom_field, order.contract.code)] += \
+                order.contract.unit * \
+                (-1 if order.order.action=='Sell' else 1) * \
+                sum([deal.quantity for deal in order.status.deals if dt.datetime.fromtimestamp(deal.ts) > last_update_time])
 
         for k, v in traded_orders.items():
             if not current_portfolio.get(k[0]):
@@ -518,8 +520,9 @@ class SinoPacTrader:
                 current_portfolio[k[0]][k[1]] = v
             else:
                 current_portfolio[k[0]][k[1]] += v
-        self.portfolio['portfolio'] = current_portfolio
-        self.portfolio['update_time'] = dt.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        if self.list_orders() != []:
+            self.portfolio['portfolio'] = current_portfolio
+            self.portfolio['update_time'] = dt.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     
     # trade
     def settlement_is_enough(self, diff_portfolio:Dict[str, List[Position]]) -> bool:
@@ -606,7 +609,6 @@ class SinoPacTrader:
                 break
             
             # cancel all orders
-            self._update_status()
             for order in self.list_orders():
                 if order['status']['status'] not in ['Filled', 'Cancelled', 'Failed']:
                     self.cancel_order(order)
