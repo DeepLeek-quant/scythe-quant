@@ -240,6 +240,7 @@ def get_portfolio(
     signal_shift:int=0, 
     hold_period:int=None, 
     weight_limit:float=None,
+    rebalance:str=None,
 )-> Tuple[pd.DataFrame, pd.DataFrame]:
     """
     將資料轉換為投資組合權重。
@@ -270,33 +271,45 @@ def get_portfolio(
         - 訊號延遲用於模擬實際交易所需的作業時間
     """
     
-    if rebalance_dates is None:
-        buy_list = data
-    else:
-        buy_list =  data[data.index.isin(rebalance_dates)]
-
     # filter 漲跌停
     # buy_list = buy_list[buy_list.apply(lambda x: x.isin([0, 1]).all())]
     
     # weight
-    portfolio = (buy_list.astype(int) if weights is None else (buy_list * weights))\
-        .apply(lambda x: x / x.sum(), axis=1)
-
-    if weight_limit is not None:
-        portfolio = portfolio.clip(upper=weight_limit)
-
-    # shift & hold_period
-    if signal_shift in [0, None]:
-        portfolio = portfolio\
-            .reindex(index = exp_returns.index, method='ffill', limit=hold_period)\
-            .fillna(0)
-    else:
-        portfolio = portfolio\
+    if rebalance in ['dt_short', 'DTS']:
+        buy_list = data
+        portfolio = buy_list.astype(int)\
+            .apply(lambda x: x / x.sum(), axis=1)
+        return buy_list, portfolio
+    if rebalance == 'event':
+        buy_list = data
+        portfolio = buy_list\
+            .astype(int)\
+            .replace({0:np.nan})\
             .reindex(index = exp_returns.index)\
-            .shift(signal_shift)\
             .ffill(limit=hold_period)\
+            .apply(lambda x: x / x.sum(), axis=1)\
             .fillna(0)
-    return buy_list, portfolio
+        return buy_list, portfolio
+    else:
+        buy_list =  data[data.index.isin(rebalance_dates)]
+        portfolio = (buy_list.astype(int) if weights is None else (buy_list * weights))\
+            .apply(lambda x: x / x.sum(), axis=1)
+
+        if weight_limit is not None:
+            portfolio = portfolio.clip(upper=weight_limit)
+
+        # shift & hold_period
+        if signal_shift in [0, None]:
+            portfolio = portfolio\
+                .reindex(index = exp_returns.index, method='ffill', limit=hold_period)\
+                .fillna(0)
+        else:
+            portfolio = portfolio\
+                .reindex(index = exp_returns.index)\
+                .shift(signal_shift)\
+                .ffill(limit=hold_period)\
+                .fillna(0)
+        return buy_list, portfolio
 
 def stop_loss_or_profit(buy_list:pd.DataFrame, portfolio_df:pd.DataFrame, exp_returns:pd.DataFrame, pct:float, stop_at:Literal['intraday', 'next_day']='intraday'):
     # calculate portfolio returns by multiplying portfolio positions (0/1) with return data
@@ -368,11 +381,12 @@ def backtesting(
     rebalance:Literal['MR', 'QR', 'W', 'M', 'Q', 'Y', 'daytrade', 'event']='QR', 
     longshort:Union[Literal[1], Literal[-1]]=1, 
     weights:pd.DataFrame=None, signal_shift:int=0, hold_period:int=None, weight_limit:float=None,
-    fee:float=0.001425, fee_discount:float=0.25, tax:float=0.003, slippage:float=0.001,
+    fee:float=0.001425, fee_discount:float=0.25, tax:float=0.003, slippage:float=0.001, trading_cost:bool=True,
     stop_loss:Union[float, pd.DataFrame]=None, stop_profit:Union[float, pd.DataFrame]=None, stop_at:Literal['intraday', 'next_day']='next_day', 
     start:Union[int, str]='2006-01-01', end:Union[int, str]=None, 
     benchmark_id:str='TRTEJ', report:bool=False,
     exp_returns:pd.DataFrame=None,
+    daytrade_stop_loss_threshold:float=0.07, daytrade_stop_loss_target:float=0.095, ignore_daytrade_filter:bool=False,
     **kwargs,
 )-> Union[pd.DataFrame, 'Report']:
     """回測函數，返回投資組合每日報酬率序列。
@@ -409,17 +423,18 @@ def backtesting(
         - 投資組合權重預設為等權重配置，除非提供自定義權重
         - 若無持有期間限制，則持有至下次再平衡日
     """
-    if rebalance in ['daytrade', 'DT']:
-        exp_returns = DatasetsHandler().read_dataset('exp_returns_daytrade', filter_date='t_date', start=start, end=end) if exp_returns is None else exp_returns
+    if rebalance in ['dt_short', 'DTS']:
+        exp_returns = DatasetsHandler().read_dataset('exp_returns_dt_short', filter_date='t_date', start=start, end=end) if exp_returns is None else exp_returns.copy()
         rebalance_dates = None
-    if rebalance == 'event':
+    elif rebalance == 'event':
         exp_returns = DatasetsHandler().read_dataset('exp_returns', filter_date='t_date', start=start, end=end) if exp_returns is None else exp_returns
         rebalance_dates = None
         hold_period = 1 if hold_period is None else hold_period
+        exp_returns *= longshort
     else:
         exp_returns = DatasetsHandler().read_dataset('exp_returns', filter_date='t_date', start=start, end=end) if exp_returns is None else exp_returns
         rebalance_dates = get_rebalance_date(rebalance)
-    exp_returns *= longshort
+        exp_returns *= longshort
 
     buy_list, portfolio_df = get_portfolio(
         data=data, 
@@ -429,6 +444,7 @@ def backtesting(
         weight_limit=weight_limit,
         signal_shift=signal_shift, 
         hold_period=hold_period, 
+        rebalance=rebalance,
     )
 
     # stop loss or profit
@@ -438,13 +454,12 @@ def backtesting(
         portfolio_df = stop_loss_or_profit(buy_list, portfolio_df, exp_returns, pct=stop_profit, stop_at=stop_at).infer_objects(copy=False).replace({np.nan: 0})
 
     # trading cost
-    if (fee_discount*fee+tax+slippage) != 0:
-        if rebalance in ['daytrade', 'DT']:
+    if trading_cost:
+        if rebalance in ['dt_short', 'DTS']:
             exp_returns -= ((fee*fee_discount)*2 + tax/2 + slippage*2)
-        elif rebalance == 'event':
-            
-            buy = ((portfolio_df.shift(1).fillna(0) == 0) & (portfolio_df != 0)).reindex(columns=exp_returns.columns, fill_value=False)
-            sell = ((portfolio_df.shift(-1).fillna(0) == 0) & (portfolio_df != 0)).reindex(columns=exp_returns.columns, fill_value=False)
+        else:
+            buy = ((portfolio_df.shift(1) == 0) & (portfolio_df != portfolio_df.shift(1))).reindex(columns=exp_returns.columns, fill_value=False)
+            sell = ((portfolio_df.shift(-1) == 0) & (portfolio_df != portfolio_df.shift(-1))).reindex(columns=exp_returns.columns, fill_value=False)
             exp_returns.iloc[:,:] = np.where(
                 buy,
                 exp_returns - (fee*fee_discount+slippage),
@@ -454,19 +469,6 @@ def backtesting(
                 sell,
                 exp_returns - (fee*fee_discount+tax+slippage),
                 exp_returns
-            ) # sell
-        else:
-            idx = exp_returns.index.get_indexer(rebalance_dates)
-            col = exp_returns.columns.get_indexer(data.columns)
-            exp_returns.iloc[idx, col] = np.where(
-                exp_returns.iloc[idx, col].notna(),
-                exp_returns.iloc[idx, col] - (fee*fee_discount+slippage),
-                exp_returns.iloc[idx, col]
-            ) # buy
-            exp_returns.iloc[(idx-1)[1:], col] = np.where(
-                exp_returns.iloc[(idx-1)[1:], col].notna(),
-                exp_returns.iloc[(idx-1)[1:], col] - (fee*fee_discount+tax+slippage),
-                exp_returns.iloc[(idx-1)[1:], col]
             ) # sell
 
     if report:
@@ -642,12 +644,12 @@ class MultiReport:
         
         # analysis
         self.style = calc_style(self.daily_return, total=True)
-        self.maemfe = pd.concat([
-            v[0].maemfe.reset_index()\
-                .assign(index=lambda x: k+' '+x['index'].astype(str))\
-                .set_index('index')\
-            for k, v in self.reports.items()
-        ], axis=0)
+        # self.maemfe = pd.concat([
+        #     v[0].maemfe.reset_index()\
+        #         .assign(index=lambda x: k+' '+x['index'].astype(str))\
+        #         .set_index('index')\
+        #     for k, v in self.reports.items()
+        # ], axis=0)
 
         # material
         self.tabs = self.plot_tabs()
@@ -678,7 +680,7 @@ class MultiReport:
             ),
             'Return heatmap': plot_return_heatmap(self.daily_return),
             'Style': plot_style(self.style),
-            'MAE/MFE': plot_maemfe(self.maemfe),
+            # 'MAE/MFE': plot_maemfe(self.maemfe),
         }
         return pn.Tabs(*[(k, pn.pane.Plotly(v)) for k, v in plot_funcs.items()])
 
@@ -743,11 +745,11 @@ def calc_factor_quantiles_return(factor:pd.DataFrame, rebalance:str='QR', group:
     results = {}
     exp_returns = kwargs.get('exp_returns')
     if exp_returns is None:
-        exp_returns = DatasetsHandler().read_dataset('exp_returns', start=kwargs.get('start'))
+        exp_returns = DatasetsHandler().read_dataset('exp_returns', filter_date='t_date', start=kwargs.get('start')) if rebalance not in ['daytrade', 'DT'] else DatasetsHandler().read_dataset('exp_returns_dt_short', filter_date='t_date', start=kwargs.get('start'))
     
     for q_start, q_end in [(i/group, (i+1)/group) for i in range(group)]:
         cond = (q_start <= factor) & (factor < q_end)
-        results[q_start*group] = backtesting(data=cond, rebalance=rebalance, exp_returns=exp_returns, fee=0, tax=0, slippage=0)
+        results[q_start*group] = backtesting(data=cond, rebalance=rebalance, longshort=kwargs.get('longshort', 1), exp_returns=exp_returns, trading_cost=False)
 
     return results
 

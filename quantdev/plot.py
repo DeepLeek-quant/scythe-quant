@@ -1109,3 +1109,5 @@ def plot_icir(ic:pd.Series, ir:pd.Series):
     )
 
     return fig
+
+def plot_double_sorting_surface(data:pd.DataFrame, x:str, y:str, z:str):

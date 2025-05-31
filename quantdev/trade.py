@@ -509,7 +509,7 @@ class SinoPacTrader:
             if (order.order.custom_field, order.contract.code) not in traded_orders:
                 traded_orders[(order.order.custom_field, order.contract.code)] = 0
             traded_orders[(order.order.custom_field, order.contract.code)] += \
-                order.contract.unit * \
+                (1000 if order.order.order_lot=='Common' else 1 if order.contract.unit=='IntradayOdd' else 1) * \
                 (-1 if order.order.action=='Sell' else 1) * \
                 sum([deal.quantity for deal in order.status.deals if dt.datetime.fromtimestamp(deal.ts) > last_update_time])
 

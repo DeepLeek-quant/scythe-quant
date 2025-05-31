@@ -8,6 +8,11 @@ from scipy import stats
 import pandas as pd
 import numpy as np
 
+import warnings
+warnings.filterwarnings("ignore", category=RuntimeWarning, message="overflow encountered in reduce")
+
+
+
 # utils
 def calc_metrics(daily_returns:Union[pd.DataFrame, pd.Series]):
     if isinstance(daily_returns,pd.Series):

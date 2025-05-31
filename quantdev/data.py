@@ -122,6 +122,7 @@ class DataUtils():
             .iloc[0]['t_date']
         return t_date.loc[lambda x: x['t_date'] <= nearest_next_t_date]
 
+
 class TEJHandler(DataUtils):
     def __init__(self):
         super().__init__()
@@ -387,7 +388,8 @@ class TEJHandler(DataUtils):
         elif dataset=='monthly_rev':
             data = data\
                 .assign(release_date=lambda x: x['release_date'].fillna(x['date'] + pd.DateOffset(days=9, months=1)))\
-                .rename(columns={col: col.replace('/', '_') for col in data.columns if '/' in col})
+                .rename(columns={col: col.replace('/', '_') for col in data.columns if '/' in col})\
+                .rename(columns={'流通在外股數(千股)':'流通在外股數(千股)_mrev'})
         # stock calendar
         elif dataset=='mkt_calendar':
             data = data[(data['date'] >= self.start_date) & (data['date'].dt.year <= dt.datetime.now().year+1)]
@@ -549,7 +551,7 @@ class ProcessedHandler(DataUtils):
             'monthly_rev_ath':{'source':'monthly_rev', 'func':self.update_monthly_rev_ath},
             'monthly_rev_ind_avg':{'source':'monthly_rev', 'func':self.update_monthly_rev_ind_avg},
             'exp_returns':{'source':'trading_data', 'func':self.update_exp_returns}, 
-            'exp_returns_daytrade':{'source':'trading_data', 'func':self.update_exp_returns_daytrade},
+            'exp_returns_dt_short':{'source':'trading_data', 'func':self.update_exp_returns_dt_short},
             'trading_activity_w_pct':{'source':'trading_activity_w', 'func':self.update_trading_activity_w_pct},
             'trading_activity_w_pct_lag':{'source':'trading_activity_w_pct', 'func':self.update_trading_activity_w_pct_lag},
             'trading_data_ind_avg':{'source':'trading_data', 'func':self.update_trading_data_ind_avg},
@@ -645,10 +647,28 @@ class ProcessedHandler(DataUtils):
             .reindex(index=t_date['t_date'])
         return self.write_dataset(dataset='exp_returns', df=df)
     
-    def update_exp_returns_daytrade(self):
+    def update_exp_returns_dt_short(self):
         t_date = self.get_t_date()
-        df = self.read_dataset('trading_data', columns=['date', 'stock_id', '開盤價', '收盤價'])\
-            .assign(rtn=lambda df: df['收盤價']/df['開盤價']-1)\
+        df = self.read_dataset('trading_data', columns=['date', 'stock_id', '開盤價', '收盤價', '最高價', '調整係數'])\
+            .merge(self.read_dataset('trading_notes', columns=['date', 'stock_id', '證券種類(中)', '是否開盤即漲跌停', '是否為處置股票', '是否全額交割', '暫停當沖先賣後買註記']), on=['date', 'stock_id'], how='left')\
+            .sort_values(by=['stock_id', 'date'])\
+            .assign(
+                adj_close=lambda df: df['收盤價'] * df['調整係數'],
+                adj_open=lambda df: df['開盤價'] * df['調整係數'],
+                adj_high=lambda df: df['最高價'] * df['調整係數'],
+                adj_prev_close=lambda df: df.groupby('stock_id')['adj_close'].shift(1),
+                stop_loss_price=lambda df: df['adj_prev_close'] * 1.09,
+                close_to_high_return=lambda df: df['adj_high']/df['adj_prev_close']-1,
+                rtn=lambda df: np.where(df['close_to_high_return'] >= .09, -1*(df['stop_loss_price']/df['adj_open']-1), -1*(df['adj_close']/df['adj_open']-1))
+            )\
+            .rename(columns={'證券種類(中)':'sec_type'})\
+            .query('(sec_type.isin(["普通股", "ETF"])) &\
+                    (是否開盤即漲跌停=="") &\
+                    (是否為處置股票=="") &\
+                    (是否全額交割=="") &\
+                    (暫停當沖先賣後買註記=="")&\
+                    (~(stock_id.str.endswith("R") | stock_id.str.endswith("L")))'
+            )\
             [['date', 'stock_id', 'rtn']]\
             .rename(columns={'date':'t_date'})\
             .set_index(['t_date', 'stock_id'])\
@@ -657,7 +677,7 @@ class ProcessedHandler(DataUtils):
             .replace([np.inf, -np.inf], np.nan)\
             .dropna(axis=0, how='all')\
             .reindex(index=t_date['t_date'])
-        return self.write_dataset(dataset='exp_returns_daytrade', df=df)
+        return self.write_dataset(dataset='exp_returns_dt_short', df=df)
 
     def update_exp_returns_overnighttrade(self):
         # buy at close, sell at open
@@ -895,7 +915,7 @@ class Databank(DataUtils):
     def _ignore(self):
         # ignore
         self.ingore_datasets = [
-            'exp_returns', 'exp_returns_daytrade', 
+            'exp_returns', 'exp_returns_dt_short', 
             'div_policy', 'cash_div', 'capital_formation', 'capital_formation_listed',
             'glbl_rates', 'twn_rates', 'index_components',
             'stock_info', 'mkt_calendar', 
