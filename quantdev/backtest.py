@@ -56,6 +56,7 @@ Examples:
     ```
 """
 
+from concurrent.futures import ThreadPoolExecutor
 from typing import Literal, Union, Tuple
 from IPython.display import display, HTML
 import datetime as dt
@@ -63,6 +64,7 @@ import pandas as pd
 import numpy as np
 import panel as pn
 import logging
+import tqdm
 
 from .analysis import calc_metrics, calc_style, calc_maemfe, calc_liquidity, calc_relative_return, calc_ic, calc_ir
 from .data import DatasetsHandler
@@ -222,6 +224,8 @@ def get_rebalance_date(rebalance:Literal['D', 'MR', 'QR', 'W', 'M', 'Q', 'Y'], s
         r_date = pd.DataFrame(pd.date_range(start=start_date, end=end_date, freq='QS'), columns=['r_date'])    
     elif rebalance == 'Y':
         r_date = pd.DataFrame(pd.date_range(start=start_date, end=end_date, freq='YS'), columns=['r_date'])
+    elif rebalance in ['DTS', 'dt_short']:
+        return None
     else:
         raise ValueError("Invalid frequency. Allowed values are 'W', 'MR, 'QR', 'M', 'Q', 'Y'.")
 
@@ -378,7 +382,7 @@ def stop_loss_or_profit(buy_list:pd.DataFrame, portfolio_df:pd.DataFrame, exp_re
 
 def backtesting(
     data:pd.DataFrame, 
-    rebalance:Literal['MR', 'QR', 'W', 'M', 'Q', 'Y', 'daytrade', 'event']='QR', 
+    rebalance:Literal['MR', 'QR', 'W', 'M', 'Q', 'Y', 'DTS', 'dt_short', 'event']='QR', 
     longshort:Union[Literal[1], Literal[-1]]=1, 
     weights:pd.DataFrame=None, signal_shift:int=0, hold_period:int=None, weight_limit:float=None,
     fee:float=0.001425, fee_discount:float=0.25, tax:float=0.003, slippage:float=0.001, trading_cost:bool=True,
@@ -718,7 +722,7 @@ def calc_factor_longshort_return(factor:pd.DataFrame, rebalance:str='QR', group:
 
     return (long-short).dropna()
 
-def calc_factor_quantiles_return(factor:pd.DataFrame, rebalance:str='QR', group:int=10, **kwargs):
+def calc_factor_quantiles_return(factor:pd.DataFrame, rebalance:str='QR', group:int=10, add_ls:bool=False, start:str='2006-01-01', **kwargs):
     """計算因子分位數報酬率
 
     Args:
@@ -742,15 +746,76 @@ def calc_factor_quantiles_return(factor:pd.DataFrame, rebalance:str='QR', group:
         - 字典的key為分位數起始點*group (例如: 0代表第一組, 1代表第二組...)
     """
     
-    results = {}
+    vals = factor.values
+    groups = {
+        lower_bound/group : pd.DataFrame((lower_bound/group < vals) & (vals <= upper_bound/group), index=factor.index, columns=factor.columns)
+        for lower_bound, upper_bound in zip(range(0, group), range(1, group+1))
+    }
+
+    # return
+    exp_returns = kwargs.get('exp_returns')
+    if exp_returns is None:
+        exp_returns = DatasetsHandler().read_dataset('exp_returns', filter_date='t_date', start=start) if rebalance not in ['DTS', 'dt_short'] else DatasetsHandler().read_dataset('exp_returns_dt_short', filter_date='t_date', start=start)
+    rebalance_dates = get_rebalance_date(rebalance=rebalance)
+    
+    def process_group(k_v):
+        k, v = k_v
+        return k, (get_portfolio(
+            data=v,
+            exp_returns=exp_returns,
+            rebalance_dates=rebalance_dates,
+            rebalance=rebalance
+        )[1] * exp_returns).dropna(how='all').sum(axis=1)
+
+    with ThreadPoolExecutor(max_workers=5) as executor:
+        results = dict(tqdm.tqdm(executor.map(process_group, groups.items()), total=len(groups)))
+    if add_ls:
+        results['LS'] = results[max(results.keys())] - results[min(results.keys())]
+    return results
+
+def calc_independent_double_sorting(factors:Tuple[pd.DataFrame, pd.DataFrame], group:Union[int, list[int], Tuple[int, int]]=10, rebalance:str='QR', **kwargs):
+    main_f, ctrl_f = factors
+
+    # factor
+    if isinstance(group, int):
+        main_g_num = group
+        ctrl_g_num = group
+    elif isinstance(group, (list, tuple)):
+        main_g_num, ctrl_g_num = group[0], group[1]
+
+    main_vals = main_f.values
+    ctrl_vals = ctrl_f.values
+    main_groups = {
+        lower_bound/main_g_num : pd.DataFrame((lower_bound/main_g_num < main_vals) & (main_vals <= upper_bound/main_g_num), index=main_f.index, columns=main_f.columns)
+        for lower_bound, upper_bound in zip(range(0, main_g_num), range(1, main_g_num+1))
+    }
+    ctrl_groups = {
+        lower_bound/ctrl_g_num : pd.DataFrame((lower_bound/ctrl_g_num < ctrl_vals) & (ctrl_vals <= upper_bound/ctrl_g_num), index=ctrl_f.index, columns=ctrl_f.columns)
+        for lower_bound, upper_bound in zip(range(0, ctrl_g_num), range(1, ctrl_g_num+1))
+    }
+    total_groups = {
+        (i, j): (main_groups[i] & ctrl_groups[j]).fillna(False)
+        for j in ctrl_groups.keys()
+        for i in main_groups.keys()
+    }
+
+    # return
     exp_returns = kwargs.get('exp_returns')
     if exp_returns is None:
         exp_returns = DatasetsHandler().read_dataset('exp_returns', filter_date='t_date', start=kwargs.get('start')) if rebalance not in ['daytrade', 'DT'] else DatasetsHandler().read_dataset('exp_returns_dt_short', filter_date='t_date', start=kwargs.get('start'))
+    rebalance_dates = get_rebalance_date(rebalance=rebalance)
     
-    for q_start, q_end in [(i/group, (i+1)/group) for i in range(group)]:
-        cond = (q_start <= factor) & (factor < q_end)
-        results[q_start*group] = backtesting(data=cond, rebalance=rebalance, longshort=kwargs.get('longshort', 1), exp_returns=exp_returns, trading_cost=False)
+    def process_group(k_v):
+        k, v = k_v
+        return k, (get_portfolio(
+            data=v,
+            exp_returns=exp_returns,
+            rebalance_dates=rebalance_dates,
+            rebalance=rebalance
+        )[1] * exp_returns).dropna(how='all').sum(axis=1)
 
+    with ThreadPoolExecutor(max_workers=5) as executor:
+        results = dict(tqdm.tqdm(executor.map(process_group, total_groups.items()), total=len(total_groups)))
     return results
 
 # factor
@@ -767,7 +832,7 @@ def factor_analysis(
         exp_returns = DatasetsHandler().read_dataset('exp_returns', filter_date='t_date', start=start, end=end)
 
     quantiles_returns = pd.DataFrame(
-        calc_factor_quantiles_return(ranked_factor, rebalance=rebalance, group=group, exp_returns=exp_returns)
+        calc_factor_quantiles_return(ranked_factor, rebalance=rebalance, group=group, exp_returns=exp_returns, start=start)
     )
     
     return FactorReport(ranked_factor, quantiles_returns, rebalance, group, benchmark_id, exp_returns)

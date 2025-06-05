@@ -1110,4 +1110,83 @@ def plot_icir(ic:pd.Series, ir:pd.Series):
 
     return fig
 
-def plot_double_sorting_surface(data:pd.DataFrame, x:str, y:str, z:str):
+def plot_double_sorting_surface(data:pd.DataFrame, items:Union[str, list[str]]):
+    x_vals = sorted(list(set([x[0] for x in data.T.index])))
+    y_vals = sorted(list(set([x[1] for x in data.T.index])))
+    
+    if isinstance(items, str):
+        items = [items]
+    fig = go.Figure(data=[
+        go.Surface(
+            x=x_vals, y=y_vals, 
+            z=[[data.loc[item].loc[(x,y)] for x in x_vals] for y in y_vals],
+            colorscale='Inferno',
+            showscale=True,
+            name = item
+        ) for item in items
+    ])
+
+    fig.update_layout(
+        title=f"{'/'.join(items)} Surface Map",
+        scene = dict(
+            xaxis_title=f'Main Group',
+            yaxis_title=f'Ctrl Group',
+            zaxis_title=f"{'/'.join(items)}",
+            camera_eye={"x": -2, "y": -2, "z": 1},
+        ),
+        height=fig_param['size']['h'], 
+        width=fig_param['size']['w'], 
+        margin= fig_param['margin'],
+        template=fig_param['template'],
+        showlegend=True,
+    )
+
+    return fig
+
+def plot_double_sorting_multi_surface(data:pd.DataFrame, items:Union[str, list[str]]=['CAGR(%)', 'MDD(%)', 'Calmar', 't']):
+    if len(items) != 4:
+        raise ValueError("items must be a list of 4 items")
+
+    fig = make_subplots(
+        rows=2, cols=2,
+        specs=[[{'is_3d': True}, {'is_3d': True}], [{'is_3d': True}, {'is_3d': True}]],
+        subplot_titles=[_bold(item) for item in items],
+    )
+
+    x_vals = sorted(list(set([x[0] for x in data.T.index])))
+    y_vals = sorted(list(set([x[1] for x in data.T.index])))
+    
+    # Add traces
+    for i, item in enumerate(items):
+        fig.add_trace(go.Surface(
+            x=x_vals, y=y_vals, 
+            z=[[data.loc[item].loc[(x,y)] for x in x_vals] for y in y_vals],
+            colorscale='Inferno',
+            showscale=False,
+            name=item,
+        ),
+        row=i//2+1, col=i%2+1)
+    
+    # Adjust subplot positions
+    fig.update_layout(
+        scene1=dict(domain=dict(x=[0, 0.5], y=[0.55, 1.0])),
+        scene2=dict(domain=dict(x=[0.55, 1.0], y=[0.55, 1.0])),
+        scene3=dict(domain=dict(x=[0, 0.5], y=[0, 0.5])),
+        scene4=dict(domain=dict(x=[0.55, 1.0], y=[0, 0.5]))
+    )
+    fig.update_annotations(font_size=12)
+    fig.update_layout(
+        title=_bold(f"Surface Maps"),
+        **{f'scene{i+1}': dict(
+            xaxis_title=dict(text=f'Main Group', font=dict(size=10)),
+            yaxis_title=dict(text=f'Ctrl Group', font=dict(size=10)), 
+            zaxis_title=dict(text=items[i], font=dict(size=10)),
+            camera_eye={"x": -2, "y": -2, "z": 1},
+        ) for i in range(4)},
+        height=fig_param['size']['h'], 
+        width=fig_param['size']['w'], 
+        margin= fig_param['margin'],
+        template=fig_param['template'],
+    )
+
+    return fig
