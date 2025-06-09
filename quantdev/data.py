@@ -4,6 +4,7 @@ from typing import Union, Literal
 import pyarrow.parquet as pq
 import pyarrow as pa
 import datetime as dt
+from tqdm import tqdm
 import pandas as pd
 import numpy as np
 import logging
@@ -470,10 +471,10 @@ class TEJHandler(DataUtils):
         """
         datasets = list(self.tej_datasets_map.keys())
         if dataset is None:
-            for d in datasets:
+            for d in tqdm(datasets, desc='Updating TEJ datasets'):
                 self.update_tej_datasets(d, end_date=end_date, back_period=back_period)
         elif isinstance(dataset, list):
-            for d in dataset:
+            for d in tqdm(dataset, desc='Updating TEJ datasets'):
                 self.update_tej_datasets(d, end_date=end_date, back_period=back_period)
         elif isinstance(dataset, str):
             if dataset not in datasets:
@@ -732,7 +733,7 @@ class ProcessedHandler(DataUtils):
 
     # update
     def update_processed_datasets(self):
-        for v in self.processed_datasets.values():
+        for v in tqdm(self.processed_datasets.values(), desc='Updating processed datasets'):
             v['func']()
 
     # industry average
@@ -817,13 +818,14 @@ class ProcessedHandler(DataUtils):
         ind_cols = [col for col in df.columns if 'ind_avg' in col]
         df = df[['date', 'stock_id', *ind_cols, 't_date']].dropna(subset=ind_cols, how='all')
         return self.write_dataset(dataset='trading_data_ind_avg', df=df)
-            
+
 
 class FactorModelHandler(DataUtils):
     def __init__(self):
         super().__init__()
     
     def update_factor_model(self):
+        print('Updating factor model')
         from quantdev.backtest import calc_factor_longshort_return
         data = Databank()
         model = pd.DataFrame({

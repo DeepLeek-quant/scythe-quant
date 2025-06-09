@@ -390,7 +390,6 @@ def backtesting(
     start:Union[int, str]='2006-01-01', end:Union[int, str]=None, 
     benchmark_id:str='TRTEJ', report:bool=False,
     exp_returns:pd.DataFrame=None,
-    daytrade_stop_loss_threshold:float=0.07, daytrade_stop_loss_target:float=0.095, ignore_daytrade_filter:bool=False,
     **kwargs,
 )-> Union[pd.DataFrame, 'Report']:
     """回測函數，返回投資組合每日報酬率序列。
@@ -717,8 +716,8 @@ def calc_factor_longshort_return(factor:pd.DataFrame, rebalance:str='QR', group:
     exp_returns = kwargs.get('exp_returns')
     if exp_returns is None:
         exp_returns = DatasetsHandler().read_dataset('exp_returns', start=kwargs.get('start'))
-    long = backtesting(factor>=(1-1/group), rebalance=rebalance, exp_returns=exp_returns, fee=0, tax=0)
-    short = backtesting(factor<(1/group), rebalance=rebalance, exp_returns=exp_returns, fee=0, tax=0)
+    long = backtesting(factor>=(1-1/group), rebalance=rebalance, exp_returns=exp_returns, trading_cost=False)
+    short = backtesting(factor<(1/group), rebalance=rebalance, exp_returns=exp_returns, trading_cost=False)
 
     return (long-short).dropna()
 
@@ -802,7 +801,7 @@ def calc_independent_double_sorting(factors:Tuple[pd.DataFrame, pd.DataFrame], g
     # return
     exp_returns = kwargs.get('exp_returns')
     if exp_returns is None:
-        exp_returns = DatasetsHandler().read_dataset('exp_returns', filter_date='t_date', start=kwargs.get('start')) if rebalance not in ['daytrade', 'DT'] else DatasetsHandler().read_dataset('exp_returns_dt_short', filter_date='t_date', start=kwargs.get('start'))
+        exp_returns = DatasetsHandler().read_dataset('exp_returns', filter_date='t_date', start=kwargs.get('start')) if rebalance not in ['dt_short', 'DTS'] else DatasetsHandler().read_dataset('exp_returns_dt_short', filter_date='t_date', start=kwargs.get('start'))
     rebalance_dates = get_rebalance_date(rebalance=rebalance)
     
     def process_group(k_v):
