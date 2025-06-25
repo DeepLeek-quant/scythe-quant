@@ -549,7 +549,7 @@ class ProcessedHandler(DataUtils):
             'fin_data_ind_avg':{'source':'fin_data', 'func':self.update_fin_data_ind_avg},
             'fin_data_ind_avg_lag':{'source':'fin_data_ind_avg', 'func':self.update_fin_data_ind_avg_lag},
             'monthly_rev_lag':{'source':'monthly_rev', 'func':self.update_monthly_rev_lag},
-            'monthly_rev_ath':{'source':'monthly_rev', 'func':self.update_monthly_rev_ath},
+            # 'monthly_rev_ath':{'source':'monthly_rev', 'func':self.update_monthly_rev_ath},
             'monthly_rev_ind_avg':{'source':'monthly_rev', 'func':self.update_monthly_rev_ind_avg},
             'exp_returns':{'source':'trading_data', 'func':self.update_exp_returns}, 
             'exp_returns_dt_short':{'source':'trading_data', 'func':self.update_exp_returns_dt_short},
@@ -834,13 +834,13 @@ class FactorModelHandler(DataUtils):
             'MCAP_to_REV':calc_factor_longshort_return((-1*data['個股市值(元)']/1000/data['營業收入']).to_factor().to_rank(), rebalance='QR'),
             'SIZE':calc_factor_longshort_return((data['個股市值(元)']).to_factor().to_rank(), rebalance='Q'),
             'VOL':calc_factor_longshort_return((data['成交金額(元)'].rolling(60).mean()).to_factor().to_rank(), rebalance='Q'),
-            'MTM3m':calc_factor_longshort_return(((data['收盤價']/data['收盤價'].shift(60))*data['調整係數']-1).to_factor().to_rank(), rebalance='Q'),
+            'MTM3m':calc_factor_longshort_return((data['收盤價']*data['調整係數'].pct_change(60)).to_factor().to_rank(), rebalance='Q'),
             'ROE':calc_factor_longshort_return((data['常續ROE']).to_factor().to_rank(), rebalance='QR'),
             'OPM':calc_factor_longshort_return((data['營業利益率']).to_factor().to_rank(), rebalance='QR'),
         }).dropna(how='all')
 
         self.write_dataset('factor_model', model)
-        logging.info('Factor model updated')
+        logging.info('Factor model updated', stacklevel=2)
 
     def calc_market_factor(self, mkt_idx:Literal['TR', None]=None):
         mkt_indice = {
@@ -923,7 +923,7 @@ class Databank(DataUtils):
             'stock_info', 'mkt_calendar', 
         ]
         self.ignore_cols = [
-            'date', 'release_date', 'stock_id', 't_date', 'insert_time', 'MTM3m'
+            'date', 'release_date', 'stock_id', 't_date', 'insert_time', 
             '期間別', '序號', '季別', '合併(Y/N)', '幣別', '產業別', '市場別', '營收發布時點', '備註說明', 'release_date_集保股權', 'release_date_集保庫存', 
         ]
 

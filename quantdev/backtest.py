@@ -66,7 +66,7 @@ import panel as pn
 import logging
 import tqdm
 
-from .analysis import calc_metrics, calc_style, calc_maemfe, calc_liquidity, calc_relative_return, calc_ic, calc_ir
+from .analysis import *
 from .data import DatasetsHandler
 from .plot import *
 from .utils import *
@@ -861,12 +861,7 @@ class FactorReport:
     def calc_metrics(self)-> pd.DataFrame:
         main = calc_metrics(self.quantiles_returns.assign(LS=lambda df:df[df.columns.max()] - df[df.columns.min()]))
         
-        ic = self.ic.agg({
-            'mean': lambda x: x.mean().round(4),
-            'std': lambda x: x.std().round(4),
-            'IR': lambda x: f'{x.mean()/x.std():.2%}', 
-            'positive ratio': lambda x: f'{len(x[x>0])/len(x):.2%}',
-        }).to_frame('Rank IC')
+        ic = calc_ic_metrics(ic=self.ic).to_frame('Rank IC')
 
         html = f"""
         <div style="display: flex; gap: 5px;row-gap: 10px;">
@@ -884,4 +879,7 @@ class FactorReport:
             'Style': plot_style(self.style),
         }
         return pn.Tabs(*[(k, pn.pane.Plotly(v)) for k, v in plot_funcs.items()])
-    
+
+# portofolio analysis
+def portofolio_analysis(portofolio, rebalance:str='QR', features:list[str]=None)-> pd.DataFrame:
+    pass

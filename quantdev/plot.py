@@ -5,7 +5,7 @@ import plotly.figure_factory as ff
 import plotly.graph_objects as go
 import calendar
 
-from typing import Union
+from typing import Union, Tuple
 import pandas as pd
 import numpy as np
 
@@ -1110,7 +1110,7 @@ def plot_icir(ic:pd.Series, ir:pd.Series):
 
     return fig
 
-def plot_double_sorting_surface(data:pd.DataFrame, items:Union[str, list[str]]):
+def plot_double_sorting_surface(data:pd.DataFrame, items:Union[str, list[str]], names:Tuple[str, str]=None):
     x_vals = sorted(list(set([x[0] for x in data.T.index])))
     y_vals = sorted(list(set([x[1] for x in data.T.index])))
     
@@ -1129,8 +1129,8 @@ def plot_double_sorting_surface(data:pd.DataFrame, items:Union[str, list[str]]):
     fig.update_layout(
         title=f"{'/'.join(items)} Surface Map",
         scene = dict(
-            xaxis_title=f'Main Group',
-            yaxis_title=f'Ctrl Group',
+            xaxis_title=names[0] if names is not None else 'Main Group',
+            yaxis_title=names[1] if names is not None else 'Ctrl Group',
             zaxis_title=f"{'/'.join(items)}",
             camera_eye={"x": -2, "y": -2, "z": 1},
         ),

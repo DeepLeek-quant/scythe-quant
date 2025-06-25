@@ -556,6 +556,7 @@ class SinoPacTrader:
                         position = future.result()
                         if position:
                             difference_portfolio[strategy].append(position)   
+            difference_portfolio = {k:[i for i in v if abs(i.round_price*i.round_qty+i.odd_price*i.odd_qty) > 500] for k, v in difference_portfolio.items()}
         elif by == 'quantity':
             for strategy, positions in new_portfolio.items():
                 difference_portfolio[strategy] = []
@@ -574,6 +575,7 @@ class SinoPacTrader:
                         position = future.result()
                         if position:
                             difference_portfolio[strategy].append(position)
+        
         return difference_portfolio
     
     def trade_position(self, position:Position, strategy_name:str=None):
@@ -882,6 +884,10 @@ class FubonTrader:
                 current_portfolio[k[0]][k[1]] = v
             else:
                 current_portfolio[k[0]][k[1]] += v
+        
+        # clear empty portfolio & position
+        current_portfolio = {k:{k1:v1 for k1, v1 in v.items() if v1!=0} for k, v in current_portfolio.items() if v != {}}
+        
         self.portfolio['portfolio'] = current_portfolio
         self.portfolio['update_time'] = dt.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 

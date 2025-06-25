@@ -14,23 +14,31 @@ warnings.filterwarnings("ignore", category=RuntimeWarning, message="overflow enc
 
 
 # utils
-def calc_metrics(daily_returns:Union[pd.DataFrame, pd.Series]):
+def mdd(rtns, mdd_type: Literal['cumprod','cumsum']='cumprod'):
+    if mdd_type == 'cumprod':
+        cum_rtns = (1 + rtns).cumprod()
+    elif mdd_type == 'cumsum':
+        cum_rtns = (1 + rtns).cumsum()    
+    return ((cum_rtns) / (cum_rtns).cummax() - 1).min()
+
+def cagr(rtns):
+    return (1 + ((1 + rtns).cumprod() - 1).iloc[-1]) ** (240 / len(rtns)) - 1
+
+def calmar(rtns):
+    return cagr(rtns) / abs(mdd(rtns, 'cumprod'))
+
+def calc_metrics(daily_returns:Union[pd.DataFrame, pd.Series, dict]):
     if isinstance(daily_returns,pd.Series):
         daily_returns = pd.DataFrame({'Strategy':daily_returns})
-    
-    def mdd(cum_rtns):
-        return ((cum_rtns) / (cum_rtns).cummax() - 1).min()
-    def cagr(rtns):
-        return (1 + ((1 + rtns).cumprod() - 1).iloc[-1]) ** (240 / len(rtns)) - 1
-    def calmar(rtns):
-        return cagr(rtns) / abs(mdd((1 + rtns).cumprod()))
+    elif isinstance(daily_returns, dict):
+        daily_returns = pd.DataFrame(daily_returns)
     
     return pd.concat({
         'CAGR(%)': cagr(daily_returns)*100,
         'Sharpe': daily_returns.mean()/daily_returns.std()*240**0.5,
         'Calmar': calmar(daily_returns),
-        'MDD(%)': mdd((1 + daily_returns).cumprod())*100,
-        'Simple MDD(%)': mdd((1+daily_returns.cumsum()))*100,
+        'MDD(%)': mdd(daily_returns, 'cumprod')*100,
+        'Simple MDD(%)': mdd(daily_returns, 'cumsum')*100,
         'Win Rate(%)': daily_returns.apply(lambda x:((x.dropna()>0).sum() / x.dropna().shape[0])*100),
         'Weekly Win(%)': daily_returns.apply(lambda x:((x.dropna().add(1).resample('W').prod().sub(1)>0).sum() / x.dropna().add(1).resample('W').prod().sub(1).dropna().shape[0])*100),
         'Monthly Win(%)': daily_returns.apply(lambda x:((x.dropna().add(1).resample('ME').prod().sub(1)>0).sum() / x.dropna().add(1).resample('ME').prod().sub(1).shape[0])*100),
@@ -41,8 +49,23 @@ def calc_metrics(daily_returns:Union[pd.DataFrame, pd.Series]):
         't': daily_returns.apply(lambda x: (x.mean() / (x.std() / np.sqrt(x.dropna().count())))),
     }, axis=1).round(2).T
 
-def calc_ic(factor:pd.DataFrame, exp_returns:pd.DataFrame, rebalance:Literal['MR', 'QR', 'W', 'M', 'Q', 'Y']=None, rank:bool=True)->pd.Series:
+def calc_ic_metrics(ic:Union[pd.DataFrame, pd.Series]=None, factor:pd.DataFrame=None, exp_returns=None, rebalance='QR', rank=True)->pd.DataFrame:
+    if ic is None and factor is not None:
+        ic = calc_ic(factor=factor, exp_returns=exp_returns, rebalance=rebalance, rank=rank)
+    if isinstance(ic, pd.Series):
+        ic = pd.DataFrame({'Factor':ic})
+
+    return pd.concat({
+            'IC mean': ic.mean().round(4),
+            'IC std': ic.std().round(4),
+            'IR': ic.apply(lambda x:f'{x.mean()/x.std():.2%}'),
+            'positive ratio': ic.apply(lambda x:f'{len(x.dropna()[x.dropna()>0])/len(x.dropna()):.2%}'),
+        }, axis=1).T
+
+def calc_ic(factor:pd.DataFrame, exp_returns:pd.DataFrame=None, rebalance:Literal['MR', 'QR', 'W', 'M', 'Q', 'Y']='QR', rank:bool=True)->pd.Series:
     from quantdev.backtest import get_rebalance_date
+    from quantdev.data import DatasetsHandler
+    exp_returns = DatasetsHandler().read_dataset('exp_returns') if exp_returns is None else exp_returns
     r_date = pd.Index(get_rebalance_date(rebalance)).intersection(exp_returns.index)
     
     factor = factor[factor.index.isin(r_date)].stack().rename('factor')
