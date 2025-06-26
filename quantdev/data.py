@@ -1,5 +1,6 @@
 from concurrent.futures import ThreadPoolExecutor
 from IPython.display import HTML, display
+from joblib import Parallel, delayed
 from typing import Union, Literal
 import pyarrow.parquet as pq
 import pyarrow as pa
@@ -447,7 +448,7 @@ class TEJHandler(DataUtils):
         return any([(row_usage >= 0.95), (req_usage >= 0.95)])
     
     # update tej datasets
-    def update_tej_datasets(self, dataset:Union[str, list[str]]=None, end_date:str=None, back_period:int=2):
+    def update_tej_datasets(self, dataset:Union[str, list[str]]=None, end_date:str=None, back_period:int=2, n_jobs:int=-1):
         """更新TEJ資料集
 
         Args:
@@ -474,8 +475,9 @@ class TEJHandler(DataUtils):
             for d in tqdm(datasets, desc='Updating TEJ datasets'):
                 self.update_tej_datasets(d, end_date=end_date, back_period=back_period)
         elif isinstance(dataset, list):
-            for d in tqdm(dataset, desc='Updating TEJ datasets'):
-                self.update_tej_datasets(d, end_date=end_date, back_period=back_period)
+            Parallel(n_jobs=n_jobs)(
+                delayed(self.update_tej_datasets)(d=d, end_date=end_date, back_period=back_period) for d in tqdm(dataset, desc='Updating TEJ datasets')
+            )
         elif isinstance(dataset, str):
             if dataset not in datasets:
                 raise ValueError(f'{dataset} is not in tej_datasets')
@@ -556,6 +558,7 @@ class ProcessedHandler(DataUtils):
             'trading_activity_w_pct':{'source':'trading_activity_w', 'func':self.update_trading_activity_w_pct},
             'trading_activity_w_pct_lag':{'source':'trading_activity_w_pct', 'func':self.update_trading_activity_w_pct_lag},
             'trading_data_ind_avg':{'source':'trading_data', 'func':self.update_trading_data_ind_avg},
+            'fin_data_combined':{'source':['fin_data_self_disclosed', 'fin_data'], 'func':self.update_fin_data_combined},
         }
 
     # financial data
@@ -612,27 +615,27 @@ class ProcessedHandler(DataUtils):
         df = df[['date', 'stock_id', *lag_cols, 't_date']].dropna(subset=lag_cols, how='all')
         return self.write_dataset(dataset='monthly_rev_lag', df=df)
     
-    def update_monthly_rev_ath(self):
-        df = self.read_dataset('monthly_rev', columns=['date', 'stock_id', 'release_date', '單月營收(千元)', 't_date'])
+    # def update_monthly_rev_ath(self):
+    #     df = self.read_dataset('monthly_rev', columns=['date', 'stock_id', 'release_date', '單月營收(千元)', 't_date'])
         
-        df['單月營收_ATH'] = np.nan
+    #     df['單月營收_ATH'] = np.nan
         
-        def calc_ath_months(x):
-            curr_val = x.iloc[-1]
-            for i in range(len(x)-1, -1, -1):
-                if x.iloc[i] > curr_val:
-                    return len(x) - i - 1
-            return len(x)
+    #     def calc_ath_months(x):
+    #         curr_val = x.iloc[-1]
+    #         for i in range(len(x)-1, -1, -1):
+    #             if x.iloc[i] > curr_val:
+    #                 return len(x) - i - 1
+    #         return len(x)
             
-        df['單月營收_ATH'] = df\
-            .groupby('stock_id')\
-            ['單月營收(千元)']\
-            .transform(lambda x: x.expanding().apply(calc_ath_months))
+    #     df['單月營收_ATH'] = df\
+    #         .groupby('stock_id')\
+    #         ['單月營收(千元)']\
+    #         .transform(lambda x: x.expanding().apply(calc_ath_months))
         
-        is_ath = df.groupby('stock_id')['單月營收(千元)'].transform(lambda x: x.iloc[12:] == x.iloc[12:].expanding().max() if len(x) > 12 else False).fillna(False)
-        df.loc[is_ath, '單月營收_ATH'] = np.inf
+    #     is_ath = df.groupby('stock_id')['單月營收(千元)'].transform(lambda x: x.iloc[12:] == x.iloc[12:].expanding().max() if len(x) > 12 else False).fillna(False)
+    #     df.loc[is_ath, '單月營收_ATH'] = np.inf
 
-        return self.write_dataset(dataset='monthly_rev_ath', df=df[['date', 'stock_id', 'release_date', '單月營收_ATH', 't_date']])
+    #     return self.write_dataset(dataset='monthly_rev_ath', df=df[['date', 'stock_id', 'release_date', '單月營收_ATH', 't_date']])
 
     # backtest 
     def update_exp_returns(self):
@@ -731,11 +734,6 @@ class ProcessedHandler(DataUtils):
         df = df[['date', 'stock_id', *lag_cols, 't_date']].dropna(subset=lag_cols, how='all')
         return self.write_dataset(dataset='trading_activity_w_pct_lag', df=df)
 
-    # update
-    def update_processed_datasets(self):
-        for v in tqdm(self.processed_datasets.values(), desc='Updating processed datasets'):
-            v['func']()
-
     # industry average
     def update_fin_data_ind_avg(self):
         industry_data = self.read_dataset('trading_notes', columns=['t_date','stock_id', '主產業別(中)', '子產業別(中)'])\
@@ -818,6 +816,33 @@ class ProcessedHandler(DataUtils):
         ind_cols = [col for col in df.columns if 'ind_avg' in col]
         df = df[['date', 'stock_id', *ind_cols, 't_date']].dropna(subset=ind_cols, how='all')
         return self.write_dataset(dataset='trading_data_ind_avg', df=df)
+
+    # combine self disclosed data with fin_data
+    def update_fin_data_combined(self):
+        def expand_fin_data_on_t_dates(dataset_name:Literal['fin_data', 'fin_data_self_disclosed']='fin_data'):
+            t_dates_stock_ids = pd.MultiIndex.from_product(
+                [self.get_t_date()['t_date'], self.read_dataset(dataset_name, columns=['stock_id'])['stock_id'].unique()], 
+                names=['t_date', 'stock_id']
+            )
+
+            return (self.read_dataset(dataset_name)
+                    .sort_values(['date', 'stock_id', 't_date'])
+                    .drop_duplicates(subset=['t_date', 'stock_id'], keep='last')
+                    .set_index(['t_date', 'stock_id'])
+                    .reindex(index=t_dates_stock_ids))
+
+        self_disclosed_expanded = expand_fin_data_on_t_dates('fin_data_self_disclosed')
+        fin_data_expanded = expand_fin_data_on_t_dates('fin_data')
+
+        
+
+
+        # update
+    def update_processed_datasets(self, n_jobs:int=-1):
+        Parallel(n_jobs=n_jobs)(
+            delayed(v['func'])() for v in tqdm(self.processed_datasets.values(), desc='Updating processed datasets')
+        )
+
 
 
 class FactorModelHandler(DataUtils):

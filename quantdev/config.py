@@ -11,6 +11,7 @@ class Config:
         # self.fubon_config = self._load_config('fubon.json')
         self.trade_api_config = self._load_config('trade_api.json')
         self.portfolio_path_config = self._load_config('portfolio_path.json')
+        self.us_data_config = self._load_config('us_data.json')
 
     def _load_config(self, file_name: str) -> dict:
         """
