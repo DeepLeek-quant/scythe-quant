@@ -558,7 +558,7 @@ class ProcessedHandler(DataUtils):
             'trading_activity_w_pct':{'source':'trading_activity_w', 'func':self.update_trading_activity_w_pct},
             'trading_activity_w_pct_lag':{'source':'trading_activity_w_pct', 'func':self.update_trading_activity_w_pct_lag},
             'trading_data_ind_avg':{'source':'trading_data', 'func':self.update_trading_data_ind_avg},
-            'fin_data_combined':{'source':['fin_data_self_disclosed', 'fin_data'], 'func':self.update_fin_data_combined},
+            'fin_data_self_disclosed_combined':{'source':['fin_data_self_disclosed', 'fin_data'], 'func':self.update_fin_data_self_disclosed_combined},
         }
 
     # financial data
@@ -818,30 +818,53 @@ class ProcessedHandler(DataUtils):
         return self.write_dataset(dataset='trading_data_ind_avg', df=df)
 
     # combine self disclosed data with fin_data
-    def update_fin_data_combined(self):
-        def expand_fin_data_on_t_dates(dataset_name:Literal['fin_data', 'fin_data_self_disclosed']='fin_data'):
+    def update_fin_data_self_disclosed_combined(self):
+        def expand_fin_data_to_t_dates(dataset_name:Literal['fin_data', 'fin_data_self_disclosed']='fin_data'):
+            dates_list = list(set(self.read_dataset('fin_data_self_disclosed', columns=['t_date'])['t_date'].unique()) | set(self.read_dataset('fin_data', columns=['t_date'])['t_date'].unique()))
             t_dates_stock_ids = pd.MultiIndex.from_product(
-                [self.get_t_date()['t_date'], self.read_dataset(dataset_name, columns=['stock_id'])['stock_id'].unique()], 
+                [dates_list, self.read_dataset(dataset_name, columns=['stock_id'])['stock_id'].unique()], 
                 names=['t_date', 'stock_id']
             )
 
-            return (self.read_dataset(dataset_name)
+            return (self.read_dataset(dataset_name, columns=list(set(self.list_columns(dataset_name))-set(['insert_time', '幣別', '產業別', '季別', '期間別', '序號', 'release_date'])))
                     .sort_values(['date', 'stock_id', 't_date'])
                     .drop_duplicates(subset=['t_date', 'stock_id'], keep='last')
                     .set_index(['t_date', 'stock_id'])
-                    .reindex(index=t_dates_stock_ids))
+                    .reindex(index=t_dates_stock_ids)
+                    .dropna(how='all')\
+                    .reset_index()
+                    .set_index([
+                        't_date', 
+                        'stock_id', 
+                        'date',
+                        '合併(Y/N)',
+                    ]))
+        combined_fin_data = pd.merge(
+            expand_fin_data_to_t_dates('fin_data_self_disclosed'), 
+            expand_fin_data_to_t_dates('fin_data'), 
+            left_index=True, 
+            right_index=True, 
+            how='outer'
+        )\
+            .dropna(how='all')\
+            .reset_index()\
+            .sort_values(by=['t_date', 'stock_id', 'date', '合併(Y/N)'])\
+            .drop_duplicates(subset=['t_date', 'stock_id'], keep='last')
 
-        self_disclosed_expanded = expand_fin_data_on_t_dates('fin_data_self_disclosed')
-        fin_data_expanded = expand_fin_data_on_t_dates('fin_data')
+        for col in combined_fin_data.columns:
+            if col.endswith('_自'):
+                base_col = col.replace('_自', '')
+                combined_fin_data[col] = combined_fin_data[col].fillna(combined_fin_data[base_col])
+        combined_fin_data = combined_fin_data[['stock_id', 'date', '合併(Y/N)', *[c for c in combined_fin_data.columns if c.endswith('_自')], 't_date']]\
+            .rename(columns=lambda col: col.replace('_自', '_combined') if col.endswith('_自') else col)
+        return self.write_dataset(dataset='fin_data_self_disclosed_combined', df=combined_fin_data)
 
-        
 
 
         # update
-    def update_processed_datasets(self, n_jobs:int=-1):
-        Parallel(n_jobs=n_jobs)(
-            delayed(v['func'])() for v in tqdm(self.processed_datasets.values(), desc='Updating processed datasets')
-        )
+    def update_processed_datasets(self):
+        for v in tqdm(self.processed_datasets.values(), desc='Updating processed datasets'):
+            v['func']()
 
 
 
