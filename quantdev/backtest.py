@@ -745,7 +745,7 @@ def calc_factor_quantiles_return(factor:pd.DataFrame, rebalance:str='QR', group:
         - 字典的key為分位數起始點*group (例如: 0代表第一組, 1代表第二組...)
     """
     
-    vals = factor.values
+    vals = factor.to_rank().values
     groups = {
         lower_bound/group : pd.DataFrame((lower_bound/group < vals) & (vals <= upper_bound/group), index=factor.index, columns=factor.columns)
         for lower_bound, upper_bound in zip(range(0, group), range(1, group+1))

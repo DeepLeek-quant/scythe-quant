@@ -867,7 +867,6 @@ class ProcessedHandler(DataUtils):
             v['func']()
 
 
-
 class FactorModelHandler(DataUtils):
     def __init__(self):
         super().__init__()
@@ -945,9 +944,9 @@ class DatasetsHandler(TEJHandler, ProcessedHandler, FactorModelHandler):
         self.update_factor_model()
 
 
-class Databank(DataUtils):
+class Databank(dict, DataUtils):
     def __init__(self, sec_type:Union[str, list[str]]=['普通股']):
-        super().__init__()
+        DataUtils.__init__(self)
         self._ignore()
         self.cashe_dict = {}
         self.func_dict = {}

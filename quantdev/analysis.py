@@ -80,7 +80,7 @@ def calc_ir(factor:pd.DataFrame, exp_returns:pd.DataFrame, rebalance:Literal['MR
     ic = calc_ic(factor, exp_returns, rebalance, rank)
     return ic.rolling(window).mean()/ic.rolling(window).std()
 
-def resample_returns(returns: pd.DataFrame, t: Literal['MR', 'QR', 'W', 'M', 'Q', 'Y']):
+def resample_returns(returns: pd.DataFrame, t: Literal['MR', 'QR', 'W', 'M', 'Q', 'Y', 'D']):
     """重新取樣報酬率時間序列
 
     Args:
@@ -109,6 +109,8 @@ def resample_returns(returns: pd.DataFrame, t: Literal['MR', 'QR', 'W', 'M', 'Q'
         - 若無法使用回測模組，則使用pandas的resample功能
     """
     
+    if t == 'D':
+        return returns
     try:
         from quantdev.backtest import get_rebalance_date
         dates =  pd.DatetimeIndex(get_rebalance_date(t)+[returns.index.max()])

@@ -98,6 +98,7 @@ pd.DataFrame.largest = lambda self, n: largest(self, n)
 pd.DataFrame.smallest = lambda self, n: smallest(self, n)
 pd.DataFrame.to_factor = lambda self, method='Z', remove_outlier='MAD', universe=None: to_factor(self, method, remove_outlier, universe)
 pd.DataFrame.to_rank = lambda self, asc=True, universe=None: to_rank(self, asc, universe)
+pd.DataFrame.log = lambda self, base=10: np.log10(self) if base == 10 else np.log(self) if base == np.e else np.log(self)
 
 def sum_dfs(x_list:list[pd.DataFrame]) -> pd.DataFrame:
     if len(x_list)==2:
