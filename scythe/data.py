@@ -31,8 +31,12 @@ class DataUtils():
     def __init__(self):
         self.datasets_path = config.data_config.get('datasets_path')
         self.databank_path = config.data_config.get('databank_path')
+        if "shortcut-targets-by-id" in self.datasets_path:
+            self.datasets_path = self.datasets_path.replace("/", "\\").replace("shortcut-targets-by-id", ".shortcut-targets-by-id", 1)    
+        
         os.makedirs(self.databank_path, exist_ok=True)
         os.makedirs(self.datasets_path, exist_ok=True)
+            
         
         self.start_date = '2005-01-01'
         self.data_type = 'parquet'

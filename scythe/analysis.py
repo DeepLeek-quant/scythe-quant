@@ -69,7 +69,7 @@ def calc_ic(factor:pd.DataFrame, exp_returns:pd.DataFrame=None, rebalance:Litera
     r_date = pd.Index(get_rebalance_date(rebalance)).intersection(exp_returns.index)
     
     factor = factor[factor.index.isin(r_date)].stack().rename('factor')
-    returns =  resample_returns(exp_returns, rebalance).stack().rename_axis(['t_date', 'stock_id']).rename('return')
+    returns = resample_returns(exp_returns, rebalance).stack().rename_axis(['t_date', 'stock_id']).rename('return')
     
     return pd.concat([factor, returns], axis=1)\
         .dropna()\
