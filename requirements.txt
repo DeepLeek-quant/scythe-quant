@@ -1,13 +1,26 @@
+# Data manipulation and analysis
 pandas>=1.5.0
 numpy>=1.21.0
-plotly>=5.0.0
+pyarrow>=8.0.0
+
+# Scientific computing and statistics
 scipy>=1.9.0
 statsmodels>=0.13.0
 scikit-learn>=1.1.0
+
+# Visualization
+plotly>=5.0.0
+cufflinks
+panel
+
+# Utilities
 joblib>=1.1.0
-pyarrow>=8.0.0
-tejapi
-IPython>=8.0.0
+tqdm
 numerize>=0.12
-fugle-trade-sdk
-sinopac-sdk 
+IPython>=8.0.0
+
+# Financial data APIs
+tejapi
+eodhd
+fugle_marketdata
+shioaji
