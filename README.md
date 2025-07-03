@@ -1,4 +1,4 @@
-# QuantDev
+# Scythe
 
 A Python package for quantitative research and trading in Taiwan stock market.
 
@@ -29,7 +29,7 @@ The `Databank` class integrates multiple data sources and provides unified acces
 - Processed (self-calculated) data (e.g., technical indicators)
 
 ```python
-from quantdev.data import Databank
+from scythe.data import Databank
 
 # Initialize the data manager
 db = Databank()
@@ -60,7 +60,7 @@ db.update_processed_datasets()  # Update processed data
 # Backtest
 
 ## backtesting
-The `backtesting()` function under the `quantdev.backtest` module tests trading strategies and returns a `Strategy` instance with analysis tools including:
+The `backtesting()` function under the `scythe.backtest` module tests trading strategies and returns a `Strategy` instance with analysis tools including:
 - Performance metrics vs benchmark
 - Position information tracking
 - Interactive reporting with multiple views:
@@ -72,7 +72,7 @@ The `backtesting()` function under the `quantdev.backtest` module tests trading 
   - ...
 
 ```python
-from quantdev.backtest import *
+from scythe.backtest import *
 
 # Get data for strategy condition
 data = get_factor('roe')  # Get ROE factor data
@@ -120,7 +120,7 @@ strategy.position_info
 
 ## multi_backtesting
 
-The `multi_backtesting()` function under the `quantdev.backtest` module allows you to combine multiple strategies into a portfolio strategy. It returns a `MultiStrategy` instance with analysis tools including:
+The `multi_backtesting()` function under the `scythe.backtest` module allows you to combine multiple strategies into a portfolio strategy. It returns a `MultiStrategy` instance with analysis tools including:
 - Performance metrics vs original strategies and benchmark
 - Position information tracking
 - Interactive reporting with multiple views:
@@ -129,7 +129,7 @@ The `multi_backtesting()` function under the `quantdev.backtest` module allows y
   - ...
 
 ```python
-from quantdev.backtest import *
+from scythe.backtest import *
 
 roe = get_factor('roe')
 pbr = get_factor('股價淨值比')
@@ -191,7 +191,7 @@ The trading system implements institutional-grade execution via SinoPac's API wi
 The `Position` class represents individual stock positions that will be managed in your portfolio:
 
 ```python
-from quantdev.trade import Position
+from scythe.trade import Position
 
 # Create positions for your trading strategy
 tsmc_position = Position(('2330', 100000))    # 100,000 TWD of TSMC
@@ -209,7 +209,7 @@ mediatek_position.refresh_quotes(price_tolerance=0.02, odd=True)
 The `Portfolio` class combines multiple positions into strategy-based portfolios that will be executed:
 
 ```python
-from quantdev.trade import Portfolio
+from scythe.trade import Portfolio
 
 # Create a portfolio with multiple trading strategies
 portfolio = Portfolio({
@@ -232,7 +232,7 @@ portfolio.refresh_quotes()
 The `PortfolioManager` class executes and monitors your portfolio strategies in real-time:
 
 ```python
-from quantdev.trade import SinoPacAccount, PortfolioManager
+from scythe.trade import SinoPacAccount, PortfolioManager
 
 # Initialize SinoPac trading account
 account = SinoPacAccount()  # Handles login automatically
@@ -274,7 +274,7 @@ pm.run_portfolio_manager(
 
 ## Prerequisites
 
-Before using QuantDev, ensure you have:
+Before using Scythe, ensure you have:
 
 ### System requirements
 - Python 3.10.14 or higher
@@ -292,8 +292,8 @@ Before using QuantDev, ensure you have:
 One last thing, you'll need to set up your configuration files in a `config` directory. The module supports custom configuration paths:
 
 ```python
-import quantdev
-quantdev.set_config_dir('/path/to/config') # if not set, the default is ./config
+import scythe
+scythe.set_config_dir('/path/to/config') # if not set, the default is ./config
 ```
 
 The configuration directory should contain necessary API keys, trading parameters, and risk management settings.
