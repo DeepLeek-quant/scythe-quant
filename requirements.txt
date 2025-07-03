@@ -1,0 +1,13 @@
+pandas>=1.5.0
+numpy>=1.21.0
+plotly>=5.0.0
+scipy>=1.9.0
+statsmodels>=0.13.0
+scikit-learn>=1.1.0
+joblib>=1.1.0
+pyarrow>=8.0.0
+tejapi
+IPython>=8.0.0
+numerize>=0.12
+fugle-trade-sdk
+sinopac-sdk 

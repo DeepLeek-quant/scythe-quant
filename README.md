@@ -270,6 +270,34 @@ pm.run_portfolio_manager(
 
 ```
 
+# Installation
+
+## From GitHub
+
+Install directly from GitHub:
+
+```bash
+pip install git+https://github.com/yourusername/scythe.git
+```
+
+## From Local Development
+
+For development or local installation:
+
+```bash
+git clone https://github.com/yourusername/scythe.git
+cd scythe
+pip install -e .
+```
+
+## Development Dependencies
+
+To install with development dependencies:
+
+```bash
+pip install -e ".[dev]"
+```
+
 # How do I use it?
 
 ## Prerequisites
