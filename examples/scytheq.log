@@ -1,0 +1,6 @@
+2025-07-05 14:10:12,839 - root - INFO - TEJ API usage: 0.00%, 0.00%
+2025-07-05 14:10:14,674 - root - INFO - Fetched trading_activity_w from 2025-06-20 to 2025-06-27 from TEJ
+2025-07-05 14:10:17,346 - root - INFO - Saved trading_activity_w as parquet from DataFrame
+2025-07-05 14:10:17,360 - root - INFO - Updated trading_activity_w from tej
+2025-07-05 14:10:24,719 - root - INFO - TEJ API usage: 0.10%, 0.01%
+2025-07-05 14:10:30,158 - root - INFO - Fetched trading_activity from 2025-06-30 to 2025-07-04 from TEJ

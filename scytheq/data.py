@@ -877,7 +877,7 @@ class FactorModelHandler(DataUtils):
     
     def update_factor_model(self):
         print('Updating factor model')
-        from scythe.backtest import calc_factor_longshort_return
+        from scytheq.backtest import calc_factor_longshort_return
         data = Databank()
         model = pd.DataFrame({
             'MKT':self.calc_market_factor(),

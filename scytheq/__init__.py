@@ -9,7 +9,7 @@ __version__ = '2.0.1'
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    filename='scythe.log',
+    filename='scytheq.log',
     filemode='a',
 )
 logger = logging.getLogger(__name__)
@@ -30,8 +30,8 @@ def set_config_dir(path: str | Path) -> None:
     Examples:
         ```python
         # 設定自訂目錄
-        import scythe
-        scythe.set_config_dir('/path/to/config')
+        import scytheq
+        scytheq.set_config_dir('/path/to/config')
         ```
         
     Note:

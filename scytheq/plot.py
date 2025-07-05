@@ -9,6 +9,8 @@ from typing import Union, Tuple
 import pandas as pd
 import numpy as np
 
+from scytheq.analysis import create_random_portfolios
+
 fig_param = {
     'size': {'w': 800, 'h': 600},
     'margin': {'t': 50, 'b': 50, 'l': 50, 'r': 50},
@@ -871,7 +873,6 @@ def plot_relative_return(relative_return:pd.DataFrame)-> go.Figure:
 
 # multi Report
 def plot_efficiency_frontier(returns:pd.DataFrame):
-    from scythe.analysis import create_random_portfolios
     portfolios = create_random_portfolios(returns)
     max_sharpe = portfolios.loc[portfolios['sharpe'].argmax()]
     min_vol = portfolios.loc[portfolios['std_dev'].argmin()]

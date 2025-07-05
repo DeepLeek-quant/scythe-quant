@@ -63,8 +63,8 @@ def calc_ic_metrics(ic:Union[pd.DataFrame, pd.Series]=None, factor:pd.DataFrame=
         }, axis=1).T
 
 def calc_ic(factor:pd.DataFrame, exp_returns:pd.DataFrame=None, rebalance:Literal['MR', 'QR', 'W', 'M', 'Q', 'Y']='QR', rank:bool=True)->pd.Series:
-    from scythe.backtest import get_rebalance_date
-    from scythe.data import DatasetsHandler
+    from scytheq.backtest import get_rebalance_date
+    from scytheq.data import DatasetsHandler
     exp_returns = DatasetsHandler().read_dataset('exp_returns') if exp_returns is None else exp_returns
     r_date = pd.Index(get_rebalance_date(rebalance)).intersection(exp_returns.index)
     
@@ -112,7 +112,7 @@ def resample_returns(returns: pd.DataFrame, t: Literal['MR', 'QR', 'W', 'M', 'Q'
     if t == 'D':
         return returns
     try:
-        from scythe.backtest import get_rebalance_date
+        from scytheq.backtest import get_rebalance_date
         dates =  pd.DatetimeIndex(get_rebalance_date(t)+[returns.index.max()])
 
         def cum_rtns(group):
@@ -165,7 +165,7 @@ def calc_liquidity(portfolio_df:pd.DataFrame)-> pd.DataFrame:
         ('date', 'in', list(set(list(buy_sells['buy_date'].unique().strftime('%Y-%m-%d')) + list(buy_sells['sell_date'].unique().strftime('%Y-%m-%d'))))),
         ]
 
-    from scythe.data import DatasetsHandler
+    from scytheq.data import DatasetsHandler
     liquidity_status=pd.merge(
         DatasetsHandler().read_dataset(
             'trading_notes', 
@@ -272,7 +272,7 @@ def calc_style(daily_return:Union[pd.DataFrame, pd.Series], window:int=None, tot
         - 因子包含市場、規模、價值等常見因子
     """
 
-    from scythe.data import DatasetsHandler
+    from scytheq.data import DatasetsHandler
     model = DatasetsHandler().read_dataset('factor_model')
     if isinstance(daily_return, pd.DataFrame):
         daily_return = daily_return.iloc[:,0]
@@ -352,7 +352,7 @@ def create_random_portfolios(returns:pd.DataFrame, num_portfolios:int=None):
 
 # combine factors
 def calc_reg_returns(factors:Union[dict[str, pd.DataFrame], list[pd.DataFrame]], rebalance:str='MR', method:Literal['OLS', 'GLS']='GLS'):
-    from scythe.data import DatasetsHandler
+    from scytheq.data import DatasetsHandler
     returns = resample_returns(DatasetsHandler().read_dataset('exp_returns'), t=rebalance)\
         .stack()\
         .reset_index()\
@@ -473,7 +473,7 @@ def combine_factors(
         return (sum(factors) / len(factors)).to_factor(universe=universe)
     elif method.startswith('HR'):
         # Calculate factor weights using historical regression
-        from scythe.backtest import get_rebalance_date
+        from scytheq.backtest import get_rebalance_date
         factors_df = pd.concat([f[f.index.isin(get_rebalance_date(rebalance))].stack() for f in factors], axis=1).dropna()
         weights = calc_reg_returns(factors_df, rebalance)
         
@@ -487,10 +487,10 @@ def combine_factors(
         combined_factor = calc_weighted_factors(factors_df, weights)
         return combined_factor.to_factor(universe=universe)
     elif (method.endswith('IC')) or (method.endswith('IR')):
-        from scythe.backtest import get_rebalance_date
+        from scytheq.backtest import get_rebalance_date
         factors_df = pd.concat([f[f.index.isin(get_rebalance_date(rebalance))].stack() for f in factors], axis=1).dropna()
         
-        from scythe.data import DatasetsHandler
+        from scytheq.data import DatasetsHandler
         exp_returns = DatasetsHandler().read_dataset('exp_returns')
         ic = pd.concat([calc_ic(f, exp_returns, rebalance=rebalance) for f in factors], axis=1).dropna()
         if method == 'IC':
