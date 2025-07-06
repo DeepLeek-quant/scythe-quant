@@ -8,3 +8,73 @@
 2025-07-05 14:11:13,072 - root - INFO - Updated trading_activity from tej
 2025-07-05 14:11:17,041 - root - INFO - TEJ API usage: 0.20%, 0.05%
 2025-07-05 14:11:19,575 - root - INFO - Fetched trading_notes from 2025-07-01 to 2025-07-04 from TEJ
+2025-07-05 14:12:06,617 - root - INFO - Saved trading_notes as parquet from DataFrame
+2025-07-05 14:12:07,655 - root - INFO - Updated trading_notes from tej
+2025-07-05 14:12:10,439 - root - INFO - TEJ API usage: 0.30%, 0.09%
+2025-07-05 14:12:14,927 - root - INFO - Fetched trading_data from 2025-06-30 to 2025-07-04 from TEJ
+2025-07-05 14:12:24,256 - root - INFO - TEJ API usage: 0.40%, 0.13%
+2025-07-05 14:13:37,625 - root - INFO - Fetched trading_data from 2005-01-03 to 2025-07-04 from TEJ
+2025-07-05 14:14:19,018 - root - INFO - Saved trading_data as parquet from DataFrame
+2025-07-05 14:14:19,137 - root - INFO - Updated trading_data from tej
+2025-07-05 14:14:21,690 - root - INFO - TEJ API usage: 0.50%, 30.41%
+2025-07-05 14:14:23,880 - root - INFO - Fetched monthly_rev from 2025-05-01 to 2025-06-01 from TEJ
+2025-07-05 14:14:27,213 - root - INFO - Saved monthly_rev as parquet from DataFrame
+2025-07-05 14:14:27,223 - root - INFO - Updated monthly_rev from tej
+2025-07-05 14:14:27,968 - root - INFO - TEJ API usage: 0.60%, 30.42%
+2025-07-05 14:14:34,611 - root - INFO - Fetched fin_data from 2024-12-01 to 2025-03-01 from TEJ
+2025-07-05 14:14:40,891 - root - INFO - Saved fin_data as parquet from DataFrame
+2025-07-05 14:14:40,922 - root - INFO - Updated fin_data from tej
+2025-07-05 14:14:41,912 - root - INFO - TEJ API usage: 0.70%, 30.46%
+2025-07-05 14:14:46,888 - root - INFO - Fetched fin_data_self_disclosed from 2024-12-01 to 2025-06-01 from TEJ
+2025-07-05 14:14:48,154 - root - INFO - Saved fin_data_self_disclosed as parquet from DataFrame
+2025-07-05 14:14:48,161 - root - INFO - Updated fin_data_self_disclosed from tej
+2025-07-05 14:14:48,804 - root - INFO - TEJ API usage: 0.80%, 30.50%
+2025-07-05 14:14:57,839 - root - INFO - Fetched capital_formation_listed from TEJ
+2025-07-05 14:14:58,443 - root - INFO - Saved capital_formation_listed as parquet from DataFrame
+2025-07-05 14:14:58,449 - root - INFO - Updated capital_formation_listed from tej
+2025-07-05 14:14:58,852 - root - INFO - TEJ API usage: 0.90%, 30.73%
+2025-07-05 14:15:06,413 - root - INFO - Fetched capital_formation from TEJ
+2025-07-05 14:15:06,617 - root - INFO - Saved capital_formation as parquet from DataFrame
+2025-07-05 14:15:06,620 - root - INFO - Updated capital_formation from tej
+2025-07-05 14:15:06,878 - root - INFO - TEJ API usage: 1.00%, 30.96%
+2025-07-05 14:15:10,023 - root - INFO - Fetched div_policy from TEJ
+2025-07-05 14:15:10,088 - root - INFO - Saved div_policy as parquet from DataFrame
+2025-07-05 14:15:10,090 - root - INFO - Updated div_policy from tej
+2025-07-05 14:15:10,347 - root - INFO - TEJ API usage: 1.10%, 31.09%
+2025-07-05 14:15:13,428 - root - INFO - Fetched cash_div from 2005-02-14 to 2025-09-29 from TEJ
+2025-07-05 14:15:13,474 - root - INFO - Saved cash_div as parquet from DataFrame
+2025-07-05 14:15:13,475 - root - INFO - Updated cash_div from tej
+2025-07-05 14:15:13,980 - root - INFO - TEJ API usage: 1.20%, 31.20%
+2025-07-05 14:15:14,738 - root - INFO - Fetched twn_rates from 2025-06-30 to 2025-07-04 from TEJ
+2025-07-05 14:15:14,756 - root - INFO - Saved twn_rates as parquet from DataFrame
+2025-07-05 14:15:14,757 - root - INFO - Updated twn_rates from tej
+2025-07-05 14:15:15,010 - root - INFO - TEJ API usage: 1.30%, 31.20%
+2025-07-05 14:15:15,739 - root - INFO - Fetched glbl_rates from 2025-06-30 to 2025-07-03 from TEJ
+2025-07-05 14:15:15,749 - root - INFO - Saved glbl_rates as parquet from DataFrame
+2025-07-05 14:15:15,749 - root - INFO - Updated glbl_rates from tej
+2025-07-05 14:15:15,998 - root - INFO - TEJ API usage: 1.40%, 31.20%
+2025-07-05 14:15:17,177 - root - INFO - Fetched stock_info from TEJ
+2025-07-05 14:15:17,194 - root - INFO - Saved stock_info as parquet from DataFrame
+2025-07-05 14:15:17,194 - root - INFO - Updated stock_info from tej
+2025-07-05 14:15:17,446 - root - INFO - TEJ API usage: 1.50%, 31.21%
+2025-07-05 14:15:18,798 - root - INFO - Fetched mkt_calendar from 2005-01-01 to 2026-12-31 from TEJ
+2025-07-05 14:15:18,807 - root - INFO - Saved mkt_calendar as parquet from DataFrame
+2025-07-05 14:15:18,807 - root - INFO - Updated mkt_calendar from tej
+2025-07-05 14:15:19,093 - root - INFO - TEJ API usage: 1.60%, 31.29%
+2025-07-05 14:15:20,140 - root - INFO - Fetched index_components from TEJ
+2025-07-05 14:15:20,153 - root - INFO - Saved index_components as parquet from DataFrame
+2025-07-05 14:15:20,154 - root - INFO - Updated index_components from tej
+2025-07-05 14:15:37,717 - root - INFO - Saved fin_data_lag as parquet from DataFrame
+2025-07-05 14:17:02,576 - root - INFO - Saved fin_data_ath as parquet from DataFrame
+2025-07-05 14:17:23,052 - root - INFO - Saved fin_data_ind_avg as parquet from DataFrame
+2025-07-05 14:17:43,533 - root - INFO - Saved fin_data_ind_avg_lag as parquet from DataFrame
+2025-07-05 14:17:45,365 - root - INFO - Saved monthly_rev_lag as parquet from DataFrame
+2025-07-05 14:18:02,207 - root - INFO - Saved monthly_rev_ind_avg as parquet from DataFrame
+2025-07-05 14:18:04,336 - root - INFO - Saved exp_returns as parquet from DataFrame
+2025-07-05 14:18:13,570 - root - INFO - Saved exp_returns_dt_short as parquet from DataFrame
+2025-07-05 14:18:14,841 - root - INFO - Saved trading_activity_w_pct as parquet from DataFrame
+2025-07-05 14:18:26,327 - root - INFO - Saved trading_activity_w_pct_lag as parquet from DataFrame
+2025-07-05 14:19:08,492 - root - INFO - Saved trading_data_ind_avg as parquet from DataFrame
+2025-07-05 14:19:13,391 - root - INFO - Saved fin_data_self_disclosed_combined as parquet from DataFrame
+2025-07-05 14:20:06,079 - root - INFO - Saved factor_model as parquet from DataFrame
+2025-07-05 14:20:06,079 - root - INFO - Factor model updated
