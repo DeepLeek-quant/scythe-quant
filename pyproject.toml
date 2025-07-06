@@ -1,0 +1,54 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "scytheq"
+version = "2.0.1"
+description = "A quantitative research and trading python package for Taiwan stock market"
+readme = "README.md"
+license = {text = "GNU Affero General Public License v3"}
+authors = [
+    {name = "Ryan Kan"}
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Financial and Insurance Industry",
+    "License :: OSI Approved :: GNU Affero General Public License v3",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Office/Business :: Financial :: Investment",
+]
+requires-python = ">=3.10"
+dependencies = [
+    "pandas>=1.5.0",
+    "numpy>=1.21.0",
+    "pyarrow>=8.0.0",
+    "scipy>=1.9.0",
+    "statsmodels>=0.13.0",
+    "scikit-learn>=1.1.0",
+    "plotly>=5.0.0",
+    "cufflinks",
+    "panel",
+    "joblib>=1.1.0",
+    "tqdm",
+    "numerize>=0.12",
+    "IPython>=8.0.0",
+    "tejapi",
+    "eodhd",
+    "fugle_marketdata",
+    "shioaji",
+]
+
+[project.urls]
+Homepage = "https://github.com/DeepLeek-quant/scythe-quant"
+Repository = "https://github.com/DeepLeek-quant/scythe-quant"
+
+[tool.setuptools.packages.find]
+include = ["scytheq*"]
+
+[tool.setuptools.package-data]
+"scytheq" = ["*.json", "*.yaml", "*.yml"] 
