@@ -59,8 +59,8 @@ def set_config_dir(path: str | Path) -> None:
         - 設定檔目錄必須包含所需的 JSON 設定檔
         - 如果未設定，則會使用預設的 config 目錄
     """
-    global _custom_config_dir
-    _custom_config_dir = Path(path)
+    global _config_dir
+    _config_dir = Path(path)
 
 def get_config_dir() -> Path:
     config_path = _config_dir or Path(__file__).parent.parent / 'config'
