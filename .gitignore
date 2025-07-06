@@ -4,8 +4,8 @@
 # Python bytecode cache directories
 **/__pycache__/
 
-# Shioaji trading API logs
-shioaji.log
+# any log files
+*.log
 
 # Python package metadata
 *.egg-info/
