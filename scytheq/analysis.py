@@ -18,7 +18,7 @@ def mdd(rtns, mdd_type: Literal['cumprod','cumsum']='cumprod'):
     if mdd_type == 'cumprod':
         cum_rtns = (1 + rtns).cumprod()
     elif mdd_type == 'cumsum':
-        cum_rtns = (1 + rtns).cumsum()    
+        cum_rtns = (rtns).cumsum()    
     return ((cum_rtns) / (cum_rtns).cummax() - 1).min()
 
 def cagr(rtns):
