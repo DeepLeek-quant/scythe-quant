@@ -7,10 +7,10 @@ import statsmodels.api as sm
 from scipy import stats
 import pandas as pd
 import numpy as np
-
 import warnings
 warnings.filterwarnings("ignore", category=RuntimeWarning, message="overflow encountered in reduce")
 
+from .utils import *
 
 
 # utils
@@ -18,7 +18,7 @@ def mdd(rtns, mdd_type: Literal['cumprod','cumsum']='cumprod'):
     if mdd_type == 'cumprod':
         cum_rtns = (1 + rtns).cumprod()
     elif mdd_type == 'cumsum':
-        cum_rtns = (rtns).cumsum()    
+        cum_rtns = (rtns).cumsum() + 1
     return ((cum_rtns) / (cum_rtns).cummax() - 1).min()
 
 def cagr(rtns):
@@ -470,7 +470,7 @@ def combine_factors(
     
     # methods
     if method == 'EW':
-        return (sum(factors) / len(factors)).to_factor(universe=universe)
+        return mean_dfs(factors)
     elif method.startswith('HR'):
         # Calculate factor weights using historical regression
         from scytheq.backtest import get_rebalance_date
@@ -485,7 +485,7 @@ def combine_factors(
         
         # Combine factors with weights
         combined_factor = calc_weighted_factors(factors_df, weights)
-        return combined_factor.to_factor(universe=universe)
+        return combined_factor
     elif (method.endswith('IC')) or (method.endswith('IR')):
         from scytheq.backtest import get_rebalance_date
         factors_df = pd.concat([f[f.index.isin(get_rebalance_date(rebalance))].stack() for f in factors], axis=1).dropna()
@@ -504,4 +504,4 @@ def combine_factors(
         else:
             raise ValueError(f"Invalid method: {method}")
         combined_factor = calc_weighted_factors(factors_df, weights)
-        return combined_factor.to_factor(universe=universe)
+        return combined_factor

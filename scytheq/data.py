@@ -605,7 +605,7 @@ class ProcessedHandler(DataUtils):
         
         return self.write_dataset(dataset='fin_data_ath', df=df[['date', 'stock_id', 'release_date', *[col for col in df.columns if col.endswith('_ATH')], 't_date']])
 
-    def update_monthly_rev_lag(self, lag_period:int=36):
+    def update_monthly_rev_lag(self, lag_period:int=48):
         target_cols = ['單月營收(千元)', '單月營收成長率％']
         lag_columns = {
             f'{col}_lag{i}': lambda df, i=i, col=col: df.groupby('stock_id')[col].shift(i)
