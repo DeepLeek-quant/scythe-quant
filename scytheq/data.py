@@ -14,7 +14,7 @@ import os
 import re
 
 import warnings
-warnings.filterwarnings('ignore', category=pd.errors.PerformanceWarning)
+
 try:
     import IPython
     IPython.get_ipython().run_line_magic('warnings', 'ignore::pandas.errors.PerformanceWarning')
@@ -36,7 +36,7 @@ class DataUtils():
         
         os.makedirs(self.databank_path, exist_ok=True)
         os.makedirs(self.datasets_path, exist_ok=True)
-            
+        warnings.filterwarnings('ignore', category=pd.errors.PerformanceWarning)
         
         self.start_date = '2005-01-01'
         self.data_type = 'parquet'
