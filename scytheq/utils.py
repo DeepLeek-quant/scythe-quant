@@ -8,7 +8,37 @@ def largest(df, n):
 def smallest(df, n):
     return df.rank(axis=1, ascending=True) <= n
 
-def to_factor(df, method:Literal['Z']='Z', remove_outlier:Literal['SD', 'IQR', 'WS', 'MAD', None]='MAD', universe:pd.DataFrame=None):
+def to_zscore(df):
+    return df.sub(df.mean(axis=1), axis=0).div(df.std(axis=1), axis=0)
+
+def winsorize(df, method:Literal['SD', 'IQR', 'WS', 'MAD']='MAD', params=None):
+    params = params or {'SD': 3, 'IQR': 2.5, 'WS': 0.05, 'MAD': 3}
+
+    # remove outlier
+    if method=='SD':
+        mean = df.mean(axis=1)
+        sd = df.std(axis=1)
+        sd_threshold = params['SD']
+        lower_bound, upper_bound = mean-sd_threshold*sd, mean+sd_threshold*sd
+        return df.where((df.ge(lower_bound, axis=0) & df.le(upper_bound, axis=0)) , np.nan)
+    elif remove_outlier=='IQR':
+        q1, q3 = df.quantile(0.25, axis=1), df.quantile(0.75, axis=1)
+        iqr = q3-q1
+        iqr_threshold = params['IQR']
+        lower_bound, upper_bound = q1-iqr_threshold*iqr, q3+iqr_threshold*iqr
+        return df.where((df.ge(lower_bound, axis=0) & df.le(upper_bound, axis=0)) , np.nan)
+    elif remove_outlier=='WS':
+        ws_limit = params['WS']
+        lower_bound, upper_bound = df.quantile(ws_limit, axis=1), data.quantile((1-ws_limit), axis=1)
+        return df.clip(lower=lower_bound, upper=upper_bound, axis=0)
+    elif remove_outlier=='MAD':
+        median = df.median(axis=1)
+        mad = df.sub(median, axis=0).abs().median(axis=1)
+        mad_threshold = params['MAD']
+        lower_bound, upper_bound = median - mad_threshold * 1.4826 * mad, median + mad_threshold * 1.4826 * mad
+        return df.where((df.ge(lower_bound, axis=0)) & (df.le(upper_bound, axis=0)), np.nan)
+
+def to_factor(df, winsorize:Literal['SD', 'IQR', 'WS', 'MAD', None]='MAD', params=None):
     """將資料去極值、標準化
 
     Args:
@@ -26,41 +56,13 @@ def to_factor(df, method:Literal['Z']='Z', remove_outlier:Literal['SD', 'IQR', '
         roe_factor = df_roe.to_factor(method='Z', remove_outlier='MAD')
         ```
     """
-    
-    params = {'SD': 3, 'IQR': 1.5, 'WS': 0.05, 'MAD': 3}
-
-    df = df[universe] if universe is not None else df
 
     # remove outlier
-    if remove_outlier !=None:
-        if remove_outlier=='SD':
-            mean = df.mean(axis=1)
-            sd = df.std(axis=1)
-            sd_threshold = params['SD']
-            lower_bound, upper_bound = mean-sd_threshold*sd, mean+sd_threshold*sd
-            df = df.where((df.ge(lower_bound, axis=0) & df.le(upper_bound, axis=0)) , np.nan)
-        elif remove_outlier=='IQR':
-            q1, q3 = df.quantile(0.25, axis=1), df.quantile(0.75, axis=1)
-            iqr = q3-q1
-            iqr_threshold = params['IQR']
-            lower_bound, upper_bound = q1-iqr_threshold*iqr, q3+iqr_threshold*iqr
-            df = df.where((df.ge(lower_bound, axis=0) & df.le(upper_bound, axis=0)) , np.nan)
-        elif remove_outlier=='WS':
-            ws_limit = params['WS']
-            lower_bound, upper_bound = df.quantile(ws_limit, axis=1), data.quantile((1-ws_limit), axis=1)
-            df = df.clip(lower=lower_bound, upper=upper_bound, axis=0)
-        elif remove_outlier=='MAD':
-            median = df.median(axis=1)
-            mad = df.sub(median, axis=0).abs().median(axis=1)
-            mad_threshold = params['MAD']
-            lower_bound, upper_bound = median - mad_threshold * 1.4826 * mad, median + mad_threshold * 1.4826 * mad
-            df = df.where((df.ge(lower_bound, axis=0)) & (df.le(upper_bound, axis=0)), np.nan)
+    if winsorize !=None:
+        df =  df.winsorize(winsorize, params)
     
     # z-score standardize
-    if method=='Z':
-        df = df.sub(df.mean(axis=1), axis=0).div(df.std(axis=1), axis=0)
-
-    return df
+    return df.to_zscore()
 
 def to_rank(df, asc:bool=True, universe:pd.DataFrame=None):
     """將資料轉換為排序值
@@ -96,9 +98,24 @@ def to_rank(df, asc:bool=True, universe:pd.DataFrame=None):
 
 pd.DataFrame.largest = lambda self, n: largest(self, n)
 pd.DataFrame.smallest = lambda self, n: smallest(self, n)
-pd.DataFrame.to_factor = lambda self, method='Z', remove_outlier='MAD', universe=None: to_factor(self, method, remove_outlier, universe)
+pd.DataFrame.to_zscore = lambda self: to_zscore(self)
+pd.DataFrame.winsorize = lambda self, method='MAD', params=None: winsorize(self, method, params)
+pd.DataFrame.to_factor = lambda self, winsorize='MAD', params=None: to_factor(self, winsorize, params)
 pd.DataFrame.to_rank = lambda self, asc=True, universe=None: to_rank(self, asc, universe)
-pd.DataFrame.log = lambda self, base=10: np.log10(self) if base == 10 else np.log(self) if base == np.e else np.log(self)
+def _df_log(self, base=10):
+    arr = self.values
+    with np.errstate(invalid='ignore', divide='ignore'):
+        arr_safe = np.where(arr > 0, arr, 0)
+        if base == 10:
+            result = np.log10(arr_safe)
+        elif base == np.e:
+            result = np.log(arr_safe)
+        else:
+            result = np.log(arr_safe) / np.log(base)
+        result = np.where(np.isneginf(result), 0, result)
+    return pd.DataFrame(result, index=self.index, columns=self.columns)
+
+pd.DataFrame.log = _df_log
 
 def sum_dfs(x_list:list[pd.DataFrame]) -> pd.DataFrame:
     if len(x_list)==2:

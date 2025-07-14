@@ -186,7 +186,7 @@ def get_rebalance_date(rebalance:Literal['D', 'MR', 'QR', 'W', 'M', 'Q', 'Y'], s
     
     # dates
     end = (dt.datetime.today() + dt.timedelta(days=1)).strftime('%Y-%m-%d') if end is None else end
-    t_date = DatasetsHandler().read_dataset('mkt_calendar', columns=['date'], filters=[('休市原因中文說明(人工建置)','=','')], start=start, end=end).rename(columns={'date':'t_date'})
+    t_date = DatasetsHandler().read_dataset('mkt_calendar', columns=['date'], filters=[('休市原因中文說明_人工建置','=','')], start=start, end=end).rename(columns={'date':'t_date'})
     start_date = t_date['t_date'].min()
     end_date = t_date['t_date'].max()
 

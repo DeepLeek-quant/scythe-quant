@@ -121,7 +121,7 @@ class DataUtils():
         logging.info(f'Saved {dataset} as parquet from DataFrame')
 
     def get_t_date(self):
-        t_date = DatasetsHandler().read_dataset('mkt_calendar', columns=['date'], filters=[('休市原因中文說明(人工建置)','=','')])\
+        t_date = DatasetsHandler().read_dataset('mkt_calendar', columns=['date'], filters=[('休市原因中文說明_人工建置','=','')])\
             .rename(columns={'date':'t_date'})
         nearest_next_t_date = t_date\
             .loc[lambda x: x['t_date'] > pd.to_datetime(dt.datetime.today().date())]\
@@ -337,10 +337,10 @@ class TEJHandler(DataUtils):
         """
         
         # import trade date
-        t_date = self.read_dataset('mkt_calendar', columns=['date'], filters=[('休市原因中文說明(人工建置)','=','')]).rename(columns={'date':'t_date'})
+        t_date = self.read_dataset('mkt_calendar', columns=['date'], filters=[('休市原因中文說明_人工建置','=','')]).rename(columns={'date':'t_date'})
         if t_date.empty:
             self.update_tej_datasets('mkt_calendar')
-            t_date = self.read_dataset('mkt_calendar', columns=['date'], filters=[('休市原因中文說明(人工建置)','=','')]).rename(columns={'date':'t_date'})
+            t_date = self.read_dataset('mkt_calendar', columns=['date'], filters=[('休市原因中文說明_人工建置','=','')]).rename(columns={'date':'t_date'})
         
         date_col = 'release_date' if 'release_date' in data.columns else 'date'
         
@@ -389,7 +389,7 @@ class TEJHandler(DataUtils):
         if dataset=='fin_data_self_disclosed':
             data = data\
                 .rename(columns={col: f'{col}_自' for col in data.columns \
-                                if col not in ['date', 'stock_id', 'release_date', '期間別', '序號', '季別', '合併(Y/N)', '幣別', '產業別', 't_date']})
+                                if col not in ['date', 'stock_id', 'release_date', '期間別', '序號', '季別', '合併_YN', '幣別', '產業別', 't_date']})
         # fillna for monthly rev release date
         elif dataset=='monthly_rev':
             data = data\
@@ -418,10 +418,13 @@ class TEJHandler(DataUtils):
         if (dataset != 'mkt_calendar') & ('date' in data.columns):
             data = self.add_t_date(data)
 
+        # rename columns
+        data.columns = [re.sub(r'\(([^)]+)\)', r'_\1', col).replace('％', '').replace('/', '') for col in data.columns]
+
         return data
 
-    def deal_with_adj_fac(self, data:pd.DataFrame):
-        adj_fac_cols = {'調整係數':'adjfac', '調整係數(除權)':'adjfac_a'}
+    def deal_with_adj_factor(self, data:pd.DataFrame):
+        adj_fac_cols = {'調整係數':'adjfac', '調整係數_除權':'adjfac_a'}
         adj_fac_data = self.get_tej_data(
             dataset='trading_data', 
             columns=['mdate', 'coid', *list(adj_fac_cols.values())], 
@@ -528,7 +531,7 @@ class TEJHandler(DataUtils):
                     if (dataset == 'trading_data') & \
                         (not old_data.empty) & \
                         (old_data['insert_time'].min().date() < dt.date.today()):
-                        old_data = self.deal_with_adj_fac(old_data)
+                        old_data = self.deal_with_adj_factor(old_data)
                     
                     # Reorder columns to move t_date and insert_time to the end
                     last_cols = [col for col in old_data.columns if col in ['t_date', 'insert_time']]
@@ -567,7 +570,7 @@ class ProcessedHandler(DataUtils):
 
     # financial data
     def update_fin_data_lag(self, lag_period:int=12):
-        ignore_cols = ['期間別', '序號', '季別', '合併(Y/N)', '幣別', '產業別', 'date', 'release_date', 'stock_id', 't_date', 'insert_time']
+        ignore_cols = ['期間別', '序號', '季別', '合併_YN', '幣別', '產業別', 'date', 'release_date', 'stock_id', 't_date', 'insert_time']
         
         lag_columns = {
             f'{col}_lag{i}': lambda df, i=i, col=col: df.groupby('stock_id')[col].shift(i)
@@ -606,7 +609,7 @@ class ProcessedHandler(DataUtils):
         return self.write_dataset(dataset='fin_data_ath', df=df[['date', 'stock_id', 'release_date', *[col for col in df.columns if col.endswith('_ATH')], 't_date']])
 
     def update_monthly_rev_lag(self, lag_period:int=48):
-        target_cols = ['單月營收(千元)', '單月營收成長率％']
+        target_cols = ['單月營收_千元', '單月營收成長率']
         lag_columns = {
             f'{col}_lag{i}': lambda df, i=i, col=col: df.groupby('stock_id')[col].shift(i)
             for i in range(1, lag_period+1) for col in target_cols
@@ -658,7 +661,7 @@ class ProcessedHandler(DataUtils):
     def update_exp_returns_dt_short(self):
         t_date = self.get_t_date()
         df = self.read_dataset('trading_data', columns=['date', 'stock_id', '開盤價', '收盤價', '最高價', '調整係數'])\
-            .merge(self.read_dataset('trading_notes', columns=['date', 'stock_id', '證券種類(中)', '是否開盤即漲跌停', '是否為處置股票', '是否全額交割', '暫停當沖先賣後買註記']), on=['date', 'stock_id'], how='left')\
+            .merge(self.read_dataset('trading_notes', columns=['date', 'stock_id', '證券種類_中', '是否開盤即漲跌停', '是否為處置股票', '是否全額交割', '暫停當沖先賣後買註記']), on=['date', 'stock_id'], how='left')\
             .sort_values(by=['stock_id', 'date'])\
             .assign(
                 adj_close=lambda df: df['收盤價'] * df['調整係數'],
@@ -669,7 +672,7 @@ class ProcessedHandler(DataUtils):
                 close_to_high_return=lambda df: df['adj_high']/df['adj_prev_close']-1,
                 rtn=lambda df: np.where(df['close_to_high_return'] >= .09, -1*(df['stop_loss_price']/df['adj_open']-1), -1*(df['adj_close']/df['adj_open']-1))
             )\
-            .rename(columns={'證券種類(中)':'sec_type'})\
+            .rename(columns={'證券種類_中':'sec_type'})\
             .query('(sec_type.isin(["普通股", "ETF"])) &\
                     (是否開盤即漲跌停=="") &\
                     (是否為處置股票=="") &\
@@ -740,15 +743,15 @@ class ProcessedHandler(DataUtils):
 
     # industry average
     def update_fin_data_ind_avg(self):
-        industry_data = self.read_dataset('trading_notes', columns=['t_date','stock_id', '主產業別(中)', '子產業別(中)'])\
-            .assign(main_ind = lambda x: x[['主產業別(中)']].apply(lambda x: x.str.split(' ').str[-1]).fillna(''))\
-            .assign(sub_ind = lambda x: x[['子產業別(中)']].apply(lambda x: x.str.split(' ').str[-1]).fillna(''))\
+        industry_data = self.read_dataset('trading_notes', columns=['t_date','stock_id', '主產業別_中', '子產業別_中'])\
+            .assign(main_ind = lambda x: x[['主產業別_中']].apply(lambda x: x.str.split(' ').str[-1]).fillna(''))\
+            .assign(sub_ind = lambda x: x[['子產業別_中']].apply(lambda x: x.str.split(' ').str[-1]).fillna(''))\
             [['t_date', 'stock_id', 'main_ind', 'sub_ind']]
 
         df = self.read_dataset('fin_data')\
             .merge(industry_data, on=['t_date', 'stock_id'], how='left')
         
-        ignore_cols = ['期間別', '序號', '季別', '合併(Y/N)', '幣別', '產業別', 'date', 'release_date', 'stock_id', 't_date', 'insert_time']
+        ignore_cols = ['期間別', '序號', '季別', '合併_YN', '幣別', '產業別', 'date', 'release_date', 'stock_id', 't_date', 'insert_time']
         cols = [col for col in self.list_columns('fin_data') if col not in ignore_cols]
         main_ind_avg_columns = {f'{col}_main_ind_avg': lambda df, col=col: df.groupby(['date', 'main_ind'])[col].transform('mean') for col in cols}
         sub_ind_avg_columns = {f'{col}_sub_ind_avg': lambda df, col=col: df.groupby(['date', 'sub_ind'])[col].transform('mean') for col in cols}
@@ -761,7 +764,7 @@ class ProcessedHandler(DataUtils):
         return self.write_dataset(dataset='fin_data_ind_avg', df=df)
 
     def update_fin_data_ind_avg_lag(self, lag_period:int=12):
-        ignore_cols = ['期間別', '序號', '季別', '合併(Y/N)', '幣別', '產業別', 'date', 'release_date', 'stock_id', 't_date', 'insert_time']
+        ignore_cols = ['期間別', '序號', '季別', '合併_YN', '幣別', '產業別', 'date', 'release_date', 'stock_id', 't_date', 'insert_time']
         
         lag_columns = {
             f'{col}_lag{i}': lambda df, i=i, col=col: df.groupby('stock_id')[col].shift(i)
@@ -775,12 +778,12 @@ class ProcessedHandler(DataUtils):
         return self.write_dataset(dataset='fin_data_ind_avg_lag', df=df)
 
     def update_monthly_rev_ind_avg(self):
-        industry_data = self.read_dataset('trading_notes', columns=['t_date','stock_id', '主產業別(中)', '子產業別(中)'])\
-            .assign(main_ind = lambda x: x[['主產業別(中)']].apply(lambda x: x.str.split(' ').str[-1]).fillna(''))\
-            .assign(sub_ind = lambda x: x[['子產業別(中)']].apply(lambda x: x.str.split(' ').str[-1]).fillna(''))\
+        industry_data = self.read_dataset('trading_notes', columns=['t_date','stock_id', '主產業別_中', '子產業別_中'])\
+            .assign(main_ind = lambda x: x[['主產業別_中']].apply(lambda x: x.str.split(' ').str[-1]).fillna(''))\
+            .assign(sub_ind = lambda x: x[['子產業別_中']].apply(lambda x: x.str.split(' ').str[-1]).fillna(''))\
             [['t_date', 'stock_id', 'main_ind', 'sub_ind']]
 
-        target_cols = ['單月營收(千元)', '單月營收成長率％']
+        target_cols = ['單月營收_千元', '單月營收成長率']
         main_ind_avg_columns = {f'{col}_main_ind_avg': lambda df, col=col: df.groupby(['date', 'main_ind'])[col].transform('mean') for col in target_cols}
         sub_ind_avg_columns = {f'{col}_sub_ind_avg': lambda df, col=col: df.groupby(['date', 'sub_ind'])[col].transform('mean') for col in target_cols}
         df = self.read_dataset(
@@ -801,14 +804,14 @@ class ProcessedHandler(DataUtils):
             '本益比',
             '股價淨值比',
             '股利殖利率',
-            '現金股利率(TEJ)',
-            '本益比(TEJ)',
-            '股價淨值比(TEJ)',
-            '股價營收比(TEJ)',
+            '現金股利率_TEJ',
+            '本益比_TEJ',
+            '股價淨值比_TEJ',
+            '股價營收比_TEJ',
         ]
-        industry_data = self.read_dataset('trading_notes', columns=['t_date','stock_id', '主產業別(中)', '子產業別(中)'])\
-            .assign(main_ind = lambda x: x[['主產業別(中)']].apply(lambda x: x.str.split(' ').str[-1]).fillna(''))\
-            .assign(sub_ind = lambda x: x[['子產業別(中)']].apply(lambda x: x.str.split(' ').str[-1]).fillna(''))\
+        industry_data = self.read_dataset('trading_notes', columns=['t_date','stock_id', '主產業別_中', '子產業別_中'])\
+            .assign(main_ind = lambda x: x[['主產業別_中']].apply(lambda x: x.str.split(' ').str[-1]).fillna(''))\
+            .assign(sub_ind = lambda x: x[['子產業別_中']].apply(lambda x: x.str.split(' ').str[-1]).fillna(''))\
             [['t_date', 'stock_id', 'main_ind', 'sub_ind']]
         main_ind_avg_columns = {f'{col}_main_ind_avg': lambda df, col=col: df.groupby(['date', 'main_ind'])[col].transform('mean') for col in target_cols}
         sub_ind_avg_columns = {f'{col}_sub_ind_avg': lambda df, col=col: df.groupby(['date', 'sub_ind'])[col].transform('mean') for col in target_cols}
@@ -841,7 +844,7 @@ class ProcessedHandler(DataUtils):
                         't_date', 
                         'stock_id', 
                         'date',
-                        '合併(Y/N)',
+                        '合併_YN',
                     ]))
         combined_fin_data = pd.merge(
             expand_fin_data_to_t_dates('fin_data_self_disclosed'), 
@@ -852,20 +855,21 @@ class ProcessedHandler(DataUtils):
         )\
             .dropna(how='all')\
             .reset_index()\
-            .sort_values(by=['t_date', 'stock_id', 'date', '合併(Y/N)'])\
+            .sort_values(by=['t_date', 'stock_id', 'date', '合併_YN'])\
             .drop_duplicates(subset=['t_date', 'stock_id'], keep='last')
 
         for col in combined_fin_data.columns:
             if col.endswith('_自'):
                 base_col = col.replace('_自', '')
                 combined_fin_data[col] = combined_fin_data[col].fillna(combined_fin_data[base_col])
-        combined_fin_data = combined_fin_data[['stock_id', 'date', '合併(Y/N)', *[c for c in combined_fin_data.columns if c.endswith('_自')], 't_date']]\
+        combined_fin_data = combined_fin_data[['stock_id', 'date', '合併_YN', *[c for c in combined_fin_data.columns if c.endswith('_自')], 't_date']]\
             .rename(columns=lambda col: col.replace('_自', '_combined') if col.endswith('_自') else col)
         return self.write_dataset(dataset='fin_data_self_disclosed_combined', df=combined_fin_data)
 
 
 
         # update
+    
     def update_processed_datasets(self):
         for v in tqdm(self.processed_datasets.values(), desc='Updating processed datasets'):
             v['func']()
@@ -960,7 +964,7 @@ class Databank(dict, DataUtils):
             sec_types = ['封閉型基金', 'ETF', '普通股', '特別股', '台灣存託憑證', '指數', 'REIT', '國外ETF', '普通股-海外']
             if any(t not in sec_types for t in sec_type):
                 raise ValueError(f'Security type must be one of {sec_types}')
-            stdata = self['證券種類(中)']\
+            stdata = self['證券種類_中']\
                 .isin(sec_type)
             self.sec_type = stdata\
                 .loc[:, stdata.sum()>0]
@@ -975,7 +979,7 @@ class Databank(dict, DataUtils):
         ]
         self.ignore_cols = [
             'date', 'release_date', 'stock_id', 't_date', 'insert_time', 
-            '期間別', '序號', '季別', '合併(Y/N)', '幣別', '產業別', '市場別', '營收發布時點', '備註說明', 'release_date_集保股權', 'release_date_集保庫存', 
+            '期間別', '序號', '季別', '合併_YN', '幣別', '產業別', '市場別', '營收發布時點', '備註說明', 'release_date_集保股權', 'release_date_集保庫存', 
         ]
 
     def find(self, keyword:str):
