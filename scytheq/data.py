@@ -27,10 +27,12 @@ from .utils import *
 
 pd.set_option('future.no_silent_downcasting', True)
 
+_data_config = config.data_config
+
 class DataUtils():
-    def __init__(self):
-        self.datasets_path = config.data_config.get('datasets_path')
-        self.databank_path = config.data_config.get('databank_path')
+    def __init__(self, datasets_path:str=None, databank_path:str=None):
+        self.datasets_path = datasets_path or _data_config.get('datasets_path')
+        self.databank_path = databank_path or _data_config.get('databank_path')
         if "shortcut-targets-by-id" in self.datasets_path:
             self.datasets_path = self.datasets_path.replace("/", "\\").replace("shortcut-targets-by-id", ".shortcut-targets-by-id", 1)    
         
@@ -130,9 +132,9 @@ class DataUtils():
 
 
 class TEJHandler(DataUtils):
-    def __init__(self):
+    def __init__(self, tej_token:str=None):
         super().__init__()
-        tejapi.ApiConfig.api_key = config.data_config.get('tej_token')
+        tejapi.ApiConfig.api_key = tej_token or _data_config.get('tej_token')
         tejapi.ApiConfig.ignoretz = True
         self.tej_datasets_map = {
             'trading_activity_w': 'TWN/APISHRACTW',

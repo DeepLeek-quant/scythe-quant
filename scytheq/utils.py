@@ -21,17 +21,17 @@ def winsorize(df, method:Literal['SD', 'IQR', 'WS', 'MAD']='MAD', params=None):
         sd_threshold = params['SD']
         lower_bound, upper_bound = mean-sd_threshold*sd, mean+sd_threshold*sd
         return df.where((df.ge(lower_bound, axis=0) & df.le(upper_bound, axis=0)) , np.nan)
-    elif remove_outlier=='IQR':
+    elif method=='IQR':
         q1, q3 = df.quantile(0.25, axis=1), df.quantile(0.75, axis=1)
         iqr = q3-q1
         iqr_threshold = params['IQR']
         lower_bound, upper_bound = q1-iqr_threshold*iqr, q3+iqr_threshold*iqr
         return df.where((df.ge(lower_bound, axis=0) & df.le(upper_bound, axis=0)) , np.nan)
-    elif remove_outlier=='WS':
+    elif method=='WS':
         ws_limit = params['WS']
         lower_bound, upper_bound = df.quantile(ws_limit, axis=1), data.quantile((1-ws_limit), axis=1)
         return df.clip(lower=lower_bound, upper=upper_bound, axis=0)
-    elif remove_outlier=='MAD':
+    elif method=='MAD':
         median = df.median(axis=1)
         mad = df.sub(median, axis=0).abs().median(axis=1)
         mad_threshold = params['MAD']
