@@ -15,12 +15,6 @@ import re
 
 import warnings
 
-try:
-    import IPython
-    IPython.get_ipython().run_line_magic('warnings', 'ignore::pandas.errors.PerformanceWarning')
-except:
-    pass
-
 # config
 from .config import config
 from .utils import *
@@ -29,19 +23,21 @@ pd.set_option('future.no_silent_downcasting', True)
 
 _data_config = config.data_config
 
-class DataUtils():
-    def __init__(self, datasets_path:str=None, databank_path:str=None):
+class DataKit():
+    def __init__(self, datasets_path:str=None, databank_path:str=None, data_type:str='parquet', start_date:str='2005-01-01'):
         self.datasets_path = datasets_path or _data_config.get('datasets_path')
         self.databank_path = databank_path or _data_config.get('databank_path')
         if "shortcut-targets-by-id" in self.datasets_path:
             self.datasets_path = self.datasets_path.replace("/", "\\").replace("shortcut-targets-by-id", ".shortcut-targets-by-id", 1)    
         
-        os.makedirs(self.databank_path, exist_ok=True)
-        os.makedirs(self.datasets_path, exist_ok=True)
+        if self.databank_path:
+            os.makedirs(self.databank_path, exist_ok=True)
+        if self.datasets_path:
+            os.makedirs(self.datasets_path, exist_ok=True)
         warnings.filterwarnings('ignore', category=pd.errors.PerformanceWarning)
         
-        self.start_date = '2005-01-01'
-        self.data_type = 'parquet'
+        self.start_date = start_date
+        self.data_type = data_type
     
     def list_columns(self, dataset:str, keyword:str=None):
         """取得資料集中所有欄位名稱
@@ -131,7 +127,7 @@ class DataUtils():
         return t_date.loc[lambda x: x['t_date'] <= nearest_next_t_date]
 
 
-class TEJHandler(DataUtils):
+class TEJHandler(DataKit):
     def __init__(self, tej_token:str=None):
         super().__init__()
         tejapi.ApiConfig.api_key = tej_token or _data_config.get('tej_token')
@@ -551,7 +547,7 @@ class TEJHandler(DataUtils):
             logging.info(f'Updated {dataset} from tej')
 
 
-class ProcessedHandler(DataUtils):
+class ProcessedHandler(DataKit):
     def __init__(self):
         super().__init__()
         self.processed_datasets = {
@@ -624,28 +620,6 @@ class ProcessedHandler(DataUtils):
         df = df[['date', 'stock_id', *lag_cols, 't_date']].dropna(subset=lag_cols, how='all')
         return self.write_dataset(dataset='monthly_rev_lag', df=df)
     
-    # def update_monthly_rev_ath(self):
-    #     df = self.read_dataset('monthly_rev', columns=['date', 'stock_id', 'release_date', '單月營收(千元)', 't_date'])
-        
-    #     df['單月營收_ATH'] = np.nan
-        
-    #     def calc_ath_months(x):
-    #         curr_val = x.iloc[-1]
-    #         for i in range(len(x)-1, -1, -1):
-    #             if x.iloc[i] > curr_val:
-    #                 return len(x) - i - 1
-    #         return len(x)
-            
-    #     df['單月營收_ATH'] = df\
-    #         .groupby('stock_id')\
-    #         ['單月營收(千元)']\
-    #         .transform(lambda x: x.expanding().apply(calc_ath_months))
-        
-    #     is_ath = df.groupby('stock_id')['單月營收(千元)'].transform(lambda x: x.iloc[12:] == x.iloc[12:].expanding().max() if len(x) > 12 else False).fillna(False)
-    #     df.loc[is_ath, '單月營收_ATH'] = np.inf
-
-    #     return self.write_dataset(dataset='monthly_rev_ath', df=df[['date', 'stock_id', 'release_date', '單月營收_ATH', 't_date']])
-
     # backtest 
     def update_exp_returns(self):
         t_date = self.get_t_date()
@@ -692,7 +666,7 @@ class ProcessedHandler(DataUtils):
             .reindex(index=t_date['t_date'])
         return self.write_dataset(dataset='exp_returns_dt_short', df=df)
 
-    def update_exp_returns_overnighttrade(self):
+    def update_exp_returns_cto(self):
         # buy at close, sell at open
         t_date = self.get_t_date()
         df = self.read_dataset('trading_data', columns=['date', 'stock_id', '收盤價', '開盤價', '調整係數'])\
@@ -709,7 +683,7 @@ class ProcessedHandler(DataUtils):
             .replace([np.inf, -np.inf], np.nan)\
             .dropna(axis=0, how='all')\
             .reindex(index=t_date['t_date'])
-        return self.write_dataset(dataset='exp_returns_overnighttrade', df=df)
+        return self.write_dataset(dataset='exp_returns_cto', df=df)
     
     # trading_activity_w
     def update_trading_activity_w_pct(self):
@@ -877,7 +851,7 @@ class ProcessedHandler(DataUtils):
             v['func']()
 
 
-class FactorModelHandler(DataUtils):
+class FactorModelHandler(DataKit):
     def __init__(self):
         super().__init__()
     
@@ -953,10 +927,14 @@ class DatasetsHandler(TEJHandler, ProcessedHandler, FactorModelHandler):
         self.update_processed_datasets()
         self.update_factor_model()
 
+def update_datasets():
+    TEJHandler().update_tej_datasets()
+    ProcessedHandler().update_processed_datasets()
+    FactorModelHandler().update_factor_model()
 
-class Databank(dict, DataUtils):
+class Databank(dict, DataKit):
     def __init__(self, sec_type:Union[str, list[str]]=['普通股']):
-        DataUtils.__init__(self)
+        DataKit.__init__(self)
         self._ignore()
         self.cashe_dict = {}
         self.func_dict = {}

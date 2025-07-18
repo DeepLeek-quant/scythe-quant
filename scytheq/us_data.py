@@ -6,10 +6,10 @@ import tqdm
 import time
 from .config import config
 from joblib import Parallel, delayed
-from .data import DataUtils
+from .data import DataKit
 import os
 
-class US_DataHandler(DataUtils):
+class US_DataHandler(DataKit):
     def __init__(self, universe=['etf', 'stock']):
         self.databank_path = config.us_data_config["databank_path"]
         self.token = config.us_data_config["eodhd_token"]
