@@ -46,7 +46,10 @@ def calc_metrics(daily_returns:Union[pd.DataFrame, pd.Series, dict]):
         'Win/Loss Ratio': daily_returns.apply(lambda x:(x[x > 0].mean() / abs(x[x < 0].mean()))),
         'Expected Return(bps)': ((1 + daily_returns).prod() ** (1 / len(daily_returns)) - 1)*10000,
         'Sample Size': daily_returns.apply(lambda x:x.dropna().count()),
-        't': daily_returns.apply(lambda x: (x.mean() / (x.std() / np.sqrt(x.dropna().count())))),
+        't': daily_returns.apply(
+            lambda x: np.nan if x.dropna().count() == 0 or x.std() == 0
+            else x.mean() / (x.std() / np.sqrt(x.dropna().count()))
+        ),
     }, axis=1).round(2).T
 
 def calc_ic_metrics(ic:Union[pd.DataFrame, pd.Series]=None, factor:pd.DataFrame=None, exp_returns=None, rebalance='QR', rank=True)->pd.DataFrame:
