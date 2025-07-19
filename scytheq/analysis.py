@@ -137,6 +137,34 @@ def resample_returns(returns: pd.DataFrame, t: Literal['MR', 'QR', 'W', 'M', 'Q'
             .resample(t)\
             .apply(lambda x: (np.nan if x.isna().all() else (x + 1).prod() - 1))
 
+def calc_r2(y, method='lstsq', min_samples=5):
+    """
+    Given a list or 1D array of floats y, fit y = a + b*x (x = index), return R-squared.
+    method: 'lstsq' (numpy lstsq) or 'linregress' (scipy.stats.linregress)
+    """
+    y = np.asarray(y)
+    x = np.arange(len(y))
+    # Remove nan
+    mask = ~np.isnan(y)
+    x = x[mask]
+    y = y[mask]
+    if len(y) < min_samples:
+        return np.nan
+    if method == 'lstsq':
+        # Fit OLS: y = a + b*x
+        A = np.vstack([x, np.ones(len(x))]).T
+        b, a = np.linalg.lstsq(A, y, rcond=None)[0]
+        y_pred = a + b*x
+        ss_res = np.sum((y - y_pred) ** 2)
+        ss_tot = np.sum((y - np.mean(y)) ** 2)
+        r2 = 1 - ss_res / ss_tot if ss_tot != 0 else np.nan
+        return r2
+    elif method == 'linregress':
+        result = stats.linregress(x, y)
+        return result.rvalue ** 2
+    else:
+        raise ValueError("method must be 'lstsq' or 'linregress'")
+
 # plot
 def calc_liquidity(portfolio_df:pd.DataFrame)-> pd.DataFrame:
         

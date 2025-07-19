@@ -556,10 +556,14 @@ class ProcessedHandler(DataKit):
             'fin_data_ind_avg':{'source':'fin_data', 'func':self.update_fin_data_ind_avg},
             'fin_data_ind_avg_lag':{'source':'fin_data_ind_avg', 'func':self.update_fin_data_ind_avg_lag},
             'monthly_rev_lag':{'source':'monthly_rev', 'func':self.update_monthly_rev_lag},
-            # 'monthly_rev_ath':{'source':'monthly_rev', 'func':self.update_monthly_rev_ath},
             'monthly_rev_ind_avg':{'source':'monthly_rev', 'func':self.update_monthly_rev_ind_avg},
+            
+            # exp_returns
             'exp_returns':{'source':'trading_data', 'func':self.update_exp_returns}, 
-            'exp_returns_dt_short':{'source':'trading_data', 'func':self.update_exp_returns_dt_short},
+            'exp_returns_otc':{'source':'trading_data', 'func':self.update_exp_returns_otc},
+            'exp_returns_otc_short':{'source':'trading_data', 'func':self.update_exp_returns_otc_short},
+            'exp_returns_cto':{'source':'trading_data', 'func':self.update_exp_returns_cto},
+            
             'trading_activity_w_pct':{'source':'trading_activity_w', 'func':self.update_trading_activity_w_pct},
             'trading_activity_w_pct_lag':{'source':'trading_activity_w_pct', 'func':self.update_trading_activity_w_pct_lag},
             'trading_data_ind_avg':{'source':'trading_data', 'func':self.update_trading_data_ind_avg},
@@ -634,7 +638,39 @@ class ProcessedHandler(DataKit):
             .reindex(index=t_date['t_date'])
         return self.write_dataset(dataset='exp_returns', df=df)
     
-    def update_exp_returns_dt_short(self):
+    def update_exp_returns_otc(self, stop_loss_pct:float=0.079):
+        t_date = self.get_t_date()
+        df = self.read_dataset('trading_data', columns=['date', 'stock_id', '開盤價', '收盤價', '最低價', '調整係數'])\
+            .merge(self.read_dataset('trading_notes', columns=['date', 'stock_id', '證券種類_中', '是否開盤即漲跌停', '是否為處置股票', '是否全額交割', '暫停當沖先賣後買註記']), on=['date', 'stock_id'], how='left')\
+            .sort_values(by=['stock_id', 'date'])\
+            .assign(
+                adj_close=lambda df: df['收盤價'] * df['調整係數'],
+                adj_open=lambda df: df['開盤價'] * df['調整係數'],
+                adj_low=lambda df: df['最低價'] * df['調整係數'],
+                adj_prev_close=lambda df: df.groupby('stock_id')['adj_close'].shift(1),
+                stop_loss_price=lambda df: df['adj_prev_close'] * (1-stop_loss_pct),
+                close_to_low_return=lambda df: df['adj_low']/df['adj_prev_close']-1,
+                rtn=lambda df: np.where(df['close_to_low_return'] <= stop_loss_pct, (df['stop_loss_price']/df['adj_open']-1), (df['adj_close']/df['adj_open']-1))
+            )\
+            .rename(columns={'證券種類_中':'sec_type'})\
+            .query('(sec_type.isin(["普通股", "ETF"])) &\
+                    (是否開盤即漲跌停=="") &\
+                    (是否為處置股票=="") &\
+                    (是否全額交割=="") &\
+                    (暫停當沖先買後賣註記=="")&\
+                    (~(stock_id.str.endswith("R") | stock_id.str.endswith("L")))'
+            )\
+            [['date', 'stock_id', 'rtn']]\
+            .rename(columns={'date':'t_date'})\
+            .set_index(['t_date', 'stock_id'])\
+            .unstack('stock_id')\
+            .droplevel(0, axis=1)\
+            .replace([np.inf, -np.inf], np.nan)\
+            .dropna(axis=0, how='all')\
+            .reindex(index=t_date['t_date'])
+        return self.write_dataset(dataset='exp_returns_otc', df=df)
+    
+    def update_exp_returns_otc_short(self, stop_loss_pct:float=0.079):
         t_date = self.get_t_date()
         df = self.read_dataset('trading_data', columns=['date', 'stock_id', '開盤價', '收盤價', '最高價', '調整係數'])\
             .merge(self.read_dataset('trading_notes', columns=['date', 'stock_id', '證券種類_中', '是否開盤即漲跌停', '是否為處置股票', '是否全額交割', '暫停當沖先賣後買註記']), on=['date', 'stock_id'], how='left')\
@@ -644,9 +680,9 @@ class ProcessedHandler(DataKit):
                 adj_open=lambda df: df['開盤價'] * df['調整係數'],
                 adj_high=lambda df: df['最高價'] * df['調整係數'],
                 adj_prev_close=lambda df: df.groupby('stock_id')['adj_close'].shift(1),
-                stop_loss_price=lambda df: df['adj_prev_close'] * 1.09,
+                stop_loss_price=lambda df: df['adj_prev_close'] * (1+stop_loss_pct),
                 close_to_high_return=lambda df: df['adj_high']/df['adj_prev_close']-1,
-                rtn=lambda df: np.where(df['close_to_high_return'] >= .09, -1*(df['stop_loss_price']/df['adj_open']-1), -1*(df['adj_close']/df['adj_open']-1))
+                rtn=lambda df: np.where(df['close_to_high_return'] >= stop_loss_pct, -1*(df['stop_loss_price']/df['adj_open']-1), -1*(df['adj_close']/df['adj_open']-1))
             )\
             .rename(columns={'證券種類_中':'sec_type'})\
             .query('(sec_type.isin(["普通股", "ETF"])) &\
@@ -664,16 +700,23 @@ class ProcessedHandler(DataKit):
             .replace([np.inf, -np.inf], np.nan)\
             .dropna(axis=0, how='all')\
             .reindex(index=t_date['t_date'])
-        return self.write_dataset(dataset='exp_returns_dt_short', df=df)
+        return self.write_dataset(dataset='exp_returns_otc_short', df=df)
 
     def update_exp_returns_cto(self):
         # buy at close, sell at open
         t_date = self.get_t_date()
         df = self.read_dataset('trading_data', columns=['date', 'stock_id', '收盤價', '開盤價', '調整係數'])\
+            .merge(self.read_dataset('trading_notes', columns=['date', 'stock_id', '證券種類_中', '漲跌停註記', '是否為處置股票']), on=['date', 'stock_id'], how='left')\
             .assign(
                 收盤價_adj=lambda df: df['收盤價']*df['調整係數'], 
                 開盤價_adj=lambda df: df['開盤價']*df['調整係數'], 
                 rtn=lambda df: df.groupby('stock_id')['開盤價_adj'].shift(-1)/df['收盤價_adj']-1
+            )\
+            .rename(columns={'證券種類_中':'sec_type'})\
+            .query('(sec_type.isin(["普通股", "ETF"])) &\
+                    (漲跌停註記!="+") &\
+                    (是否為處置股票=="") &\
+                    (~(stock_id.str.endswith("R") | stock_id.str.endswith("L")))'
             )\
             [['date', 'stock_id', 'rtn']]\
             .rename(columns={'date':'t_date'})\
@@ -865,7 +908,7 @@ class FactorModelHandler(DataKit):
             'MCAP_to_REV':calc_factor_longshort_return((-1*data['個股市值_元']/1000/data['營業收入']).to_factor().to_rank(), rebalance='QR'),
             'SIZE':calc_factor_longshort_return((data['個股市值_元']).to_factor().to_rank(), rebalance='Q'),
             'VOL':calc_factor_longshort_return((data['成交金額_元'].rolling(60).mean()).to_factor().to_rank(), rebalance='Q'),
-            'MTM3m':calc_factor_longshort_return((data['收盤價']*data['調整係數'].pct_change(60)).to_factor().to_rank(), rebalance='Q'),
+            'MTM6m':calc_factor_longshort_return((data['收盤價']*data['調整係數'].pct_change(120)).to_factor().to_rank(), rebalance='Q'),
             'ROE':calc_factor_longshort_return((data['常續ROE']).to_factor().to_rank(), rebalance='QR'),
             'OPM':calc_factor_longshort_return((data['營業利益率']).to_factor().to_rank(), rebalance='QR'),
         }).dropna(how='all')
@@ -952,7 +995,7 @@ class Databank(dict, DataKit):
     def _ignore(self):
         # ignore
         self.ingore_datasets = [
-            'exp_returns', 'exp_returns_dt_short', 
+            'exp_returns', 'update_exp_returns_otc_short', 
             'div_policy', 'cash_div', 'capital_formation', 'capital_formation_listed',
             'glbl_rates', 'twn_rates', 'index_components',
             'stock_info', 'mkt_calendar', 

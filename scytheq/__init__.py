@@ -2,6 +2,10 @@ from pathlib import Path
 import logging
 import re
 
+import cufflinks as cf
+cf.go_offline()
+cf.set_config_file(theme='space')
+
 from .utils import *
 
 __version__ = '2.0.1'

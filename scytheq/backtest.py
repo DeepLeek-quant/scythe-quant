@@ -224,7 +224,7 @@ def get_rebalance_date(rebalance:Literal['D', 'MR', 'QR', 'W', 'M', 'Q', 'Y'], s
         r_date = pd.DataFrame(pd.date_range(start=start_date, end=end_date, freq='QS'), columns=['r_date'])    
     elif rebalance == 'Y':
         r_date = pd.DataFrame(pd.date_range(start=start_date, end=end_date, freq='YS'), columns=['r_date'])
-    elif rebalance in ['DTS', 'dt_short']:
+    elif rebalance in ['otcs', 'otc_short']:
         return None
     else:
         raise ValueError("Invalid frequency. Allowed values are 'W', 'MR, 'QR', 'M', 'Q', 'Y'.")
@@ -382,7 +382,7 @@ def stop_loss_or_profit(buy_list:pd.DataFrame, portfolio_df:pd.DataFrame, exp_re
 
 def backtesting(
     data:pd.DataFrame, 
-    rebalance:Literal['MR', 'QR', 'W', 'M', 'Q', 'Y', 'DTS', 'dt_short', 'event']='QR', 
+    rebalance:Literal['MR', 'QR', 'W', 'M', 'Q', 'Y', 'otcs', 'otc_short', 'event']='QR', 
     longshort:Union[Literal[1], Literal[-1]]=1, 
     weights:pd.DataFrame=None, signal_shift:int=0, hold_period:int=None, weight_limit:float=None,
     fee:float=0.001425, fee_discount:float=0.25, tax:float=0.003, slippage:float=0.001, trading_cost:bool=True,
@@ -427,7 +427,7 @@ def backtesting(
         - 若無持有期間限制，則持有至下次再平衡日
     """
     if rebalance in ['dt_short', 'DTS']:
-        exp_returns = DatasetsHandler().read_dataset('exp_returns_dt_short', filter_date='t_date', start=start, end=end) if exp_returns is None else exp_returns.copy()
+        exp_returns = DatasetsHandler().read_dataset('update_exp_returns_otc_short', filter_date='t_date', start=start, end=end) if exp_returns is None else exp_returns.copy()
         rebalance_dates = None
     elif rebalance == 'event':
         exp_returns = DatasetsHandler().read_dataset('exp_returns', filter_date='t_date', start=start, end=end) if exp_returns is None else exp_returns
@@ -754,7 +754,7 @@ def calc_factor_quantiles_return(factor:pd.DataFrame, rebalance:str='QR', group:
     # return
     exp_returns = kwargs.get('exp_returns')
     if exp_returns is None:
-        exp_returns = DatasetsHandler().read_dataset('exp_returns', filter_date='t_date', start=start) if rebalance not in ['DTS', 'dt_short'] else DatasetsHandler().read_dataset('exp_returns_dt_short', filter_date='t_date', start=start)
+        exp_returns = DatasetsHandler().read_dataset('exp_returns', filter_date='t_date', start=start) if rebalance not in ['otcs', 'otc_short'] else DatasetsHandler().read_dataset('update_exp_returns_otc_short', filter_date='t_date', start=start)
     rebalance_dates = get_rebalance_date(rebalance=rebalance)
     
     def process_group(k_v):
@@ -801,7 +801,7 @@ def calc_independent_double_sorting(factors:Tuple[pd.DataFrame, pd.DataFrame], g
     # return
     exp_returns = kwargs.get('exp_returns')
     if exp_returns is None:
-        exp_returns = DatasetsHandler().read_dataset('exp_returns', filter_date='t_date', start=kwargs.get('start')) if rebalance not in ['dt_short', 'DTS'] else DatasetsHandler().read_dataset('exp_returns_dt_short', filter_date='t_date', start=kwargs.get('start'))
+        exp_returns = DatasetsHandler().read_dataset('exp_returns', filter_date='t_date', start=kwargs.get('start')) if rebalance not in ['dt_short', 'DTS'] else DatasetsHandler().read_dataset('update_exp_returns_otc_short', filter_date='t_date', start=kwargs.get('start'))
     rebalance_dates = get_rebalance_date(rebalance=rebalance)
     
     def process_group(k_v):
