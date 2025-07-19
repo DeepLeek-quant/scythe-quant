@@ -862,9 +862,9 @@ class FactorModelHandler(DataKit):
         model = pd.DataFrame({
             'MKT':self.calc_market_factor(),
             'PBR':calc_factor_longshort_return((-1*data['股價淨值比']).to_factor().to_rank(), rebalance='QR'),
-            'MCAP_to_REV':calc_factor_longshort_return((-1*data['個股市值(元)']/1000/data['營業收入']).to_factor().to_rank(), rebalance='QR'),
-            'SIZE':calc_factor_longshort_return((data['個股市值(元)']).to_factor().to_rank(), rebalance='Q'),
-            'VOL':calc_factor_longshort_return((data['成交金額(元)'].rolling(60).mean()).to_factor().to_rank(), rebalance='Q'),
+            'MCAP_to_REV':calc_factor_longshort_return((-1*data['個股市值_元']/1000/data['營業收入']).to_factor().to_rank(), rebalance='QR'),
+            'SIZE':calc_factor_longshort_return((data['個股市值_元']).to_factor().to_rank(), rebalance='Q'),
+            'VOL':calc_factor_longshort_return((data['成交金額_元'].rolling(60).mean()).to_factor().to_rank(), rebalance='Q'),
             'MTM3m':calc_factor_longshort_return((data['收盤價']*data['調整係數'].pct_change(60)).to_factor().to_rank(), rebalance='Q'),
             'ROE':calc_factor_longshort_return((data['常續ROE']).to_factor().to_rank(), rebalance='QR'),
             'OPM':calc_factor_longshort_return((data['營業利益率']).to_factor().to_rank(), rebalance='QR'),
@@ -889,7 +889,7 @@ class FactorModelHandler(DataKit):
         # get market cap data
         idx_mkt_cap = self.read_dataset(
             dataset='trading_data',
-            columns=['date', 'stock_id', '個股市值(元)'],
+            columns=['date', 'stock_id', '個股市值_元'],
             filters=[['stock_id', 'in', idx_ids]]
         ).set_index(['date', 'stock_id']).unstack('stock_id').droplevel(0, axis=1).shift(1)
 

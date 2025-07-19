@@ -174,12 +174,12 @@ def calc_liquidity(portfolio_df:pd.DataFrame)-> pd.DataFrame:
         ),
         DatasetsHandler().read_dataset(
             'trading_data',
-            columns=['date', 'stock_id', '成交量(千股)', '成交金額(元)'],
+            columns=['date', 'stock_id', '成交量_千股', '成交金額_元'],
             filters=filters,
         ),
         on=['date', 'stock_id'],
         how='inner',
-        ).rename(columns={'成交量(千股)':'成交量', '成交金額(元)':'成交金額'})
+        ).rename(columns={'成交量_千股':'成交量', '成交金額_元':'成交金額'})
 
     # merge
     return pd.concat([
