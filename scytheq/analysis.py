@@ -24,6 +24,12 @@ def mdd(rtns, mdd_type: Literal['cumprod','cumsum']='cumprod'):
 def cagr(rtns):
     return (1 + ((1 + rtns).cumprod() - 1).iloc[-1]) ** (240 / len(rtns)) - 1
 
+def median_cagr(rtns):
+    return rtns.add(1).resample('YE').prod().sub(1).median()
+
+def sd_cagr(rtns):
+    return rtns.add(1).resample('YE').prod().sub(1).std()
+
 def calmar(rtns):
     return cagr(rtns) / abs(mdd(rtns, 'cumprod'))
 
@@ -125,10 +131,7 @@ def resample_returns(returns: pd.DataFrame, t: Literal['MR', 'QR', 'W', 'M', 'Q'
                 result[all_na_cols] = np.nan
                 return result
             else:
-                if all_na_cols:
-                    return np.nan
-                else:
-                    return (group + 1).prod() - 1
+                return np.nan if all_na_cols else (group + 1).prod() - 1
 
         return returns\
             .groupby(dates[dates.searchsorted(returns.index)], group_keys=True)\

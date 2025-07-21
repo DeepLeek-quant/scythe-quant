@@ -1,7 +1,8 @@
-from typing import Literal
+from typing import Literal, Union
 import pandas as pd
 import numpy as np
 
+# factor
 def largest(df, n):
     return df.rank(axis=1, ascending=False) <= n
 
@@ -96,12 +97,6 @@ def to_rank(df, asc:bool=True, universe:pd.DataFrame=None):
         df = df[universe]
     return df.rank(axis=1, pct=True, ascending=asc)
 
-pd.DataFrame.largest = lambda self, n: largest(self, n)
-pd.DataFrame.smallest = lambda self, n: smallest(self, n)
-pd.DataFrame.to_zscore = lambda self: to_zscore(self)
-pd.DataFrame.winsorize = lambda self, method='MAD', params=None: winsorize(self, method, params)
-pd.DataFrame.to_factor = lambda self, winsorize='MAD', params=None: to_factor(self, winsorize, params)
-pd.DataFrame.to_rank = lambda self, asc=True, universe=None: to_rank(self, asc, universe)
 def _df_log(self, base=10):
     arr = self.values
     with np.errstate(invalid='ignore', divide='ignore'):
@@ -115,8 +110,22 @@ def _df_log(self, base=10):
         result = np.where(np.isneginf(result), 0, result)
     return pd.DataFrame(result, index=self.index, columns=self.columns)
 
-pd.DataFrame.log = _df_log
+# plot
+def plot_cr(df:Union[pd.DataFrame, pd.Series], **kwargs):
+    if isinstance(df, pd.Series):
+        df = pd.DataFrame(df)
+    return df.add(1).cumprod().sub(1).iplot(**kwargs)
 
+pd.DataFrame.largest = lambda self, n: largest(self, n)
+pd.DataFrame.smallest = lambda self, n: smallest(self, n)
+pd.DataFrame.to_zscore = lambda self: to_zscore(self)
+pd.DataFrame.winsorize = lambda self, method='MAD', params=None: winsorize(self, method, params)
+pd.DataFrame.to_factor = lambda self, winsorize='MAD', params=None: to_factor(self, winsorize, params)
+pd.DataFrame.to_rank = lambda self, asc=True, universe=None: to_rank(self, asc, universe)
+pd.DataFrame.log = _df_log
+pd.DataFrame.plot_cr = pd.Series.plot_cr = plot_cr
+
+# dfs
 def sum_dfs(x_list:list[pd.DataFrame]) -> pd.DataFrame:
     if len(x_list)==2:
         return x_list[0] + x_list[1]

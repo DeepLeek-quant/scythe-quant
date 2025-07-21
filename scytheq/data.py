@@ -641,7 +641,7 @@ class ProcessedHandler(DataKit):
     def update_exp_returns_otc(self, stop_loss_pct:float=0.079):
         t_date = self.get_t_date()
         df = self.read_dataset('trading_data', columns=['date', 'stock_id', '開盤價', '收盤價', '最低價', '調整係數'])\
-            .merge(self.read_dataset('trading_notes', columns=['date', 'stock_id', '證券種類_中', '是否開盤即漲跌停', '是否為處置股票', '是否全額交割', '暫停當沖先賣後買註記']), on=['date', 'stock_id'], how='left')\
+            .merge(self.read_dataset('trading_notes', columns=['date', 'stock_id', '證券種類_中', '是否開盤即漲跌停', '是否為處置股票', '是否全額交割', '暫停當沖先買後賣註記']), on=['date', 'stock_id'], how='left')\
             .sort_values(by=['stock_id', 'date'])\
             .assign(
                 adj_close=lambda df: df['收盤價'] * df['調整係數'],
