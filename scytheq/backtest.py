@@ -279,7 +279,7 @@ def get_portfolio(
     # buy_list = buy_list[buy_list.apply(lambda x: x.isin([0, 1]).all())]
     
     # weight
-    if rebalance in ['dt_short', 'DTS']:
+    if rebalance in ['otcs', 'otc_short']:
         buy_list = data
         portfolio = buy_list.astype(int)\
             .apply(lambda x: x / x.sum(), axis=1)
@@ -426,8 +426,8 @@ def backtesting(
         - 投資組合權重預設為等權重配置，除非提供自定義權重
         - 若無持有期間限制，則持有至下次再平衡日
     """
-    if rebalance in ['dt_short', 'DTS']:
-        exp_returns = DatasetsHandler().read_dataset('update_exp_returns_otc_short', filter_date='t_date', start=start, end=end) if exp_returns is None else exp_returns.copy()
+    if rebalance in ['otcs', 'otc_short']:
+        exp_returns = DatasetsHandler().read_dataset('exp_returns_otc_short', filter_date='t_date', start=start, end=end) if exp_returns is None else exp_returns.copy()
         rebalance_dates = None
     elif rebalance == 'event':
         exp_returns = DatasetsHandler().read_dataset('exp_returns', filter_date='t_date', start=start, end=end) if exp_returns is None else exp_returns
@@ -754,7 +754,7 @@ def calc_factor_quantiles_return(factor:pd.DataFrame, rebalance:str='QR', group:
     # return
     exp_returns = kwargs.get('exp_returns')
     if exp_returns is None:
-        exp_returns = DatasetsHandler().read_dataset('exp_returns', filter_date='t_date', start=start) if rebalance not in ['otcs', 'otc_short'] else DatasetsHandler().read_dataset('update_exp_returns_otc_short', filter_date='t_date', start=start)
+        exp_returns = DatasetsHandler().read_dataset('exp_returns', filter_date='t_date', start=start) if rebalance not in ['otcs', 'otc_short'] else DatasetsHandler().read_dataset('exp_returns_otc_short', filter_date='t_date', start=start)
     rebalance_dates = get_rebalance_date(rebalance=rebalance)
     
     def process_group(k_v):

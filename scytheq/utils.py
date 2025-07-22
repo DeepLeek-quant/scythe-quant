@@ -12,32 +12,41 @@ def smallest(df, n):
 def to_zscore(df):
     return df.sub(df.mean(axis=1), axis=0).div(df.std(axis=1), axis=0)
 
-def winsorize(df, method:Literal['SD', 'IQR', 'WS', 'MAD']='MAD', params=None):
+def winsorize(df, method: Literal['SD', 'IQR', 'WS', 'MAD'] = 'MAD', params=None, side: Literal['both', 'upper', 'lower'] = 'both'):
     params = params or {'SD': 3, 'IQR': 2.5, 'WS': 0.05, 'MAD': 3}
 
     # remove outlier
-    if method=='SD':
+    if method == 'SD':
         mean = df.mean(axis=1)
         sd = df.std(axis=1)
         sd_threshold = params['SD']
-        lower_bound, upper_bound = mean-sd_threshold*sd, mean+sd_threshold*sd
-        return df.where((df.ge(lower_bound, axis=0) & df.le(upper_bound, axis=0)) , np.nan)
-    elif method=='IQR':
+        lower_bound, upper_bound = mean - sd_threshold * sd, mean + sd_threshold * sd
+    elif method == 'IQR':
         q1, q3 = df.quantile(0.25, axis=1), df.quantile(0.75, axis=1)
-        iqr = q3-q1
+        iqr = q3 - q1
         iqr_threshold = params['IQR']
-        lower_bound, upper_bound = q1-iqr_threshold*iqr, q3+iqr_threshold*iqr
-        return df.where((df.ge(lower_bound, axis=0) & df.le(upper_bound, axis=0)) , np.nan)
-    elif method=='WS':
+        lower_bound, upper_bound = q1 - iqr_threshold * iqr, q3 + iqr_threshold * iqr
+    elif method == 'WS':
         ws_limit = params['WS']
-        lower_bound, upper_bound = df.quantile(ws_limit, axis=1), data.quantile((1-ws_limit), axis=1)
-        return df.clip(lower=lower_bound, upper=upper_bound, axis=0)
-    elif method=='MAD':
+        lower_bound, upper_bound = df.quantile(ws_limit, axis=1), df.quantile((1 - ws_limit), axis=1)
+    elif method == 'MAD':
         median = df.median(axis=1)
         mad = df.sub(median, axis=0).abs().median(axis=1)
         mad_threshold = params['MAD']
         lower_bound, upper_bound = median - mad_threshold * 1.4826 * mad, median + mad_threshold * 1.4826 * mad
-        return df.where((df.ge(lower_bound, axis=0)) & (df.le(upper_bound, axis=0)), np.nan)
+    else:
+        raise ValueError(f"Unknown method: {method}")
+
+    if side == 'both':
+        mask = (df.ge(lower_bound, axis=0)) & (df.le(upper_bound, axis=0))
+    elif side == 'lower':
+        mask = df.ge(lower_bound, axis=0)
+    elif side == 'upper':
+        mask = df.le(upper_bound, axis=0)
+    else:
+        raise ValueError(f"Unknown side: {side}")
+
+    return df.where(mask, np.nan)
 
 def to_factor(df, winsorize:Literal['SD', 'IQR', 'WS', 'MAD', None]='MAD', params=None):
     """將資料去極值、標準化
@@ -97,8 +106,8 @@ def to_rank(df, asc:bool=True, universe:pd.DataFrame=None):
         df = df[universe]
     return df.rank(axis=1, pct=True, ascending=asc)
 
-def _df_log(self, base=10):
-    arr = self.values
+def _df_log(data, base=10):
+    arr = data.values
     with np.errstate(invalid='ignore', divide='ignore'):
         arr_safe = np.where(arr > 0, arr, 0)
         if base == 10:
@@ -108,22 +117,47 @@ def _df_log(self, base=10):
         else:
             result = np.log(arr_safe) / np.log(base)
         result = np.where(np.isneginf(result), 0, result)
-    return pd.DataFrame(result, index=self.index, columns=self.columns)
+    
+    if isinstance(data, pd.Series):
+        return pd.Series(result, index=data.index, name=data.name)
+    elif isinstance(data, pd.DataFrame):
+        return pd.DataFrame(result, index=data.index, columns=data.columns)
 
 # plot
 def plot_cr(df:Union[pd.DataFrame, pd.Series], **kwargs):
     if isinstance(df, pd.Series):
         df = pd.DataFrame(df)
+    if 'layout' not in kwargs:
+        kwargs['layout'] = dict(
+            template='plotly_dark',
+            yaxis=dict(tickformat='.0%'),
+        )
     return df.add(1).cumprod().sub(1).iplot(**kwargs)
+
+def plot_cagr(df:Union[pd.DataFrame, pd.Series], **kwargs):
+    if isinstance(df, pd.Series):
+        df = pd.DataFrame(df)
+    from .analysis import cagr
+    cagr_df = cagr(df)
+    if 'kind' not in kwargs:
+        kwargs['kind'] = 'bar'
+    if 'layout' not in kwargs:
+        kwargs['layout'] = dict(
+            template='plotly_dark',
+            yaxis=dict(tickformat='.0%'),
+            xaxis=dict(tickmode='array', tickvals=list(cagr_df.index))
+        )
+    return cagr_df.iplot(**kwargs)
 
 pd.DataFrame.largest = lambda self, n: largest(self, n)
 pd.DataFrame.smallest = lambda self, n: smallest(self, n)
 pd.DataFrame.to_zscore = lambda self: to_zscore(self)
-pd.DataFrame.winsorize = lambda self, method='MAD', params=None: winsorize(self, method, params)
+pd.DataFrame.winsorize = lambda self, method='MAD', params=None, side='both': winsorize(self, method, params, side)
 pd.DataFrame.to_factor = lambda self, winsorize='MAD', params=None: to_factor(self, winsorize, params)
 pd.DataFrame.to_rank = lambda self, asc=True, universe=None: to_rank(self, asc, universe)
-pd.DataFrame.log = _df_log
+pd.DataFrame.log = pd.Series.log = _df_log
 pd.DataFrame.plot_cr = pd.Series.plot_cr = plot_cr
+pd.DataFrame.plot_cagr = pd.Series.plot_cagr = plot_cagr
 
 # dfs
 def sum_dfs(x_list:list[pd.DataFrame]) -> pd.DataFrame:
