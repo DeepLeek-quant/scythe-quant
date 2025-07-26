@@ -196,8 +196,8 @@ def calc_liquidity(portfolio_df:pd.DataFrame)-> pd.DataFrame:
     # load data
     filters=[
         ('stock_id', 'in', list(buy_sells['stock_id'].unique())),
-        ('date', 'in', list(set(list(buy_sells['buy_date'].unique().strftime('%Y-%m-%d')) + list(buy_sells['sell_date'].unique().strftime('%Y-%m-%d'))))),
-        ]
+        ('date', 'in', list(set(list(buy_sells['buy_date'].tolist()) + list(buy_sells['sell_date'].tolist())))),
+    ]
 
     from scytheq.data import DatasetsHandler
     liquidity_status=pd.merge(
