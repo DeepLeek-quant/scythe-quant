@@ -308,7 +308,7 @@ class TEJHandler(DataKit):
         
         return self.bulk_tej_data_temp
 
-    def add_t_date(self, data:pd.DataFrame) -> pd.DataFrame:
+    def add_t_date(self, data:pd.DataFrame, date_col=None) -> pd.DataFrame:
         """將資料加入交易日期
 
         將資料的日期或發布日期對應到下一個交易日，用於計算資訊揭露後的市場反應
@@ -340,7 +340,8 @@ class TEJHandler(DataKit):
             self.update_tej_datasets('mkt_calendar')
             t_date = self.read_dataset('mkt_calendar', columns=['date'], filters=[('休市原因中文說明_人工建置','=','')]).rename(columns={'date':'t_date'})
         
-        date_col = 'release_date' if 'release_date' in data.columns else 'date'
+        if date_col is None:
+            date_col = 'release_date' if 'release_date' in data.columns else 'date'
         
         data = data\
             .drop(columns='t_date', errors='ignore')\

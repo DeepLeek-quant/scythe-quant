@@ -71,10 +71,10 @@ def calc_ic_metrics(ic:Union[pd.DataFrame, pd.Series]=None, factor:pd.DataFrame=
             'positive ratio': ic.apply(lambda x:f'{len(x.dropna()[x.dropna()>0])/len(x.dropna()):.2%}'),
         }, axis=1).T
 
-def calc_ic(factor:pd.DataFrame, exp_returns:pd.DataFrame=None, rebalance:Literal['MR', 'QR', 'W', 'M', 'Q', 'Y']='QR', rank:bool=True)->pd.Series:
+def calc_ic(factor:pd.DataFrame, exp_returns:pd.DataFrame=None, rebalance:Literal['MR', 'QR', 'W', 'M', 'Q', 'Y']='QR', rank:bool=True, **kwargs)->pd.Series:
     from scytheq.backtest import get_rebalance_date
     from scytheq.data import DatasetsHandler
-    exp_returns = DatasetsHandler().read_dataset('exp_returns') if exp_returns is None else exp_returns
+    exp_returns = DatasetsHandler().read_dataset('exp_returns', filter_date='t_date', start=kwargs.get('start'), end=kwargs.get('end')) if exp_returns is None else exp_returns
     r_date = pd.Index(get_rebalance_date(rebalance)).intersection(exp_returns.index)
     
     factor = factor[factor.index.isin(r_date)].stack().rename('factor')

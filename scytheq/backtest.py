@@ -602,7 +602,7 @@ class Report:
         # calculated
         self.liquidity = calc_liquidity(self.portfolio_df)
         self.style = calc_style(self.daily_return, window=None, total=True)
-        # self.maemfe = calc_maemfe(self.buy_list, self.portfolio_df, self.exp_returns)
+        self.maemfe = calc_maemfe(self.buy_list, self.portfolio_df, self.exp_returns)
         self.relative_return = calc_relative_return(self.daily_return, self.exp_returns[self.benchmark_id])
         # tabs
         self.tabs = self.plot_tabs()
@@ -620,7 +620,7 @@ class Report:
             'Return heatmap': plot_return_heatmap(self.daily_return),
             'Liquidity': plot_liquidity(self.liquidity),
             'Style': plot_style(self.style),
-            # 'MAE/MFE': plot_maemfe(self.maemfe),
+            'MAE/MFE': plot_maemfe(self.maemfe),
         }
         return pn.Tabs(*[(k, pn.pane.Plotly(v)) for k, v in plot_funcs.items()])
 
