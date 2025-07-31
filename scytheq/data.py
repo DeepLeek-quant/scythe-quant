@@ -119,13 +119,17 @@ class DataKit():
         logging.info(f'Saved {dataset} as parquet from DataFrame')
 
     def get_t_date(self):
-        t_date = DatasetsHandler().read_dataset('mkt_calendar', columns=['date'], filters=[('休市原因中文說明_人工建置','=','')])\
+        t_date = self.read_dataset('mkt_calendar', columns=['date'], filters=[('休市原因中文說明_人工建置','=','')])\
             .rename(columns={'date':'t_date'})
         nearest_next_t_date = t_date\
             .loc[lambda x: x['t_date'] > pd.to_datetime(dt.datetime.today().date())]\
             .iloc[0]['t_date']
         return t_date.loc[lambda x: x['t_date'] <= nearest_next_t_date]
 
+    def to_t_date(self, data:Union[pd.DataFrame, pd.Series]):
+        data = (data + pd.DateOffset(days=1)).squeeze().to_frame('next_day').astype('datetime64[ms]')
+        t_date = self.get_t_date()
+        return pd.merge_asof(data, t_date, left_on='next_day', right_on='t_date', direction='forward')['t_date']
 
 class TEJHandler(DataKit):
     def __init__(self, tej_token:str=None):
