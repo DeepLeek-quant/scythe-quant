@@ -41,6 +41,7 @@ def calc_metrics(daily_returns:Union[pd.DataFrame, pd.Series, dict]):
     
     return pd.concat({
         'CAGR(%)': cagr(daily_returns)*100,
+        'Simple CAGR(%)': daily_returns.mean()*240*100,
         'Sharpe': daily_returns.mean()/daily_returns.std()*240**0.5,
         'Calmar': calmar(daily_returns),
         'MDD(%)': mdd(daily_returns, 'cumprod')*100,

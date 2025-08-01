@@ -147,7 +147,7 @@ def mkt_is_open():
 
     return (current_day<5) and (market_open<=current_time<=market_close)
 
-def gen_position_info(report:Report)-> pd.DataFrame:
+def gen_position_info(report:Report, portfolio:pd.DataFrame=None)-> pd.DataFrame:
     from .backtest import get_rebalance_date
     from .data import DatasetsHandler
     last_buy_date = report.buy_list.index[-1]
